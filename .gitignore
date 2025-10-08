@@ -17,3 +17,9 @@ paper/
 data/
 *.out
 wandb
+__pycache__/
+
+
+# Hydra outputs
+outputs/
+multirun/

@@ -1,0 +1,20 @@
+# @package _global_
+
+# --- Defaults ---
+# This section tells Hydra where to find the default
+# configurations for composable components.
+defaults:
+  - agent: random_agent
+  - env: toy_env_v1
+
+# --- Run Settings ---
+seed: 42
+total_timesteps: 50000
+num_envs: 16
+
+# --- Training Settings ---
+batch_size: 256
+buffer_size: 10000
+
+# --- Logging & Evaluation ---
+log_frequency: 100

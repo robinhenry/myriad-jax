@@ -61,7 +61,7 @@ def _make_train_step_fn(
         key, buffer_key = jax.random.split(key)
         # Assuming env_states.obs is the observation before the step
         transitions = (env_states.obs, actions, rewards, next_obs, dones)
-        buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size)
+        buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
 
         # 4. UPDATE THE AGENT
         key, update_key = jax.random.split(key)
@@ -125,9 +125,22 @@ def train_and_evaluate(config: Config):
 
     # Initialize replay buffer
     replay_buffer = ReplayBuffer(buffer_size=config.buffer_size)
-    buffer_state = replay_buffer.init(
-        (obs[0], agent.default_params.num_actions, 1, obs[0], 1)  # Sample transition shapes
+    # A sample transition is (obs, action, reward, next_obs, done)
+    # We need to get the correct shapes and dtypes for initialization.
+    sample_obs = obs[0]
+    # For a discrete action space, the action is a single integer.
+    sample_action = jnp.array(0, dtype=jnp.int32)
+    sample_reward = jnp.array(0.0, dtype=jnp.float32)
+    sample_done = jnp.array(0.0, dtype=jnp.float32)
+
+    sample_transition = (
+        sample_obs,
+        sample_action,
+        sample_reward,
+        sample_obs,  # next_obs has the same shape as obs
+        sample_done,
     )
+    buffer_state = replay_buffer.init(sample_transition)
 
     # Create the jitted training function
     train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.num_envs)

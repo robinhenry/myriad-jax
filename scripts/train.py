@@ -1,15 +1,34 @@
-# In a main experiment script (e.g., train.py)
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+import hydra
+from omegaconf import DictConfig
 
-# 1. Create a default config
-config = Config()
+# Import your schema and the runner
+from src.aion.configs.default import Config
+from src.aion.platform.runner import train_and_evaluate
 
-# # 2. Customize it for a specific experiment if needed
-# config = config.replace(  # type: ignore
-#     total_timesteps=100000,
-#     agent=AgentConfig(name="pqn_agent", learning_rate=1e-3)
-# )
 
-# 3. Pass the single config object to your runner
-train_and_evaluate(config)
+@hydra.main(version_base=None, config_path="../configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """
+    Main entry point for training, decorated by Hydra.
+
+    Hydra will automatically:
+    1. Find the `configs/config.yaml` file.
+    2. Compose the configuration based on the `defaults` list.
+    3. Allow overrides from the command line.
+    4. Pass the final configuration as the `cfg` argument.
+    """
+    # Use hydra.utils.instantiate to directly convert the composed
+    # config (cfg) into our typed, structured Config object.
+    # Hydra will recursively build AgentConfig and EnvConfig as well.
+    final_config: Config = hydra.utils.instantiate(cfg)
+
+    print("--- Running with the following configuration ---")
+    print(final_config)
+    print("------------------------------------------------")
+
+    # Call your existing runner with the fully-typed and populated config object
+    train_and_evaluate(final_config)
+
+
+if __name__ == "__main__":
+    main()

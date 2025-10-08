@@ -1,47 +1,47 @@
 """
-Default configuration for training runs, using hierarchical dataclasses.
+Defines the schema for training run configurations using hierarchical dataclasses.
+The default values are managed by Hydra in the .yaml files.
 """
 from flax.struct import dataclass
 
 
 @dataclass
 class AgentConfig:
-    """Configuration for the Agent."""
+    """Schema for the Agent's configuration."""
 
-    name: str = "random_agent"
-    # --- PQN Agent Params ---
-    learning_rate: float = 2.5e-4
-    gamma: float = 0.99
-    epsilon_start: float = 1.0
-    epsilon_end: float = 0.05
-    epsilon_decay_steps: int = 20000
-    target_network_frequency: int = 500
-    tau: float = 1.0
+    name: str
+    learning_rate: float
+    gamma: float
+    epsilon_start: float
+    epsilon_end: float
+    epsilon_decay_steps: int
+    target_network_frequency: int
+    tau: float
 
 
 @dataclass
 class EnvConfig:
-    """Configuration for the Environment."""
+    """Schema for the Environment's configuration."""
 
-    name: str = "toy_env_v1"
+    name: str
 
 
 @dataclass
 class Config:
-    """Top-level configuration for a training run."""
+    """Schema for the top-level configuration of a training run."""
 
     # --- Run Settings ---
-    seed: int = 42
-    total_timesteps: int = 50000
-    num_envs: int = 16  # Number of parallel environments
+    seed: int
+    total_timesteps: int
+    num_envs: int
 
     # --- Training Settings ---
-    batch_size: int = 256
-    buffer_size: int = 10000
+    batch_size: int
+    buffer_size: int
 
     # --- Logging & Evaluation ---
-    log_frequency: int = 100  # Log every 100 training steps
+    log_frequency: int
 
     # --- Component Configs ---
-    agent: AgentConfig = AgentConfig()
-    env: EnvConfig = EnvConfig()
+    agent: AgentConfig
+    env: EnvConfig

@@ -37,6 +37,17 @@ files = [
 ]
 
 [[package]]
+name = "antlr4-python3-runtime"
+version = "4.9.3"
+description = "ANTLR 4.9.3 runtime for Python 3.7"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"},
+]
+
+[[package]]
 name = "attrs"
 version = "25.4.0"
 description = "Classes Without Boilerplate"
@@ -773,6 +784,23 @@ files = [
 
 [package.extras]
 tests = ["freezegun", "pytest", "pytest-cov"]
+
+[[package]]
+name = "hydra-core"
+version = "1.3.2"
+description = "A framework for elegantly configuring complex applications"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "hydra-core-1.3.2.tar.gz", hash = "sha256:8a878ed67216997c3e9d88a8e72e7b4767e81af37afb4ea3334b269a4390a824"},
+    {file = "hydra_core-1.3.2-py3-none-any.whl", hash = "sha256:fa0238a9e31df3373b35b0bfb672c34cc92718d21f81311d8996a16de1141d8b"},
+]
+
+[package.dependencies]
+antlr4-python3-runtime = "==4.9.*"
+omegaconf = ">=2.2,<2.4"
+packaging = "*"
 
 [[package]]
 name = "identify"
@@ -1696,6 +1724,22 @@ files = [
     {file = "nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:0b48363fc6964dede448029434c6abed6c5e37f823cb43c3bcde7ecfc0457e15"},
     {file = "nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:042f2500f24c021db8a06c5eec2539027d57460e1c1a762055a6554f72c369bd"},
 ]
+
+[[package]]
+name = "omegaconf"
+version = "2.3.0"
+description = "A flexible configuration library"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "omegaconf-2.3.0-py3-none-any.whl", hash = "sha256:7b4df175cdb08ba400f45cae3bdcae7ba8365db4d165fc65fd04b050ab63b46b"},
+    {file = "omegaconf-2.3.0.tar.gz", hash = "sha256:d5d4b6d29955cc50ad50c46dc269bcd92c6e00f5f90d23ab5fee7bfca4ba4cc7"},
+]
+
+[package.dependencies]
+antlr4-python3-runtime = "==4.9.*"
+PyYAML = ">=5.1.0"
 
 [[package]]
 name = "opt-einsum"
@@ -3137,4 +3181,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "c6e792283d82d1c7d157a0b9e2e83351926703716d22b89cf5668f4c2fe880fe"
+content-hash = "be211be6f7be24e48e707a31abf8b63c8c7467aac6e5a6bb071926f32eb9ebcc"
