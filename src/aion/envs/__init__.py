@@ -7,7 +7,7 @@ ENV_REGISTRY = {
 }
 
 
-def make(env_id: str, **kwargs) -> Environment:
+def make_env(env_id: str, **kwargs) -> Environment:
     """
     A general factory function to create any registered environment.
 

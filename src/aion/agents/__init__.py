@@ -8,7 +8,7 @@ AGENT_REGISTRY = {
 }
 
 
-def make(agent_id: str, **kwargs) -> Agent:
+def make_agent(agent_id: str, **kwargs) -> Agent:
     """
     A general factory function to create any registered agent.
 

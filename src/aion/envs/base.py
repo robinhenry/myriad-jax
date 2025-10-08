@@ -25,6 +25,9 @@ class Environment(NamedTuple):
     # The pure, jitted reset function
     reset: Callable[[chex.PRNGKey, EnvironmentParams, EnvironmentConfig], tuple[chex.Array, EnvironmentState]]
 
+    # The pure function to get the action space size
+    get_action_space_size: Callable[[], int]
+
     # Default parameters for the environment
     default_params: EnvironmentParams
 

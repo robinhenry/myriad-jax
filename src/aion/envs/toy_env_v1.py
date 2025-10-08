@@ -1,4 +1,5 @@
 """A toy control environment implemented as pure JAX functions."""
+
 from functools import partial
 from typing import Any, Dict, NamedTuple
 
@@ -193,4 +194,10 @@ def make_env(
             "Warning: `params` object was provided, so keyword arguments " f"({list(kwargs.keys())}) will be ignored."
         )
 
-    return Environment(step=jit_step, reset=jit_reset, default_params=params, config=config)
+    return Environment(
+        step=jit_step,
+        reset=jit_reset,
+        get_action_space_size=get_action_space_size,
+        default_params=params,
+        config=config,
+    )
