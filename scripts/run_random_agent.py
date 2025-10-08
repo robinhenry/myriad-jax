@@ -1,12 +1,13 @@
 """Run a single episode with a random agent on the toy problem."""
 
+from pathlib import Path
+
+import click
 import jax
 import jax.numpy as jnp
-from pathlib import Path
-import click
 
-from aion.agents.random_agent import RandomAgent
-from aion.envs.toy_problem import ToyProblem
+from aion.agents.random import RandomAgent
+from aion.envs.toy_env_v1 import ToyProblem
 from aion.platform.interaction import run_episodes_parallel
 from aion.utils.plotting.episodes import plot_episodes
 

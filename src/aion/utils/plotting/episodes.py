@@ -1,11 +1,12 @@
 """Plotting functions for episodes."""
 
+from pathlib import Path
+from typing import Union
+
 import jax.numpy as jnp
+import plotly.colors as pcolors
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
-import plotly.colors as pcolors
-from typing import Union
 
 
 def plot_episodes(

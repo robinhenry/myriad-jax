@@ -1,9 +1,10 @@
 """Plotting functions for training metrics."""
 
+from pathlib import Path
+from typing import Dict, List, Union
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
-from typing import List, Dict, Union
 
 
 def plot_training_metrics(
@@ -32,7 +33,7 @@ def plot_training_metrics(
 
     episodes = list(range(len(metrics_history)))
     losses = [float(m["loss"]) for m in metrics_history]
-    
+
     # Handle both old and new metric formats
     if "total_reward" in metrics_history[0]:
         total_rewards = [float(m["total_reward"]) for m in metrics_history]

@@ -1,22 +1,24 @@
 """Functions for interacting with the environment - optimized for GPU scaling."""
 
+from functools import partial
+from typing import Callable, Tuple
+
+import chex
 import jax
 import jax.numpy as jnp
-from typing import Callable, Tuple
-import chex
 from flax.training.train_state import TrainState
-from aion.envs.toy_problem import EnvParams, step as env_step, reset as env_reset
-from functools import partial
+
+from aion.envs.toy_env_v1 import EnvParams, reset as env_reset, step as env_step
 
 
 def run_episode(
     env_reset_fn: Callable,
-    env_step_fn: Callable, 
+    env_step_fn: Callable,
     agent_select_action: Callable,
-    key: chex.PRNGKey, 
+    key: chex.PRNGKey,
     env_params: EnvParams,
     train_state: TrainState,
-    max_steps: int
+    max_steps: int,
 ) -> Tuple[chex.Array, chex.Array]:
     """
     Runs a single episode of the environment with the given agent.
@@ -40,22 +42,18 @@ def run_episode(
     def scan_step(carry, _):
         key, obs, state, step = carry
         key, action_key, step_key = jax.random.split(key, 3)
-        
+
         action, _ = agent_select_action(action_key, obs, train_state, step)
         next_obs, next_state, reward, done, _ = env_step_fn(step_key, state, action, env_params)
-        
+
         # Continue with next observation or stop if done
         obs = jnp.where(done, obs, next_obs)
-        state = jax.tree_util.tree_map(
-            lambda x, y: jnp.where(done, x, y), state, next_state
-        )
-        
+        state = jax.tree_util.tree_map(lambda x, y: jnp.where(done, x, y), state, next_state)
+
         return (key, obs, state, step + 1), (obs, reward)
 
     initial_carry = (key, obs, state, 0)
-    _, (observations, rewards) = jax.lax.scan(
-        scan_step, initial_carry, None, length=max_steps
-    )
+    _, (observations, rewards) = jax.lax.scan(scan_step, initial_carry, None, length=max_steps)
 
     return observations, rewards
 
@@ -71,13 +69,13 @@ def run_episodes_parallel(
 ) -> Tuple[chex.Array, chex.Array, chex.Array, chex.Array, chex.Array]:
     """
     Runs multiple episodes in parallel using jax.vmap for optimal GPU utilization.
-    
+
     This function is JIT-compiled and optimized for large-scale parallel execution
     on GPUs with thousands of environments.
 
     Args:
         key: JAX random key
-        agent_select_action: The agent's action selection method  
+        agent_select_action: The agent's action selection method
         train_state: The training state of the agent
         env_params: The environment parameters
         num_envs: The number of parallel environments
@@ -94,16 +92,12 @@ def run_episodes_parallel(
         key, action_key, step_key = jax.random.split(key, 3)
 
         # Parallel action selection across environments
-        actions, _ = jax.vmap(
-            agent_select_action, in_axes=(0, 0, None, None)
-        )(
+        actions, _ = jax.vmap(agent_select_action, in_axes=(0, 0, None, None))(
             jax.random.split(action_key, num_envs), obs, train_state, step
         )
 
         # Parallel environment stepping
-        next_obs, next_env_state, rewards, dones, _ = jax.vmap(
-            env_step, in_axes=(0, 0, 0, None)
-        )(
+        next_obs, next_env_state, rewards, dones, _ = jax.vmap(env_step, in_axes=(0, 0, 0, None))(
             jax.random.split(step_key, num_envs), env_state, actions, env_params
         )
 
@@ -112,16 +106,12 @@ def run_episodes_parallel(
 
     # Initialize all environments in parallel
     key, reset_key = jax.random.split(key)
-    initial_obs, initial_states = jax.vmap(
-        env_reset, in_axes=(0, None)
-    )(
+    initial_obs, initial_states = jax.vmap(env_reset, in_axes=(0, None))(
         jax.random.split(reset_key, num_envs), env_params
     )
 
     # Run the parallel rollout
     initial_carry = (key, initial_obs, initial_states, 0)
-    _, trajectories = jax.lax.scan(
-        scan_step, initial_carry, None, length=max_steps_in_episode
-    )
+    _, trajectories = jax.lax.scan(scan_step, initial_carry, None, length=max_steps_in_episode)
 
     return trajectories

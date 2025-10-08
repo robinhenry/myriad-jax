@@ -1,17 +1,17 @@
 """Script to train the PQN agent on the toy problem."""
 
+from pathlib import Path
+
+import click
 import jax
 import jax.numpy as jnp
-import click
-from pathlib import Path
+
 from aion.agents.pqn_agent import PQNAgent, QNetwork
-from aion.envs.toy_problem import (
-    EnvParams, get_action_space_size, create_sine_target, create_constant_target
-)
+from aion.envs.toy_env_v1 import EnvParams, create_constant_target, create_sine_target, get_action_space_size
+from aion.platform.interaction import run_episodes_parallel
 from aion.platform.training import train
 from aion.utils.plotting.episodes import plot_episodes
 from aion.utils.plotting.training import plot_training_metrics
-from aion.platform.interaction import run_episodes_parallel
 
 
 @click.command()
@@ -36,24 +36,19 @@ def main(num_episodes, num_envs, max_steps, batch_size, seed, target_type):
         x_target = jnp.linspace(2.0, 18.0, max_steps)
     elif target_type == "step":
         steps_per_level = max_steps // 4
-        x_target = jnp.concatenate([
-            jnp.full((steps_per_level,), 5.0),
-            jnp.full((steps_per_level,), 15.0),
-            jnp.full((steps_per_level,), 8.0),
-            jnp.full((max_steps - 3 * steps_per_level,), 12.0)
-        ])
+        x_target = jnp.concatenate(
+            [
+                jnp.full((steps_per_level,), 5.0),
+                jnp.full((steps_per_level,), 15.0),
+                jnp.full((steps_per_level,), 8.0),
+                jnp.full((max_steps - 3 * steps_per_level,), 12.0),
+            ]
+        )
     else:
         raise ValueError(f"Unknown target type: {target_type}")
 
     # Create environment parameters
-    env_params = EnvParams(
-        a=1.0,
-        b=1.0,
-        min_x=0.0,
-        max_x=20.0,
-        max_steps=max_steps,
-        x_target=x_target
-    )
+    env_params = EnvParams(a=1.0, b=1.0, min_x=0.0, max_x=20.0, max_steps=max_steps, x_target=x_target)
 
     # Create agent with optimized network architecture
     agent = PQNAgent(
@@ -61,7 +56,7 @@ def main(num_episodes, num_envs, max_steps, batch_size, seed, target_type):
             action_dim=get_action_space_size(),
             hidden_dims=(256, 256),  # Larger for better GPU utilization
             activation="relu",
-            use_layer_norm=True
+            use_layer_norm=True,
         ),
         learning_rate=2.5e-4,
         gamma=0.99,

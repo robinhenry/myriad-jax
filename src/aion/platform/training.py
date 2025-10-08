@@ -1,18 +1,20 @@
 """Training loop for RL agents - optimized for GPU scaling."""
+from functools import partial
+from typing import Any, Dict, List, Tuple
+
+import chex
 import jax
 import jax.numpy as jnp
-from aion.platform.interaction import run_episodes_parallel
+
 from aion.agents.pqn_agent import PQNAgent, PQNTrainState
-from aion.envs.toy_problem import EnvParams
-from typing import Tuple, Dict, List, Any
-import chex
-from functools import partial
+from aion.envs.toy_env_v1 import EnvParams
+from aion.platform.interaction import run_episodes_parallel
 
 
 @partial(jax.jit, static_argnums=(2, 4, 5, 6, 7))
 def _train_step(
     key: chex.PRNGKey,
-    train_state: PQNTrainState, 
+    train_state: PQNTrainState,
     agent: PQNAgent,
     env_params: EnvParams,
     num_envs: int,
@@ -23,19 +25,16 @@ def _train_step(
     epsilon_decay_steps: int,
 ) -> Tuple[PQNTrainState, Dict[str, chex.Scalar]]:
     """A single training step - JIT compiled for maximum performance.
-    
+
     This function is optimized for GPU execution with large batch sizes
     and many parallel environments.
     """
     # --- COLLECT EXPERIENCE ---
     key, rollout_key = jax.random.split(key)
-    
+
     # Pure function for action selection (JIT-compatible)
     def select_action_fn(
-        key: chex.PRNGKey, 
-        observation: chex.Array, 
-        train_state: PQNTrainState, 
-        step: int
+        key: chex.PRNGKey, observation: chex.Array, train_state: PQNTrainState, step: int
     ) -> Tuple[chex.Array, PQNTrainState]:
         epsilon = jnp.interp(
             step,
@@ -53,7 +52,7 @@ def _train_step(
         use_random = jax.random.uniform(key) < epsilon
         action = jax.lax.cond(use_random, explore, exploit)
         return action, train_state
-    
+
     # Run parallel environments
     trajectories = run_episodes_parallel(
         rollout_key,
@@ -66,11 +65,11 @@ def _train_step(
 
     # Efficiently flatten and sample trajectories
     obs, actions, rewards, next_obs, dones = trajectories
-    
+
     # Reshape from (max_steps, num_envs, ...) to (max_steps * num_envs, ...)
     batch_dims = obs.shape[:2]  # (max_steps, num_envs)
     total_transitions = batch_dims[0] * batch_dims[1]
-    
+
     flat_obs = obs.reshape((total_transitions,) + obs.shape[2:])
     flat_actions = actions.reshape((total_transitions,) + actions.shape[2:])
     flat_rewards = rewards.reshape((total_transitions,) + rewards.shape[2:])
@@ -79,17 +78,15 @@ def _train_step(
 
     # Efficient batch sampling
     key, sample_key = jax.random.split(key)
-    batch_size_actual = jnp.minimum(batch_size, total_transitions)
-    indices = jax.random.choice(
-        sample_key, total_transitions, (batch_size,), replace=False
-    )
-    
+    # batch_size_actual = jnp.minimum(batch_size, total_transitions)
+    indices = jax.random.choice(sample_key, total_transitions, (batch_size,), replace=False)
+
     batch = (
         flat_obs[indices],
-        flat_actions[indices], 
+        flat_actions[indices],
         flat_rewards[indices],
         flat_next_obs[indices],
-        flat_dones[indices]
+        flat_dones[indices],
     )
 
     # --- UPDATE AGENT ---
@@ -122,7 +119,7 @@ def train(
 ) -> Tuple[PQNTrainState, List[Dict[str, Any]]]:
     """
     Main training loop optimized for GPU scaling.
-    
+
     This function supports efficient training with large numbers of parallel
     environments and can scale to thousands of environments on modern GPUs.
 
@@ -160,25 +157,23 @@ def train(
     # --- TRAINING LOOP ---
     print(f"--- Training with {num_envs} parallel environments ---")
     print(f"Total transitions per episode: {num_envs * max_steps_in_episode}")
-    
+
     metrics_history = []
-    
+
     for episode in range(num_episodes):
         key, train_key = jax.random.split(key)
-        
+
         # Run training step
-        train_state, metrics = compiled_train_step(
-            train_key, train_state
-        )
-        
+        train_state, metrics = compiled_train_step(train_key, train_state)
+
         metrics_history.append(metrics)
-        
+
         # Log progress
         if episode % log_frequency == 0:
             loss = float(metrics["loss"])
             mean_return = float(metrics["mean_episode_return"])
             std_return = float(metrics["std_episode_return"])
-            
+
             print(
                 f"Episode {episode:6d} | "
                 f"Loss: {loss:8.4f} | "
