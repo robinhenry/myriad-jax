@@ -1,31 +1,27 @@
 [project]
 name = "aion"
 version = "0.1.0"
-description = ""
+description = "Platform for large-scale high-throughput control & decision-making experiments"
 authors = [
     { name = "Robin Henry", email = "robin.henry012@gmail.com" },
 ]
 readme = "README.md"
-packages = [ { include = "aion", from = "src" } ]
+packages = [
+    { include = "aion", from = "src" },
+]
 exclude = ["tests", "tests.*"]
 
 [tool.poetry.scripts]
 
+
 [tool.poetry.dependencies]
 python = "^3.11"
-numpy = "^2.2.3"
 plotly = "^6.0.0"
 tqdm = "^4.67.1"
-polars = "^1.22.0"
-gymnax = "^0.0.9"
 flax = "^0.12.0"
-distrax = "^0.1.7"
-pydantic = { version = "^2.10.6", extras = ["dotenv"] }
-pydantic-settings = "^2.8.1"
-loguru = "^0.7.3"
 jaxlib = "0.7.2"
 click = "^8.1.8"
-hydra-core = "^1.3"
+omegaconf = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.9.0"
@@ -64,7 +60,7 @@ build-backend = "poetry_dynamic_versioning.backend"
 line-length = 120
 
 [tool.mypy]
-files = ["source/aion/**/*.py"]
+files = ["src/aion/**/*.py"]
 
 [tool.coverage.run]
 source = ["aion"]
@@ -116,6 +112,6 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.isort]
-known-first-party = ["cell_rl"]
+known-first-party = ["aion"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
