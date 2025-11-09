@@ -79,11 +79,9 @@ def _step(
 
 def _reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[chex.Array, EnvState]:
     """Reset the environment to initial state."""
-    # Split key for reproducibility
-    key, state_key = jax.random.split(key)
 
     # Reset state to a random value
-    x = jax.random.uniform(state_key, shape=(), minval=config.min_x, maxval=config.max_x)
+    x = jax.random.uniform(key, shape=(), minval=config.min_x, maxval=config.max_x)
     t = jnp.array(0)
     state = EnvState(x, t)
     obs = get_obs(state, params, config)

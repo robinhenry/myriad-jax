@@ -1,61 +1,54 @@
-"""A fully functional implementation of a simple random agent."""
-
-from typing import Any, Tuple
+from typing import Any, NamedTuple, Tuple
 
 import chex
-import jax
 from flax.struct import dataclass
 
-from .base import Agent, AgentState
+from aion.core.spaces import Space
+
+from .agent import Agent
 
 
 @dataclass
-class RandomAgentParams:
+class AgentParams:
     """Static parameters for the random agent."""
 
-    num_actions: int
+    action_space: Space
 
 
-def _init(key: chex.PRNGKey, sample_obs: chex.Array, params: RandomAgentParams) -> AgentState:
-    """Initializes the agent's state. For a random agent, there is no state."""
-    # The key is unused but required by the protocol.
-    _ = key, sample_obs, params
-    return None
+class AgentState(NamedTuple):
+    """A random agent has no state"""
+
+    ...
+
+
+def _init(_key: chex.PRNGKey, _sample_obs: chex.Array, _params: AgentParams) -> AgentState:
+    return AgentState()
 
 
 def _select_action(
     key: chex.PRNGKey,
-    observation: chex.Array,
+    _obs: chex.Array,
     agent_state: AgentState,
-    params: RandomAgentParams,
+    params: AgentParams,
 ) -> Tuple[chex.Array, AgentState]:
-    """Selects a random action from the discrete action space."""
-    # The observation is unused but required by the protocol.
-    _ = observation
-
-    action = jax.random.randint(key, shape=(), minval=0, maxval=params.num_actions)
-    return action, agent_state
+    return params.action_space.sample(key), agent_state
 
 
 def _update(
-    key: chex.PRNGKey, agent_state: AgentState, transition: Any, params: RandomAgentParams
+    _key: chex.PRNGKey, agent_state: AgentState, _transition: Any, _params: AgentParams
 ) -> Tuple[AgentState, dict]:
-    """The random agent does not learn, so this method does nothing."""
-    # All arguments are unused but required by the protocol.
-    _ = key, transition, params
-
     return agent_state, {}
 
 
-def make_agent(num_actions: int) -> Agent:
+def make_agent(action_space: Space) -> Agent:
     """Factory function to create an instance of the RandomAgent."""
 
     # Create the default parameters for this agent
-    default_params = RandomAgentParams(num_actions=num_actions)
+    params = AgentParams(action_space=action_space)
 
     return Agent(
+        params=params,
         init=_init,
         select_action=_select_action,
         update=_update,
-        default_params=default_params,
     )

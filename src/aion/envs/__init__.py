@@ -1,9 +1,10 @@
-from . import toy_env
+from . import example_env, toy_env
 from .environment import Environment
 
 # The registry mapping environment IDs to their factory functions
 ENV_REGISTRY = {
     "toy_env_v1": toy_env.make_env,
+    "example_env": example_env.make_env,
 }
 
 
