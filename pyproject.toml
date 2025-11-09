@@ -6,6 +6,8 @@ authors = [
     { name = "Robin Henry", email = "robin.henry012@gmail.com" },
 ]
 readme = "README.md"
+
+[tool.poetry]
 packages = [
     { include = "aion", from = "src" },
 ]

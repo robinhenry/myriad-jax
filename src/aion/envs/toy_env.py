@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from flax.struct import dataclass
 
-from .base import Environment
+from .environment import Environment
 
 
 @dataclass
