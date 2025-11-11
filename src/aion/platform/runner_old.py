@@ -1,3 +1,5 @@
+"""Core functions for running, training, and evaluating agents in environments."""
+
 from dataclasses import asdict
 from functools import partial
 from typing import Any, Callable
@@ -6,13 +8,11 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from aion.agents import make_agent
-from aion.agents.agent import Agent, AgentState
+import aion.agents
+import aion.envs
+from aion.agents.base import Agent
 from aion.configs.default import Config
 from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
-from aion.core.spaces import Space
-from aion.core.types import TrainingEnvState, Transition
-from aion.envs import make_env
 from aion.envs.environment import Environment
 
 
@@ -22,8 +22,10 @@ def _make_train_step_fn(
     replay_buffer: ReplayBuffer,
     num_envs: int,
 ) -> Callable:
-    """Factory to create a jitted, vmapped training step function"""
-
+    """
+    Factory to create a jitted, vmapped training step function.
+    This is the core of the JAX optimization.
+    """
     # Vmap the environment step and reset functions
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -31,46 +33,49 @@ def _make_train_step_fn(
     @partial(jax.jit, static_argnames=["batch_size"])
     def train_step(
         key: chex.PRNGKey,
-        agent_state: AgentState,
-        env_states: TrainingEnvState,
+        agent_state: chex.ArrayTree,
+        env_states: chex.ArrayTree,
         buffer_state: ReplayBufferState,
         batch_size: int,
     ) -> tuple:
-        """Executes one step of training across all parallel environments. This function is pure and jitted."""
-
+        """
+        Executes one step of training across all parallel environments.
+        This function is pure and jitted.
+        """
         # 1. SELECT ACTION
         key, action_key = jax.random.split(key)
         action_keys = jax.random.split(action_key, num_envs)
-
-        actions, agent_state = jax.vmap(agent.select_action, in_axes=(0, 0, 0, None))(
-            action_keys, env_states.obs, agent_state, agent.params
+        # Assuming env_states has an `obs` field/attribute
+        actions, _ = jax.vmap(agent.select_action, in_axes=(0, 0, 0, None))(
+            action_keys, env_states.obs, agent_state, agent.default_params
         )
 
-        # 2. STEP THE ENVIRONMENTS
+        # 2. STEP THE ENVIRONMENT
         key, step_key = jax.random.split(key)
         step_keys = jax.random.split(step_key, num_envs)
         next_obs, next_env_states, rewards, dones, infos = vmapped_env_step(
-            step_keys, env_states, actions, env.params, env.config
+            step_keys, env_states, actions, env.default_params, env.config
         )
 
         # 3. STORE TRANSITIONS AND SAMPLE FROM BUFFER
         key, buffer_key = jax.random.split(key)
-        transitions = Transition(env_states.obs, actions, rewards, next_obs, dones)
+        # Assuming env_states.obs is the observation before the step
+        transitions = (env_states.obs, actions, rewards, next_obs, dones)
         buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
 
         # 4. UPDATE THE AGENT
         key, update_key = jax.random.split(key)
-        agent_state, metrics = agent.update(update_key, agent_state, batch, agent.params)
+        agent_state, metrics = agent.update(update_key, agent_state, batch, agent.default_params)
 
         # Handle auto-resetting environments that are 'done'
         key, reset_key = jax.random.split(key)
         reset_keys = jax.random.split(reset_key, num_envs)
 
         # Reset only the environments that are done
-        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.default_params, env.config)
 
         # If done, use the new state, otherwise keep the existing one
-        final_obs = jnp.where(dones[:, None], new_obs, next_obs)  # type: ignore
+        final_obs = jnp.where(dones[:, None], new_obs, next_obs)
         final_env_states = jax.tree_util.tree_map(
             lambda old, new: jnp.where(dones, new, old), next_env_states, new_env_states
         )
@@ -98,35 +103,50 @@ def train_and_evaluate(config: Config):
     """
     # 1. INITIALIZE EVERYTHING
     key = jax.random.PRNGKey(config.seed)
-    key, env_key, agent_key, buffer_key = jax.random.split(key, 4)
 
-    # Create the env
+    # Create env and agent from the config using the registries
     env_kwargs = _get_factory_kwargs(config.env)
-    env = make_env(config.env.name, **env_kwargs)
+    env = aion.envs.make_env(config.env.name, **env_kwargs)
 
-    # Create the agent
     agent_kwargs = _get_factory_kwargs(config.agent)
-    action_space = env.get_action_space(env.config)
-    agent = make_agent(config.agent.name, action_space=action_space, **agent_kwargs)
+    # The agent needs to know the action dimension from the environment
+    agent_kwargs["action_dim"] = env.get_action_space_size()
+    agent = aion.agents.make_agent(config.agent.name, **agent_kwargs)
+
+    # Initialize states
+    key, env_key, agent_key, buffer_key = jax.random.split(key, 4)
 
     # Initialize parallel environments
     env_keys = jax.random.split(env_key, config.num_envs)
-    obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
+    obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.default_params, env.config)
     env_states = env_states.replace(obs=obs)  # Ensure obs is in state
 
-    # Initialize agent using the initial observation from one environment
-    sample_obs = obs[0]  # type: ignore
-    agent_state = agent.init(agent_key, sample_obs, agent.params)
+    agent_state = agent.init(agent_key, obs[0], agent.default_params)  # Init with one sample obs
 
     # Initialize replay buffer
     replay_buffer = ReplayBuffer(buffer_size=config.buffer_size)
-    sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
+    # A sample transition is (obs, action, reward, next_obs, done)
+    # We need to get the correct shapes and dtypes for initialization.
+    sample_obs = obs[0]
+    # For a discrete action space, the action is a single integer.
+    sample_action = jnp.array(0, dtype=jnp.int32)
+    sample_reward = jnp.array(0.0, dtype=jnp.float32)
+    sample_done = jnp.array(0.0, dtype=jnp.float32)
+
+    sample_transition = (
+        sample_obs,
+        sample_action,
+        sample_reward,
+        sample_obs,  # next_obs has the same shape as obs
+        sample_done,
+    )
     buffer_state = replay_buffer.init(sample_transition)
 
     # Create the jitted training function
     train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.num_envs)
 
-    # 2. OUTER TRAINING LOOP
+    # 2. OUTER TRAINING LOOP (in Python)
+    print("Starting training...")
     for step in range(config.total_timesteps // config.num_envs):
         key, agent_state, env_states, buffer_state, metrics = train_step_fn(
             key=key,
@@ -152,18 +172,3 @@ def _get_factory_kwargs(config_obj: Any) -> dict:
     kwargs = asdict(config_obj)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
     return kwargs
-
-
-def _make_sample_transition(key: chex.PRNGKey, sample_obs: chex.Array, action_space: Space) -> Transition:
-    """Creates a sample transition PyTree for replay buffer initialization."""
-    sample_action = action_space.sample(key)
-    sample_reward = jnp.array(0.0, dtype=jnp.float32)
-    sample_done = jnp.array(0.0, dtype=jnp.float32)
-
-    return Transition(
-        sample_obs,
-        sample_action,
-        sample_reward,
-        sample_obs,  # next_obs has the same shape as obs
-        sample_done,
-    )
