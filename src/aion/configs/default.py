@@ -31,6 +31,7 @@ class Config:
     # --- Training Settings ---
     batch_size: int
     buffer_size: int
+    scan_chunk_size: int
 
     # --- Evaluation ---
     eval_frequency: int
