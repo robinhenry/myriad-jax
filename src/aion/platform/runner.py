@@ -102,6 +102,62 @@ def _make_train_step_fn(
     return train_step
 
 
+def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Callable:
+    """Factory to create a jitted evaluation rollout."""
+
+    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
+    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
+
+    def _broadcast_mask(mask: chex.Array, target: chex.Array) -> chex.Array:
+        return jnp.broadcast_to(jnp.expand_dims(mask, axis=-1), target.shape)
+
+    def _mask_tree(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
+        return jax.tree_util.tree_map(lambda new, old: jnp.where(mask, new, old), new_tree, old_tree)
+
+    @jax.jit
+    def eval_rollout(key: chex.PRNGKey, agent_state: AgentState) -> tuple[chex.PRNGKey, chex.Array, chex.Array]:
+        n_rollouts = config.eval_rollouts
+
+        key, reset_key = jax.random.split(key)
+        reset_keys = jax.random.split(reset_key, n_rollouts)
+        obs, env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+
+        episode_returns = jnp.zeros((n_rollouts,), dtype=jnp.float32)
+        dones = jnp.zeros((n_rollouts,), dtype=bool)
+
+        def body(carry, _):
+            key, obs, env_states, episode_returns, dones = carry
+
+            key, action_key = jax.random.split(key)
+            action_keys = jax.random.split(action_key, n_rollouts)
+            actions, _ = jax.vmap(agent.select_action, in_axes=(0, 0, 0, None))(
+                action_keys, obs, agent_state, agent.params
+            )
+
+            key, step_key = jax.random.split(key)
+            step_keys = jax.random.split(step_key, n_rollouts)
+            next_obs, next_env_states, rewards, step_dones, _ = vmapped_env_step(
+                step_keys, env_states, actions, env.params, env.config
+            )
+
+            active = jnp.logical_not(dones)
+            episode_returns = episode_returns + rewards * active.astype(rewards.dtype)
+
+            obs = jnp.where(_broadcast_mask(active, next_obs), next_obs, obs)
+            env_states = _mask_tree(active, next_env_states, env_states)
+
+            dones = jnp.logical_or(dones, step_dones.astype(bool))
+
+            return (key, obs, env_states, episode_returns, dones), None
+
+        initial_carry = (key, obs, env_states, episode_returns, dones)
+        (key, _, _, episode_returns, dones), _ = jax.lax.scan(body, initial_carry, jnp.arange(config.eval_max_steps))
+
+        return key, episode_returns, dones
+
+    return eval_rollout
+
+
 def train_and_evaluate(config: Config):
     """
     Main entry point for a training run.
@@ -134,8 +190,9 @@ def train_and_evaluate(config: Config):
     sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
     buffer_state = replay_buffer.init(sample_transition)
 
-    # Create the jitted training function
+    # Create the jitted training and evaluation functions
     train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.num_envs)
+    eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
     # 2. OUTER TRAINING LOOP
     for step in range(config.total_timesteps // config.num_envs):
@@ -147,13 +204,15 @@ def train_and_evaluate(config: Config):
             batch_size=config.batch_size,
         )
 
-        # Log metrics (this happens outside the JIT loop)
-        # if step % config.log_frequency == 0:
-        #     # Aggregate returns from all envs that finished in this step
-        #     finished_returns = metrics["episode_return"][metrics["episode_return"] != 0]
-        #     if len(finished_returns) > 0:
-        #         avg_return = finished_returns.mean()
-        #         print(f"Step: {step * config.num_envs}, Avg Return: {avg_return:.2f}, Loss: {metrics['loss']:.4f}")
+        # Periodically evaluate the policy and log returns
+        if (step + 1) % config.eval_frequency == 0:
+            key, eval_key = jax.random.split(key)
+            eval_key, eval_returns, eval_dones = eval_rollout_fn(eval_key, agent_state)
+            eval_returns = jax.device_get(eval_returns)
+            eval_dones = jax.device_get(eval_dones)
+            mean_return = float(eval_returns.mean())
+            global_step = (step + 1) * config.num_envs
+            print(f"[eval] step={global_step} mean_episode_return={mean_return:.3f}")
 
     print("Training finished.")
 

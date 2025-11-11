@@ -17,5 +17,10 @@ num_envs: 16
 batch_size: 256
 buffer_size: 10000
 
-# --- Logging & Evaluation ---
+# --- Evaluation ---
+eval_frequency: 500
+eval_rollouts: 100
+eval_max_steps: 1000
+
+# --- Logging ---
 log_frequency: 100

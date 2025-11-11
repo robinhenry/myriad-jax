@@ -32,7 +32,12 @@ class Config:
     batch_size: int
     buffer_size: int
 
-    # --- Logging & Evaluation ---
+    # --- Evaluation ---
+    eval_frequency: int
+    eval_rollouts: int
+    eval_max_steps: int
+
+    # --- Logging ---
     log_frequency: int
 
     # --- Component Configs ---
