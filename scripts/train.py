@@ -1,9 +1,14 @@
+import logging
+
 import hydra
 from omegaconf import DictConfig
 
 # Import your schema and the runner
 from aion.configs.default import Config
 from aion.platform.runner import train_and_evaluate
+
+# Suppress excessive JAX logging when running on CPU
+logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")

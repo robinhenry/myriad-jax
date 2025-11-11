@@ -6,14 +6,14 @@ from typing import Any, Dict, NamedTuple
 import chex
 import jax
 import jax.numpy as jnp
-from flax.struct import dataclass
+from flax import struct
 
 from aion.core.spaces import Box
 
 from .environment import Environment
 
 
-@dataclass
+@struct.dataclass
 class EnvConfig:
     """Static configuration for the environment."""
 
@@ -24,7 +24,7 @@ class EnvConfig:
     max_steps: int = 100
 
 
-@dataclass
+@struct.dataclass
 class EnvParams:
     """Dynamic parameters for the environment."""
 
@@ -32,18 +32,18 @@ class EnvParams:
     x_target: float
 
 
-def create_env_params(a: float = 1.0, x_target: float = 5.0) -> EnvParams:
-    """
-    Factory function to create and validate EnvParams and EnvConfig.
-    """
-    return EnvParams(a=a, x_target=x_target)
-
-
 class EnvState(NamedTuple):
     """Environment state containing position and time step."""
 
     x: chex.Array  # JAX array for position
     t: chex.Array  # JAX array for time step
+
+
+def create_env_params(a: float = 1.0, x_target: float = 5.0) -> EnvParams:
+    """
+    Factory function to create and validate EnvParams and EnvConfig.
+    """
+    return EnvParams(a=a, x_target=x_target)
 
 
 def _step(
@@ -104,10 +104,6 @@ def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array
     return jnp.array([state.x, params.x_target])
 
 
-def get_action_space_size() -> int:
-    return 1
-
-
 def get_obs_shape(_config: EnvConfig) -> tuple:
     """Get the size of the observation space."""
     return (2,)
@@ -115,7 +111,7 @@ def get_obs_shape(_config: EnvConfig) -> tuple:
 
 def get_action_space(config: EnvConfig) -> Box:
     """Get the continuous action space for the environment."""
-    return Box(low=-config.max_u, high=config.max_u, shape=(1,))
+    return Box(low=-config.max_u, high=config.max_u, shape=())
 
 
 def make_env(

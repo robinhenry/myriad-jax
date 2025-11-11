@@ -1,21 +1,22 @@
-from typing import Any, NamedTuple, Tuple
+from typing import Any, Tuple
 
 import chex
-from flax.struct import dataclass
+from flax import struct
 
 from aion.core.spaces import Space
 
 from .agent import Agent
 
 
-@dataclass
+@struct.dataclass
 class AgentParams:
     """Static parameters for the random agent."""
 
     action_space: Space
 
 
-class AgentState(NamedTuple):
+@struct.dataclass
+class AgentState:
     """A random agent has no state"""
 
     ...

@@ -1,19 +1,28 @@
-from dataclasses import asdict
 from functools import partial
 from typing import Any, Callable
 
 import chex
 import jax
 import jax.numpy as jnp
+from flax import struct
+from omegaconf import OmegaConf
 
 from aion.agents import make_agent
 from aion.agents.agent import Agent, AgentState
 from aion.configs.default import Config
 from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from aion.core.spaces import Space
-from aion.core.types import TrainingEnvState, Transition
+from aion.core.types import Transition
 from aion.envs import make_env
-from aion.envs.environment import Environment
+from aion.envs.environment import Environment, EnvironmentState
+
+
+@struct.dataclass
+class TrainingEnvState:
+    """Container for the state of a training environment, including observations."""
+
+    env_state: EnvironmentState
+    obs: chex.Array
 
 
 def _make_train_step_fn(
@@ -32,30 +41,31 @@ def _make_train_step_fn(
     def train_step(
         key: chex.PRNGKey,
         agent_state: AgentState,
-        env_states: TrainingEnvState,
+        training_env_states: TrainingEnvState,
         buffer_state: ReplayBufferState,
         batch_size: int,
-    ) -> tuple:
+    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState, dict]:
         """Executes one step of training across all parallel environments. This function is pure and jitted."""
+
+        last_obs = training_env_states.obs
 
         # 1. SELECT ACTION
         key, action_key = jax.random.split(key)
         action_keys = jax.random.split(action_key, num_envs)
-
         actions, agent_state = jax.vmap(agent.select_action, in_axes=(0, 0, 0, None))(
-            action_keys, env_states.obs, agent_state, agent.params
+            action_keys, last_obs, agent_state, agent.params
         )
 
         # 2. STEP THE ENVIRONMENTS
         key, step_key = jax.random.split(key)
         step_keys = jax.random.split(step_key, num_envs)
         next_obs, next_env_states, rewards, dones, infos = vmapped_env_step(
-            step_keys, env_states, actions, env.params, env.config
+            step_keys, training_env_states.env_state, actions, env.params, env.config
         )
 
         # 3. STORE TRANSITIONS AND SAMPLE FROM BUFFER
         key, buffer_key = jax.random.split(key)
-        transitions = Transition(env_states.obs, actions, rewards, next_obs, dones)
+        transitions = Transition(last_obs, actions, rewards, next_obs, dones)
         buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
 
         # 4. UPDATE THE AGENT
@@ -74,16 +84,17 @@ def _make_train_step_fn(
         final_env_states = jax.tree_util.tree_map(
             lambda old, new: jnp.where(dones, new, old), next_env_states, new_env_states
         )
-        # The final observation needs to be part of the final state
-        final_env_states = final_env_states.replace(obs=final_obs)
+
+        # Store the final states and observations as the new training environment state
+        new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
 
         # Add episode return to metrics for logging
-        metrics["episode_return"] = infos["episode_return"]
+        # metrics["episode_return"] = infos["episode_return"]
 
         return (
             key,
             agent_state,
-            final_env_states,
+            new_training_env_state,
             buffer_state,
             metrics,
         )
@@ -112,7 +123,7 @@ def train_and_evaluate(config: Config):
     # Initialize parallel environments
     env_keys = jax.random.split(env_key, config.num_envs)
     obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
-    env_states = env_states.replace(obs=obs)  # Ensure obs is in state
+    training_env_states = TrainingEnvState(env_state=env_states, obs=obs)
 
     # Initialize agent using the initial observation from one environment
     sample_obs = obs[0]  # type: ignore
@@ -128,28 +139,29 @@ def train_and_evaluate(config: Config):
 
     # 2. OUTER TRAINING LOOP
     for step in range(config.total_timesteps // config.num_envs):
-        key, agent_state, env_states, buffer_state, metrics = train_step_fn(
+        key, agent_state, training_env_states, buffer_state, metrics = train_step_fn(
             key=key,
             agent_state=agent_state,
-            env_states=env_states,
+            training_env_states=training_env_states,
             buffer_state=buffer_state,
             batch_size=config.batch_size,
         )
 
         # Log metrics (this happens outside the JIT loop)
-        if step % config.log_frequency == 0:
-            # Aggregate returns from all envs that finished in this step
-            finished_returns = metrics["episode_return"][metrics["episode_return"] != 0]
-            if len(finished_returns) > 0:
-                avg_return = finished_returns.mean()
-                print(f"Step: {step * config.num_envs}, Avg Return: {avg_return:.2f}, Loss: {metrics['loss']:.4f}")
+        # if step % config.log_frequency == 0:
+        #     # Aggregate returns from all envs that finished in this step
+        #     finished_returns = metrics["episode_return"][metrics["episode_return"] != 0]
+        #     if len(finished_returns) > 0:
+        #         avg_return = finished_returns.mean()
+        #         print(f"Step: {step * config.num_envs}, Avg Return: {avg_return:.2f}, Loss: {metrics['loss']:.4f}")
 
     print("Training finished.")
 
 
-def _get_factory_kwargs(config_obj: Any) -> dict:
+def _get_factory_kwargs(config: Any) -> dict:
     """Converts a dataclass config object to a dict for factory functions."""
-    kwargs = asdict(config_obj)
+    kwargs = OmegaConf.to_container(config, resolve=True)
+    assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
     return kwargs
 

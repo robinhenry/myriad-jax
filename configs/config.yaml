@@ -6,6 +6,7 @@
 defaults:
   - agent: random_agent
   - env: example_env
+  - _self_
 
 # --- Run Settings ---
 seed: 42
