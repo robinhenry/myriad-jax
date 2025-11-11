@@ -10,13 +10,6 @@ class AgentConfig:
     """Schema for the Agent's configuration."""
 
     name: str
-    learning_rate: float
-    gamma: float
-    epsilon_start: float
-    epsilon_end: float
-    epsilon_decay_steps: int
-    target_network_frequency: int
-    tau: float
 
 
 @dataclass

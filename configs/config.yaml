@@ -5,7 +5,7 @@
 # configurations for composable components.
 defaults:
   - agent: random_agent
-  - env: toy_env_v1
+  - env: example_env
 
 # --- Run Settings ---
 seed: 42

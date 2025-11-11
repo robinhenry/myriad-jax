@@ -2,8 +2,8 @@ import hydra
 from omegaconf import DictConfig
 
 # Import your schema and the runner
-from src.aion.configs.default import Config
-from src.aion.platform.runner import train_and_evaluate
+from aion.configs.default import Config
+from aion.platform.runner import train_and_evaluate
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
