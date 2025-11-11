@@ -6,6 +6,21 @@ from flax.struct import dataclass
 
 
 @dataclass
+class WandbConfig:
+    """Schema for optional Weights & Biases tracking configuration."""
+
+    enabled: bool
+    project: str | None
+    entity: str | None
+    group: str | None
+    job_type: str | None
+    run_name: str | None
+    mode: str | None
+    dir: str | None
+    tags: tuple[str, ...] | None
+
+
+@dataclass
 class AgentConfig:
     """Schema for the Agent's configuration."""
 
@@ -44,3 +59,4 @@ class Config:
     # --- Component Configs ---
     agent: AgentConfig
     env: EnvConfig
+    wandb: WandbConfig

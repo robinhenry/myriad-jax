@@ -1,9 +1,18 @@
+from dataclasses import asdict
 from functools import partial
 from typing import Any, Callable
 
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
+
+try:
+    import wandb  # type: ignore[import]
+except ImportError:  # pragma: no cover - handled at runtime
+    wandb = None  # type: ignore[assignment]
+else:
+    wandb_import_error = None
 from flax import struct
 from omegaconf import OmegaConf
 
@@ -23,6 +32,82 @@ class TrainingEnvState:
 
     env_state: EnvironmentState
     obs: chex.Array
+
+
+def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
+    """Removes items with None values from a dictionary."""
+
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def _summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
+    """Expands an array-like metric into scalar statistics for logging."""
+
+    try:
+        array = np.asarray(value)
+    except Exception:  # pragma: no cover - defensive guard
+        return {}
+
+    if array.size == 0:
+        return {}
+
+    if array.dtype == np.bool_:
+        array = array.astype(np.float32)
+
+    if not np.issubdtype(array.dtype, np.number):
+        return {}
+
+    array = np.asarray(array, dtype=np.float64)
+
+    if array.ndim == 0:
+        try:
+            scalar = float(array.item())
+        except (TypeError, ValueError):  # pragma: no cover - defensive guard
+            return {}
+        return {f"{prefix}{name}": scalar}
+
+    return {
+        f"{prefix}{name}/mean": float(np.nanmean(array)),
+        f"{prefix}{name}/std": float(np.nanstd(array)),
+        f"{prefix}{name}/max": float(np.nanmax(array)),
+        f"{prefix}{name}/min": float(np.nanmin(array)),
+    }
+
+
+def _maybe_init_wandb(config: Config):
+    """Initializes a Weights & Biases run when enabled in the config."""
+
+    wandb_config = getattr(config, "wandb", None)
+    if wandb_config is None or not wandb_config.enabled:
+        return None
+
+    if wandb is None:
+        message = (
+            "Weights & Biases tracking is enabled but the `wandb` package is not installed. "
+            "Install it with `pip install wandb` to proceed."
+        )
+        raise RuntimeError(message) from wandb_import_error
+
+    init_kwargs: dict[str, Any] = _drop_none(
+        {
+            "project": wandb_config.project,
+            "entity": wandb_config.entity,
+            "group": wandb_config.group,
+            "job_type": wandb_config.job_type,
+            "mode": wandb_config.mode,
+            "dir": wandb_config.dir,
+        }
+    )
+
+    if wandb_config.run_name:
+        init_kwargs["name"] = wandb_config.run_name
+
+    if wandb_config.tags:
+        init_kwargs["tags"] = list(wandb_config.tags)
+
+    init_kwargs["config"] = asdict(config)
+
+    return wandb.init(**init_kwargs)
 
 
 def _tree_select(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
@@ -251,11 +336,9 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
     return eval_rollout
 
 
-def train_and_evaluate(config: Config):
-    """
-    Main entry point for a training run.
-    Initializes everything and runs the outer training loop.
-    """
+def _run_training_loop(config: Config, wandb_run: Any) -> None:
+    """Executes the training loop and emits host-side and W&B logs."""
+
     # Initialize everything
     key = jax.random.PRNGKey(config.seed)
     key, env_key, agent_key, buffer_key = jax.random.split(key, 4)
@@ -322,17 +405,31 @@ def train_and_evaluate(config: Config):
             sliced_history = {name: values[:steps_this_chunk] for name, values in metrics_history.items()}
             metrics_host = {name: jax.device_get(values) for name, values in sliced_history.items()}
 
-        if log_frequency > 0 and steps_completed % log_frequency == 0 and metrics_host:
-            metric_parts = []
+        should_log = log_frequency > 0 and steps_completed % log_frequency == 0 and metrics_host
+        if should_log:
+            global_step = steps_completed * config.num_envs
+            metric_parts: list[str] = []
+            train_payload: dict[str, float] = {}
+            has_train_metrics = False
+
             for name, history in metrics_host.items():
                 value = history[-1]
                 try:
                     metric_parts.append(f"{name}={float(value):.4f}")
                 except (TypeError, ValueError):
-                    continue
+                    pass
+
+                summary = _summarize_metric("train/", name, value)
+                if summary:
+                    has_train_metrics = True
+                    train_payload.update(summary)
+
             if metric_parts:
-                global_step = steps_completed * config.num_envs
                 print(f"[train] step={global_step} {' '.join(metric_parts)}")
+
+            if wandb_run is not None and wandb is not None and has_train_metrics:
+                train_payload["train/global_env_steps"] = float(global_step)
+                wandb.log(train_payload, step=global_step)
 
         # Periodically run evaluation rollouts without touching the training buffer
         if eval_frequency > 0 and steps_completed > 0 and steps_completed % eval_frequency == 0:
@@ -352,10 +449,43 @@ def train_and_evaluate(config: Config):
                 f"[eval] step={global_step} mean_episode_return={mean_return:.3f} "
                 f"std_episode_return={std_return:.3f} mean_episode_length={mean_length:.1f}"
             )
+
+            if wandb_run is not None and wandb is not None:
+                eval_payload: dict[str, float] = {}
+                if eval_returns is not None:
+                    eval_payload.update(_summarize_metric("eval/", "episode_return", eval_returns))
+                if eval_lengths is not None:
+                    eval_payload.update(_summarize_metric("eval/", "episode_length", eval_lengths))
+                if eval_dones is not None:
+                    termination_rate = float(np.asarray(eval_dones, dtype=np.float32).mean())
+                    eval_payload["eval/termination_rate"] = termination_rate
+
+                if eval_payload:
+                    eval_payload["eval/global_env_steps"] = float(global_step)
+                    wandb.log(eval_payload, step=global_step)
+
             if eval_dones is not None and not bool(eval_dones.all()):
                 print("[eval] warning: some evaluation environments reached eval_max_steps without terminating.")
 
+    total_env_steps = steps_completed * config.num_envs
+    if wandb_run is not None and wandb is not None:
+        wandb.log({"train/final_env_steps": float(total_env_steps)}, step=total_env_steps)
+
     print("Training finished.")
+
+
+def train_and_evaluate(config: Config):
+    """
+    Main entry point for a training run.
+    Initializes everything and runs the outer training loop.
+    """
+    wandb_run = _maybe_init_wandb(config)
+
+    try:
+        _run_training_loop(config, wandb_run)
+    finally:
+        if wandb_run is not None and wandb is not None:
+            wandb.finish()
 
 
 def _get_factory_kwargs(config: Any) -> dict:

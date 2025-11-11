@@ -25,3 +25,14 @@ eval_max_steps: 1000
 
 # --- Logging ---
 log_frequency: 100
+
+wandb:
+  enabled: false
+  project: aion
+  entity: null
+  group: null
+  job_type: train
+  run_name: null
+  mode: online
+  dir: null
+  tags: []
