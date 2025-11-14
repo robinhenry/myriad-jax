@@ -10,7 +10,7 @@ defaults:
 
 # --- Run Settings ---
 seed: 42
-total_timesteps: 50000
+total_timesteps: 100000
 num_envs: 16
 
 # --- Training Settings ---
@@ -19,7 +19,7 @@ buffer_size: 10000
 scan_chunk_size: 128
 
 # --- Evaluation ---
-eval_frequency: 500
+eval_frequency: 100
 eval_rollouts: 100
 eval_max_steps: 1000
 
@@ -27,12 +27,12 @@ eval_max_steps: 1000
 log_frequency: 100
 
 wandb:
-  enabled: false
-  project: aion
-  entity: null
-  group: null
-  job_type: train
-  run_name: null
-  mode: online
-  dir: null
-  tags: []
+  enabled: true
+  entity: lugagne-lab  # team or user name
+  project: aion  # project name (will group runs)
+  group: scrap  # sub-group within a project (eg, sweep or experiment name)
+  job_type: train  # eg, train, eval, test
+  run_name: null  # if null, a default name will be generated
+  mode: offline  # 'online' or 'offline' (can later be synced)
+  dir: null  # where to log results locally (default: ./wandb/.)
+  tags: []  # list of tags that can be used for searching later

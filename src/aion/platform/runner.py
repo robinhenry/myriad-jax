@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from functools import partial
 from typing import Any, Callable
 
@@ -77,8 +76,8 @@ def _summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
 def _maybe_init_wandb(config: Config):
     """Initializes a Weights & Biases run when enabled in the config."""
 
-    wandb_config = getattr(config, "wandb", None)
-    if wandb_config is None or not wandb_config.enabled:
+    wandb_config = config.wandb
+    if not wandb_config.enabled:
         return None
 
     if wandb is None:
@@ -105,7 +104,7 @@ def _maybe_init_wandb(config: Config):
     if wandb_config.tags:
         init_kwargs["tags"] = list(wandb_config.tags)
 
-    init_kwargs["config"] = asdict(config)
+    init_kwargs["config"] = OmegaConf.to_container(config, resolve=True)
 
     return wandb.init(**init_kwargs)
 
