@@ -6,14 +6,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-try:
-    import wandb  # type: ignore[import]
-except ImportError:  # pragma: no cover - handled at runtime
-    wandb = None  # type: ignore[assignment]
-else:
-    wandb_import_error = None
-from flax import struct
-
 from aion.agents import make_agent
 from aion.agents.agent import Agent, AgentState
 from aion.configs.default import Config
@@ -21,146 +13,17 @@ from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from aion.core.spaces import Space
 from aion.core.types import BaseModel, Transition
 from aion.envs import make_env
-from aion.envs.environment import Environment, EnvironmentState
+from aion.envs.environment import Environment
 
-
-@struct.dataclass
-class TrainingEnvState:
-    """Container for the state of a training environment, including observations."""
-
-    env_state: EnvironmentState
-    obs: chex.Array
-
-
-def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
-    """Removes items with None values from a dictionary."""
-
-    return {key: value for key, value in values.items() if value is not None}
-
-
-def _prepare_metrics_host(metrics_history: Any, steps_this_chunk: int) -> dict[str, Any]:
-    """Transform scan metrics to host arrays, keeping only the active steps.
-
-    The chunk runner always executes a fixed number of scan iterations, padding
-    any inactive slots with zeros.  This helper slices the *leading*
-    ``steps_this_chunk`` entries (the ones whose mask was ``True``) and moves
-    them to host memory so downstream logging deals only with real data.
-    """
-
-    if not isinstance(metrics_history, dict) or not metrics_history or steps_this_chunk <= 0:
-        return {}
-
-    sliced_history = {name: values[:steps_this_chunk] for name, values in metrics_history.items()}
-    return {name: jax.device_get(values) for name, values in sliced_history.items()}
-
-
-def _build_train_payload(metrics_host: dict[str, Any]) -> dict[str, float]:
-    """Aggregates training metrics into scalar summaries suitable for W&B."""
-
-    payload: dict[str, float] = {}
-    for name, history in metrics_host.items():
-        if hasattr(history, "__getitem__") and len(history) > 0:
-            value = history[-1]
-            payload.update(_summarize_metric("train/", name, value))
-    return payload
-
-
-def _summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
-    """Expands an array-like metric into scalar statistics for logging."""
-
-    try:
-        array = np.asarray(value)
-    except Exception:  # pragma: no cover - defensive guard
-        return {}
-
-    if array.size == 0:
-        return {}
-
-    if array.dtype == np.bool_:
-        array = array.astype(np.float32)
-
-    if not np.issubdtype(array.dtype, np.number):
-        return {}
-
-    array = np.asarray(array, dtype=np.float64)
-
-    if array.ndim == 0:
-        try:
-            scalar = float(array.item())
-        except (TypeError, ValueError):  # pragma: no cover - defensive guard
-            return {}
-        return {f"{prefix}{name}": scalar}
-
-    return {
-        f"{prefix}{name}/mean": float(np.nanmean(array)),
-        f"{prefix}{name}/std": float(np.nanstd(array)),
-        f"{prefix}{name}/max": float(np.nanmax(array)),
-        f"{prefix}{name}/min": float(np.nanmin(array)),
-    }
-
-
-def _maybe_init_wandb(config: Config):
-    """Initializes a Weights & Biases run when enabled in the config."""
-
-    wandb_config = config.wandb
-    if not wandb_config.enabled:
-        return None
-
-    if wandb is None:
-        message = (
-            "Weights & Biases tracking is enabled but the `wandb` package is not installed. "
-            "Install it with `pip install wandb` to proceed."
-        )
-        raise RuntimeError(message) from wandb_import_error
-
-    init_kwargs: dict[str, Any] = _drop_none(
-        {
-            "project": wandb_config.project,
-            "entity": wandb_config.entity,
-            "group": wandb_config.group,
-            "job_type": wandb_config.job_type,
-            "mode": wandb_config.mode,
-            "dir": wandb_config.dir,
-        }
-    )
-
-    if wandb_config.run_name:
-        init_kwargs["name"] = wandb_config.run_name
-
-    if wandb_config.tags:
-        init_kwargs["tags"] = list(wandb_config.tags)
-
-    init_kwargs["config"] = config.model_dump()
-
-    return wandb.init(**init_kwargs)
-
-
-def _tree_select(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
-    """Selects between two pytrees using a scalar boolean mask."""
-
-    return jax.tree_util.tree_map(lambda new, old: jax.lax.select(mask, new, old), new_tree, old_tree)
-
-
-def _expand_mask(mask: chex.Array, target_ndim: int) -> chex.Array:
-    """Reshapes a mask so it can broadcast to a target rank."""
-
-    expand_dims = target_ndim - mask.ndim
-    if expand_dims <= 0:
-        return mask
-    return mask.reshape(mask.shape + (1,) * expand_dims)
-
-
-def _where_mask(mask: chex.Array, new_value: chex.Array, old_value: chex.Array) -> chex.Array:
-    """Selects array values using a boolean mask, supporting broadcasting."""
-
-    mask_bool = mask.astype(jnp.bool_)
-    return jnp.where(_expand_mask(mask_bool, new_value.ndim), new_value, old_value)
-
-
-def _mask_tree(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
-    """Selects between two pytrees using a (potentially vector) mask."""
-
-    return jax.tree_util.tree_map(lambda new, old: _where_mask(mask, new, old), new_tree, old_tree)
+from .logging_utils import (
+    build_train_payload,
+    maybe_init_wandb,
+    prepare_metrics_host,
+    summarize_metric,
+    wandb,
+)
+from .scan_utils import make_chunk_runner, mask_tree, where_mask
+from .shared import TrainingEnvState
 
 
 def _make_train_step_fn(
@@ -222,8 +85,8 @@ def _make_train_step_fn(
         new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
 
         # If done, use the new state, otherwise keep the existing one
-        final_obs = _where_mask(dones_bool, new_obs, next_obs)
-        final_env_states = _mask_tree(dones_bool, new_env_states, next_env_states)
+        final_obs = where_mask(dones_bool, new_obs, next_obs)
+        final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
 
         # Store the final states and observations as the new training environment state
         new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
@@ -237,58 +100,6 @@ def _make_train_step_fn(
         )
 
     return train_step
-
-
-def _make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
-    """Wrap ``train_step_fn`` in a fixed-size, mask-aware scan.
-
-    The returned function expects a carry tuple and an ``active_mask`` whose
-    length defines the ``chunk_size``. Each mask entry triggers exactly one
-    call to ``train_step_fn``; however, when a mask value is ``False`` the
-    freshly-computed carry/metrics are discarded and the previous values are
-    threaded through unchanged. This allows the outer loop to JIT a single
-    scan while still respecting variable-length chunks (e.g. stopping right at
-    log or eval boundaries). Metrics for inactive slots are zeroed so the
-    caller can simply slice the first ``steps_this_chunk`` rows.
-    """
-
-    def run_chunk(
-        carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],
-        active_mask: chex.Array,
-    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState], Any]:
-        # Mask determines how many scan iterations should actually apply the update
-        # Remaining iterations keep the carry unchanged to allow fixed-size scans
-        active_mask = active_mask.astype(jnp.bool_)
-
-        def body(
-            carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],
-            active: chex.Array,
-        ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState], dict]:
-            key, agent_state, training_env_states, buffer_state = carry
-            key_new, agent_state_new, training_env_states_new, buffer_state_new, metrics = train_step_fn(
-                key=key,
-                agent_state=agent_state,
-                training_env_states=training_env_states,
-                buffer_state=buffer_state,
-                batch_size=batch_size,
-            )
-
-            # Selectively commit the new state only when the mask signals an active step
-            active_mask_scalar = jnp.asarray(active, dtype=jnp.bool_)
-            key = jax.lax.select(active_mask_scalar, key_new, key)
-            agent_state = _tree_select(active_mask_scalar, agent_state_new, agent_state)
-            training_env_states = _tree_select(active_mask_scalar, training_env_states_new, training_env_states)
-            buffer_state = _tree_select(active_mask_scalar, buffer_state_new, buffer_state)
-            metrics = jax.tree_util.tree_map(
-                lambda x: jax.lax.select(active_mask_scalar, x, jnp.zeros_like(x)),
-                metrics,
-            )
-
-            return (key, agent_state, training_env_states, buffer_state), metrics
-
-        return jax.lax.scan(body, carry, active_mask)
-
-    return jax.jit(run_chunk)
 
 
 def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Callable:
@@ -347,8 +158,8 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
             lengths = lengths + active.astype(lengths.dtype)
 
             env_state = TrainingEnvState(
-                env_state=_mask_tree(active, next_env_states, env_state.env_state),
-                obs=_where_mask(active, next_obs, env_state.obs),
+                env_state=mask_tree(active, next_env_states, env_state.env_state),
+                obs=where_mask(active, next_obs, env_state.obs),
             )
 
             dones = jnp.logical_or(dones, step_dones)
@@ -409,7 +220,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
     chunk_size = max(1, config.run.scan_chunk_size)
-    run_chunk_fn = _make_chunk_runner(train_step_fn, config.run.batch_size)
+    run_chunk_fn = make_chunk_runner(train_step_fn, config.run.batch_size)
 
     total_steps = config.run.total_timesteps // config.run.num_envs
     log_frequency = config.run.log_frequency
@@ -440,11 +251,11 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
         global_step = steps_completed * config.run.num_envs
 
         # Host-side logging pulls the latest metrics emitted during the training chunk
-        metrics_host = _prepare_metrics_host(metrics_history, steps_this_chunk)
+        metrics_host = prepare_metrics_host(metrics_history, steps_this_chunk)
 
         should_log = steps_completed % log_frequency == 0 and metrics_host
         if should_log and wandb_run is not None and wandb is not None:
-            train_payload = _build_train_payload(metrics_host)
+            train_payload = build_train_payload(metrics_host)
             if train_payload:
                 train_payload["train/global_env_steps"] = float(global_step)
                 wandb.log(train_payload, step=global_step)
@@ -463,9 +274,9 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
             if wandb_run is not None and wandb is not None:
                 eval_payload: dict[str, float] = {}
                 if eval_returns is not None:
-                    eval_payload.update(_summarize_metric("eval/", "episode_return", eval_returns))
+                    eval_payload.update(summarize_metric("eval/", "episode_return", eval_returns))
                 if eval_lengths is not None:
-                    eval_payload.update(_summarize_metric("eval/", "episode_length", eval_lengths))
+                    eval_payload.update(summarize_metric("eval/", "episode_length", eval_lengths))
                 if eval_dones is not None:
                     termination_rate = float(np.asarray(eval_dones, dtype=np.float32).mean())
                     eval_payload["eval/termination_rate"] = termination_rate
@@ -485,7 +296,7 @@ def train_and_evaluate(config: Config):
     Main entry point for a training run.
     Initializes everything and runs the outer training loop.
     """
-    wandb_run = _maybe_init_wandb(config)
+    wandb_run = maybe_init_wandb(config)
 
     try:
         _run_training_loop(config, wandb_run)

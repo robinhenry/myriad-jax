@@ -58,7 +58,7 @@ def test_get_action_space(env: Environment):
     space = env.get_action_space(env.config)
     space = cast(spaces.Box, space)
 
-    assert space.shape == (1,)
+    assert space.shape == ()
 
 
 def test_get_obs_shape(env: Environment):

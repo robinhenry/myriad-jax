@@ -38,7 +38,7 @@ def _select_action(
 def _update(
     _key: chex.PRNGKey, agent_state: AgentState, _transition: Any, _params: AgentParams
 ) -> Tuple[AgentState, dict]:
-    return agent_state, {"action": _transition.action}
+    return agent_state, {}
 
 
 def make_agent(action_space: Space) -> Agent:
