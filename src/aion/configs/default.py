@@ -2,6 +2,8 @@
 Defines the schema for training run configurations using hierarchical dataclasses.
 The default values are managed by Hydra in the .yaml files.
 """
+from pydantic import PositiveInt
+
 from aion.core.types import BaseModel
 
 
@@ -35,21 +37,21 @@ class RunConfig(BaseModel):
 
     # --- Run Settings ---
     seed: int
-    total_timesteps: int
-    num_envs: int
+    total_timesteps: PositiveInt
+    num_envs: PositiveInt
 
     # --- Training Settings ---
-    batch_size: int
-    buffer_size: int
-    scan_chunk_size: int
+    batch_size: PositiveInt
+    buffer_size: PositiveInt
+    scan_chunk_size: PositiveInt
 
     # --- Evaluation ---
-    eval_frequency: int
-    eval_rollouts: int
-    eval_max_steps: int
+    eval_frequency: PositiveInt
+    eval_rollouts: PositiveInt
+    eval_max_steps: PositiveInt
 
     # --- Logging ---
-    log_frequency: int
+    log_frequency: PositiveInt
 
 
 class Config(BaseModel):

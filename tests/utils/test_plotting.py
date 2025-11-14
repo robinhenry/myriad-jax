@@ -1,8 +1,10 @@
 """Tests for the plotting utilities."""
 
-import jax.numpy as jnp
 from pathlib import Path
+
+import jax.numpy as jnp
 import pytest
+
 from aion.utils.plotting.episodes import plot_episodes
 
 
@@ -19,9 +21,7 @@ class TestPlotting:
         rewards = jnp.zeros((num_episodes, num_steps))
         return observations, rewards
 
-    def test_plot_episodes(
-        self, sample_data: tuple[jnp.ndarray, jnp.ndarray], tmp_path: Path
-    ):
+    def test_plot_episodes(self, sample_data: tuple[jnp.ndarray, jnp.ndarray], tmp_path: Path):
         """Tests the plot_episodes function."""
         observations, rewards = sample_data
         filename = tmp_path / "test_plot.html"

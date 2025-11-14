@@ -39,7 +39,13 @@ def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _prepare_metrics_host(metrics_history: Any, steps_this_chunk: int) -> dict[str, Any]:
-    """Transforms device metrics into host numpy arrays for logging."""
+    """Transform scan metrics to host arrays, keeping only the active steps.
+
+    The chunk runner always executes a fixed number of scan iterations, padding
+    any inactive slots with zeros.  This helper slices the *leading*
+    ``steps_this_chunk`` entries (the ones whose mask was ``True``) and moves
+    them to host memory so downstream logging deals only with real data.
+    """
 
     if not isinstance(metrics_history, dict) or not metrics_history or steps_this_chunk <= 0:
         return {}
@@ -184,9 +190,12 @@ def _make_train_step_fn(
         # Select actions using per-env keys while sharing agent state and params
         key, action_key = jax.random.split(key)
         action_keys = jax.random.split(action_key, num_envs)
-        actions, agent_state = jax.vmap(agent.select_action, in_axes=(0, 0, None, None))(
-            action_keys, last_obs, agent_state, agent.params
-        )
+        # Keep a shared agent_state while still batching per-env actions by using `out_axes=(0, None)`
+        actions, agent_state = jax.vmap(
+            agent.select_action,
+            in_axes=(0, 0, None, None),
+            out_axes=(0, None),
+        )(action_keys, last_obs, agent_state, agent.params)
 
         # Step environments in parallel and capture the resulting transitions
         key, step_key = jax.random.split(key)
@@ -231,7 +240,17 @@ def _make_train_step_fn(
 
 
 def _make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
-    """Creates a JIT-compiled function that executes a chunk of training steps via lax.scan."""
+    """Wrap ``train_step_fn`` in a fixed-size, mask-aware scan.
+
+    The returned function expects a carry tuple and an ``active_mask`` whose
+    length defines the ``chunk_size``. Each mask entry triggers exactly one
+    call to ``train_step_fn``; however, when a mask value is ``False`` the
+    freshly-computed carry/metrics are discarded and the previous values are
+    threaded through unchanged. This allows the outer loop to JIT a single
+    scan while still respecting variable-length chunks (e.g. stopping right at
+    log or eval boundaries). Metrics for inactive slots are zeroed so the
+    caller can simply slice the first ``steps_this_chunk`` rows.
+    """
 
     def run_chunk(
         carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],

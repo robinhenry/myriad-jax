@@ -1,7 +1,7 @@
 from typing import NamedTuple
 
 import chex
-from pydantic import BaseModel as _BaseModel
+from pydantic import BaseModel as _BaseModel, ConfigDict
 
 
 class Transition(NamedTuple):
@@ -15,7 +15,6 @@ class Transition(NamedTuple):
 class BaseModel(_BaseModel):
     """Pydantic BaseModel subclass to be used throughout the codebase."""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     ...
