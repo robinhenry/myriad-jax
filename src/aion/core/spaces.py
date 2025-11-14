@@ -43,3 +43,25 @@ class Box(Space):
     def contains(self, x: chex.Array) -> bool:
         """Check if x is within bounds."""
         return bool(jnp.all(x >= self.low) and jnp.all(x <= self.high))
+
+
+class Discrete(Space):
+    """A finite set of integer actions {0, 1, ..., n-1}."""
+
+    def __init__(self, n: int, dtype: Any = jnp.int32):
+        if n <= 0:
+            raise ValueError("Discrete space size must be positive")
+        self.n = int(n)
+        self.dtype = dtype
+        self.shape: Tuple[int, ...] = ()
+
+    def sample(self, key: chex.PRNGKey) -> chex.Array:
+        """Sample uniformly from the discrete set."""
+        return jax.random.randint(key, shape=self.shape, minval=0, maxval=self.n, dtype=self.dtype)
+
+    def contains(self, x: chex.Array) -> bool:
+        """Check if x is a valid discrete value."""
+        value = jnp.asarray(x)
+        if value.ndim != 0:
+            return False
+        return bool((value >= 0) & (value < self.n))
