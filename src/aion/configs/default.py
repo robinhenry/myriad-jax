@@ -2,11 +2,10 @@
 Defines the schema for training run configurations using hierarchical dataclasses.
 The default values are managed by Hydra in the .yaml files.
 """
-from flax.struct import dataclass
+from aion.core.types import BaseModel
 
 
-@dataclass
-class WandbConfig:
+class WandbConfig(BaseModel):
     """Schema for optional Weights & Biases tracking configuration."""
 
     enabled: bool
@@ -20,23 +19,19 @@ class WandbConfig:
     tags: tuple[str, ...] | None
 
 
-@dataclass
-class AgentConfig:
+class AgentConfig(BaseModel):
     """Schema for the Agent's configuration."""
 
     name: str
 
 
-@dataclass
-class EnvConfig:
+class EnvConfig(BaseModel):
     """Schema for the Environment's configuration."""
 
     name: str
 
 
-@dataclass
-class Config:
-    """Schema for the top-level configuration of a training run."""
+class RunConfig(BaseModel):
 
     # --- Run Settings ---
     seed: int
@@ -56,7 +51,12 @@ class Config:
     # --- Logging ---
     log_frequency: int
 
+
+class Config(BaseModel):
+    """Schema for the top-level configuration of a training run."""
+
     # --- Component Configs ---
+    run: RunConfig
     agent: AgentConfig
     env: EnvConfig
     wandb: WandbConfig

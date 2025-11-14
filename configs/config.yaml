@@ -8,23 +8,24 @@ defaults:
   - env: example_env
   - _self_
 
-# --- Run Settings ---
-seed: 42
-total_timesteps: 100000
-num_envs: 16
+run:
+  # --- Run Settings ---
+  seed: 42
+  total_timesteps: 1e7
+  num_envs: 124
 
-# --- Training Settings ---
-batch_size: 256
-buffer_size: 10000
-scan_chunk_size: 128
+  # --- Training Settings ---
+  batch_size: 256
+  buffer_size: 10000
+  scan_chunk_size: 128
 
-# --- Evaluation ---
-eval_frequency: 100
-eval_rollouts: 100
-eval_max_steps: 1000
+  # --- Evaluation ---
+  eval_frequency: 1e3
+  eval_rollouts: 100
+  eval_max_steps: 1000
 
-# --- Logging ---
-log_frequency: 100
+  # --- Logging ---
+  log_frequency: 1e3
 
 wandb:
   enabled: true

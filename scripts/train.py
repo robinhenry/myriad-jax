@@ -1,7 +1,7 @@
 import logging
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 # Import your schema and the runner
 from aion.configs.default import Config
@@ -22,17 +22,16 @@ def main(cfg: DictConfig) -> None:
     3. Allow overrides from the command line.
     4. Pass the final configuration as the `cfg` argument.
     """
-    # Use hydra.utils.instantiate to directly convert the composed
-    # config (cfg) into our typed, structured Config object.
-    # Hydra will recursively build AgentConfig and EnvConfig as well.
-    final_config: Config = hydra.utils.instantiate(cfg)
+    # Convert the Hydra configuration into a Pydantic configuration
+    config_dict = OmegaConf.to_object(cfg)
+    config: Config = Config(**config_dict)  # type: ignore
 
     print("--- Running with the following configuration ---")
-    print(final_config)
+    print(config)
     print("------------------------------------------------")
 
     # Call your existing runner with the fully-typed and populated config object
-    train_and_evaluate(final_config)
+    train_and_evaluate(config)
 
 
 if __name__ == "__main__":

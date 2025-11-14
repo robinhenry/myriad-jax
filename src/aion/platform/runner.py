@@ -13,14 +13,13 @@ except ImportError:  # pragma: no cover - handled at runtime
 else:
     wandb_import_error = None
 from flax import struct
-from omegaconf import OmegaConf
 
 from aion.agents import make_agent
 from aion.agents.agent import Agent, AgentState
 from aion.configs.default import Config
 from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from aion.core.spaces import Space
-from aion.core.types import Transition
+from aion.core.types import BaseModel, Transition
 from aion.envs import make_env
 from aion.envs.environment import Environment, EnvironmentState
 
@@ -37,6 +36,27 @@ def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
     """Removes items with None values from a dictionary."""
 
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _prepare_metrics_host(metrics_history: Any, steps_this_chunk: int) -> dict[str, Any]:
+    """Transforms device metrics into host numpy arrays for logging."""
+
+    if not isinstance(metrics_history, dict) or not metrics_history or steps_this_chunk <= 0:
+        return {}
+
+    sliced_history = {name: values[:steps_this_chunk] for name, values in metrics_history.items()}
+    return {name: jax.device_get(values) for name, values in sliced_history.items()}
+
+
+def _build_train_payload(metrics_host: dict[str, Any]) -> dict[str, float]:
+    """Aggregates training metrics into scalar summaries suitable for W&B."""
+
+    payload: dict[str, float] = {}
+    for name, history in metrics_host.items():
+        if hasattr(history, "__getitem__") and len(history) > 0:
+            value = history[-1]
+            payload.update(_summarize_metric("train/", name, value))
+    return payload
 
 
 def _summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
@@ -104,7 +124,7 @@ def _maybe_init_wandb(config: Config):
     if wandb_config.tags:
         init_kwargs["tags"] = list(wandb_config.tags)
 
-    init_kwargs["config"] = OmegaConf.to_container(config, resolve=True)
+    init_kwargs["config"] = config.model_dump()
 
     return wandb.init(**init_kwargs)
 
@@ -257,8 +277,8 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
 
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
-    num_eval_envs = config.eval_rollouts
-    max_eval_steps = config.eval_max_steps
+    num_eval_envs = config.run.eval_rollouts
+    max_eval_steps = config.run.eval_max_steps
 
     @jax.jit
     def eval_rollout(key: chex.PRNGKey, agent_state: AgentState) -> tuple[chex.PRNGKey, dict[str, chex.Array]]:
@@ -339,7 +359,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     """Executes the training loop and emits host-side and W&B logs."""
 
     # Initialize everything
-    key = jax.random.PRNGKey(config.seed)
+    key = jax.random.PRNGKey(config.run.seed)
     key, env_key, agent_key, buffer_key = jax.random.split(key, 4)
 
     # Create the environment
@@ -352,7 +372,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     agent = make_agent(config.agent.name, action_space=action_space, **agent_kwargs)
 
     # Initialize parallel environments
-    env_keys = jax.random.split(env_key, config.num_envs)
+    env_keys = jax.random.split(env_key, config.run.num_envs)
     obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
     training_env_states = TrainingEnvState(env_state=env_states, obs=obs)
 
@@ -361,20 +381,20 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     agent_state = agent.init(agent_key, sample_obs, agent.params)
 
     # Initialize replay buffer
-    replay_buffer = ReplayBuffer(buffer_size=config.buffer_size)
+    replay_buffer = ReplayBuffer(buffer_size=config.run.buffer_size)
     sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
     buffer_state = replay_buffer.init(sample_transition)
 
     # Build jitted execution primitives
-    train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.num_envs)
+    train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
     eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
-    chunk_size = max(1, config.scan_chunk_size)
-    run_chunk_fn = _make_chunk_runner(train_step_fn, config.batch_size)
+    chunk_size = max(1, config.run.scan_chunk_size)
+    run_chunk_fn = _make_chunk_runner(train_step_fn, config.run.batch_size)
 
-    total_steps = config.total_timesteps // config.num_envs
-    log_frequency = config.log_frequency
-    eval_frequency = config.eval_frequency
+    total_steps = config.run.total_timesteps // config.run.num_envs
+    log_frequency = config.run.log_frequency
+    eval_frequency = config.run.eval_frequency
 
     steps_completed = 0
     while steps_completed < total_steps:
@@ -384,7 +404,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
             if frequency <= 0:
                 return chunk_size
             remainder = current_step % frequency
-            return frequency if remainder == 0 else frequency - remainder
+            result = frequency if remainder == 0 else frequency - remainder
+            return result
 
         # Determine how many scan iterations to run before the next logging or eval boundary
         steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
@@ -397,41 +418,21 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
         )
 
         steps_completed += steps_this_chunk
+        global_step = steps_completed * config.run.num_envs
 
-        # Host-side logging pulls the latest metrics emitted during the chunk
-        metrics_host: dict[str, Any] = {}
-        if isinstance(metrics_history, dict) and metrics_history and steps_this_chunk > 0:
-            sliced_history = {name: values[:steps_this_chunk] for name, values in metrics_history.items()}
-            metrics_host = {name: jax.device_get(values) for name, values in sliced_history.items()}
+        # Host-side logging pulls the latest metrics emitted during the training chunk
+        metrics_host = _prepare_metrics_host(metrics_history, steps_this_chunk)
 
-        should_log = log_frequency > 0 and steps_completed % log_frequency == 0 and metrics_host
-        if should_log:
-            global_step = steps_completed * config.num_envs
-            metric_parts: list[str] = []
-            train_payload: dict[str, float] = {}
-            has_train_metrics = False
-
-            for name, history in metrics_host.items():
-                value = history[-1]
-                try:
-                    metric_parts.append(f"{name}={float(value):.4f}")
-                except (TypeError, ValueError):
-                    pass
-
-                summary = _summarize_metric("train/", name, value)
-                if summary:
-                    has_train_metrics = True
-                    train_payload.update(summary)
-
-            if metric_parts:
-                print(f"[train] step={global_step} {' '.join(metric_parts)}")
-
-            if wandb_run is not None and wandb is not None and has_train_metrics:
+        should_log = steps_completed % log_frequency == 0 and metrics_host
+        if should_log and wandb_run is not None and wandb is not None:
+            train_payload = _build_train_payload(metrics_host)
+            if train_payload:
                 train_payload["train/global_env_steps"] = float(global_step)
                 wandb.log(train_payload, step=global_step)
 
         # Periodically run evaluation rollouts without touching the training buffer
-        if eval_frequency > 0 and steps_completed > 0 and steps_completed % eval_frequency == 0:
+        should_eval = eval_frequency > 0 and steps_completed > 0 and steps_completed % eval_frequency == 0
+        if should_eval:
             key, eval_key = jax.random.split(key)
             eval_key, eval_metrics = eval_rollout_fn(eval_key, agent_state)
             key = eval_key
@@ -439,15 +440,6 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
             eval_returns = eval_metrics_host.get("episode_return")
             eval_lengths = eval_metrics_host.get("episode_length")
             eval_dones = eval_metrics_host.get("dones")
-
-            mean_return = float(eval_returns.mean()) if eval_returns is not None else float("nan")
-            std_return = float(eval_returns.std()) if eval_returns is not None else float("nan")
-            mean_length = float(eval_lengths.mean()) if eval_lengths is not None else float("nan")
-            global_step = steps_completed * config.num_envs
-            print(
-                f"[eval] step={global_step} mean_episode_return={mean_return:.3f} "
-                f"std_episode_return={std_return:.3f} mean_episode_length={mean_length:.1f}"
-            )
 
             if wandb_run is not None and wandb is not None:
                 eval_payload: dict[str, float] = {}
@@ -458,19 +450,15 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
                 if eval_dones is not None:
                     termination_rate = float(np.asarray(eval_dones, dtype=np.float32).mean())
                     eval_payload["eval/termination_rate"] = termination_rate
+                    eval_payload["eval/non_termination_rate"] = float(1.0 - termination_rate)
 
                 if eval_payload:
                     eval_payload["eval/global_env_steps"] = float(global_step)
                     wandb.log(eval_payload, step=global_step)
 
-            if eval_dones is not None and not bool(eval_dones.all()):
-                print("[eval] warning: some evaluation environments reached eval_max_steps without terminating.")
-
-    total_env_steps = steps_completed * config.num_envs
+    total_env_steps = steps_completed * config.run.num_envs
     if wandb_run is not None and wandb is not None:
         wandb.log({"train/final_env_steps": float(total_env_steps)}, step=total_env_steps)
-
-    print("Training finished.")
 
 
 def train_and_evaluate(config: Config):
@@ -487,9 +475,9 @@ def train_and_evaluate(config: Config):
             wandb.finish()
 
 
-def _get_factory_kwargs(config: Any) -> dict:
+def _get_factory_kwargs(config: BaseModel) -> dict:
     """Converts a dataclass config object to a dict for factory functions."""
-    kwargs = OmegaConf.to_container(config, resolve=True)
+    kwargs = config.model_dump()
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
     return kwargs
