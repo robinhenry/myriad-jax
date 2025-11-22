@@ -1,6 +1,6 @@
 """A toy control environment implemented as pure JAX functions."""
 
-from functools import partial
+import logging
 from typing import Any, Dict, NamedTuple
 
 import chex
@@ -11,6 +11,8 @@ from flax import struct
 from aion.core.spaces import Box
 
 from .environment import Environment
+
+logger = logging.getLogger(__name__)
 
 
 @struct.dataclass
@@ -88,16 +90,8 @@ def _reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[che
     return obs, state
 
 
-@partial(jax.jit, static_argnames=["config"])
-def step(
-    key: chex.PRNGKey, state: EnvState, action: chex.Array, params: EnvParams, config: EnvConfig
-) -> tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[str, Any]]:
-    return _step(key, state, action, params, config)
-
-
-@partial(jax.jit, static_argnames=["config"])
-def reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[chex.Array, EnvState]:
-    return _reset(key, params, config)
+step = jax.jit(_step, static_argnames=["config"])
+reset = jax.jit(_reset, static_argnames=["config"])
 
 
 def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array:
@@ -144,9 +138,7 @@ def make_env(
     if params is None:
         params = create_env_params(**kwargs)
     elif kwargs:
-        print(
-            "Warning: `params` object was provided, so keyword arguments " f"({list(kwargs.keys())}) will be ignored."
-        )
+        logger.warning("`params` object was provided, so keyword arguments %s will be ignored.", list(kwargs.keys()))
 
     return Environment(
         step=step,

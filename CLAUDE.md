@@ -114,7 +114,6 @@ src/aion/
 │   └── random.py         # Random agent implementation
 ├── envs/           # Environment implementations
 │   ├── environment.py    # Environment protocol and base types
-│   ├── toy_env.py        # Simple toy environment
 │   ├── example_env.py    # Example environment template
 │   └── ccas_ccar.py      # CCAS-CCAR environment
 ├── configs/        # Configuration schemas
