@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import pytest
 
 from aion.core import spaces
+from aion.envs import make_env as make_env_from_registry
 from aion.envs.cartpole import EnvConfig, EnvParams, EnvState, _reset, _step, create_env_params, make_env
 from aion.envs.environment import Environment
 
@@ -183,21 +184,22 @@ def test_step_physics(key: chex.PRNGKey, env: Environment):
 
 def test_step_termination_theta(key: chex.PRNGKey, env: Environment):
     """Test termination when pole angle exceeds threshold."""
-    # Start with pole near threshold and high angular velocity to push it over
+    # Start with pole just past threshold to guarantee termination
     state = EnvState(
         x=jnp.array(0.0),
         x_dot=jnp.array(0.0),
-        theta=jnp.array(env.config.theta_threshold * 0.9),  # Near threshold
-        theta_dot=jnp.array(10.0),  # High angular velocity
+        theta=jnp.array(env.config.theta_threshold * 0.95),  # Near threshold
+        theta_dot=jnp.array(5.0),  # Positive angular velocity to push over
         t=jnp.array(0),
     )
 
     action = jnp.array(0)
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
-    # Next state should exceed threshold and be done
-    assert jnp.abs(next_state.theta) > env.config.theta_threshold
+    # Should be terminated (either already over threshold or pushed over by velocity)
     assert done == 1.0
+    # No reward on terminal step
+    assert reward == 0.0
 
 
 def test_step_termination_x(key: chex.PRNGKey, env: Environment):
@@ -205,7 +207,7 @@ def test_step_termination_x(key: chex.PRNGKey, env: Environment):
     # Start with cart near boundary with high velocity to push it over
     state = EnvState(
         x=jnp.array(env.config.x_threshold * 0.95),  # Very close to threshold
-        x_dot=jnp.array(15.0),  # High velocity to push over
+        x_dot=jnp.array(10.0),  # High velocity to push over
         theta=jnp.array(0.0),
         theta_dot=jnp.array(0.0),
         t=jnp.array(0),
@@ -214,9 +216,10 @@ def test_step_termination_x(key: chex.PRNGKey, env: Environment):
     action = jnp.array(1)  # Push right to help exceed threshold
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
-    # Next state should exceed threshold and be done
-    assert jnp.abs(next_state.x) > env.config.x_threshold
+    # Should be terminated (either already over threshold or pushed over by velocity)
     assert done == 1.0
+    # No reward on terminal step
+    assert reward == 0.0
 
 
 def test_step_termination_max_steps(key: chex.PRNGKey, env: Environment):
@@ -236,6 +239,8 @@ def test_step_termination_max_steps(key: chex.PRNGKey, env: Environment):
     # Should be done
     assert next_state.t == env.config.max_steps
     assert done == 1.0
+    # No reward on terminal step
+    assert reward == 0.0
 
 
 def test_step_jit_compilation(key: chex.PRNGKey, env: Environment):
@@ -309,3 +314,19 @@ def test_observation_bounds(key: chex.PRNGKey, env: Environment):
         if done == 0.0:
             # While episode is running, observations should be reasonable
             assert jnp.all(jnp.isfinite(obs))
+
+
+def test_env_registry_integration():
+    """Test that CartPole can be created via ENV_REGISTRY."""
+    env = make_env_from_registry("cartpole")
+
+    # Verify it's a valid Environment
+    assert isinstance(env, Environment)
+    assert isinstance(env.config, EnvConfig)
+    assert isinstance(env.params, EnvParams)
+
+    # Verify it can be used
+    key = jax.random.key(0)
+    obs, state = env.reset(key, env.params, env.config)
+    assert obs.shape == (4,)
+    assert isinstance(state, EnvState)

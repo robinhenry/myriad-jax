@@ -30,7 +30,7 @@ class EnvConfig:
     dt: float = 0.02  # Time step for physics integration
 
     # Termination thresholds
-    theta_threshold: float = 12.0 * 2 * jnp.pi / 360  # ~12 degrees in radians
+    theta_threshold: float = 0.2094395102393195  # 12 degrees in radians
     x_threshold: float = 2.4
 
     # Episode settings
@@ -66,8 +66,18 @@ class EnvState(NamedTuple):
     t: chex.Array
 
 
-def create_env_params() -> EnvParams:
-    """Factory function to create EnvParams."""
+def create_env_params(**kwargs) -> EnvParams:
+    """Factory function to create EnvParams.
+
+    Args:
+        **kwargs: Currently unused for CartPole (no dynamic parameters),
+                  but kept for consistency with other environments.
+
+    Returns:
+        EnvParams instance.
+    """
+    if kwargs:
+        print(f"Warning: CartPole has no dynamic parameters. Ignoring kwargs: {list(kwargs.keys())}")
     return EnvParams()
 
 
@@ -112,10 +122,10 @@ def _step(
     x_out_of_bounds = jnp.abs(x_next) > config.x_threshold
     max_steps_reached = t_next >= config.max_steps
 
-    done = jnp.where(theta_out_of_bounds | x_out_of_bounds | max_steps_reached, 1.0, 0.0)
+    done = (theta_out_of_bounds | x_out_of_bounds | max_steps_reached).astype(jnp.float32)
 
-    # Reward: +1 for each timestep the pole is balanced
-    reward = jnp.array(1.0)
+    # Reward: +1 for each timestep the pole is balanced (no reward on terminal step)
+    reward = jnp.where(done == 1.0, 0.0, 1.0)
 
     # Create next state and observation
     next_state = EnvState(x_next, x_dot_next, theta_next, theta_dot_next, t_next)
@@ -158,7 +168,7 @@ def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array
 
     Returns a 4D vector: [x, x_dot, theta, theta_dot]
     """
-    return jnp.array([state.x, state.x_dot, state.theta, state.theta_dot])
+    return jnp.stack([state.x, state.x_dot, state.theta, state.theta_dot])
 
 
 def get_obs_shape(_config: EnvConfig) -> tuple:
@@ -184,8 +194,8 @@ def make_env(
 
     Args:
         config: A custom EnvConfig object. If None, a default one is created.
-        params: A pre-constructed EnvParams object. If None, a default one is created.
-        **kwargs: Currently unused, but kept for consistency with other environments.
+        params: A pre-constructed EnvParams object. If None, kwargs are used to create one.
+        **kwargs: Keyword arguments for creating EnvParams if params is not provided.
 
     Returns:
         An Environment object containing the CartPole environment.
@@ -194,15 +204,15 @@ def make_env(
         config = EnvConfig()
 
     if params is None:
-        params = create_env_params()
+        params = create_env_params(**kwargs)
     elif kwargs:
         print(f"Warning: `params` object was provided, so keyword arguments ({list(kwargs.keys())}) will be ignored.")
 
     return Environment(
-        params=params,
-        config=config,
+        step=step,
+        reset=reset,
         get_action_space=get_action_space,
         get_obs_shape=get_obs_shape,
-        reset=reset,
-        step=step,
+        params=params,
+        config=config,
     )
