@@ -112,11 +112,7 @@ def _step(
     x_out_of_bounds = jnp.abs(x_next) > config.x_threshold
     max_steps_reached = t_next >= config.max_steps
 
-    done = jnp.where(
-        jnp.logical_or(jnp.logical_or(theta_out_of_bounds, x_out_of_bounds), max_steps_reached),
-        1.0,
-        0.0,
-    )
+    done = jnp.where(theta_out_of_bounds | x_out_of_bounds | max_steps_reached, 1.0, 0.0)
 
     # Reward: +1 for each timestep the pole is balanced
     reward = jnp.array(1.0)
@@ -203,10 +199,10 @@ def make_env(
         print(f"Warning: `params` object was provided, so keyword arguments ({list(kwargs.keys())}) will be ignored.")
 
     return Environment(
-        step=step,
-        reset=reset,
-        get_action_space=get_action_space,
-        get_obs_shape=get_obs_shape,
         params=params,
         config=config,
+        get_action_space=get_action_space,
+        get_obs_shape=get_obs_shape,
+        reset=reset,
+        step=step,
     )

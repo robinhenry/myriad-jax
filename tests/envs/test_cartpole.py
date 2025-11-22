@@ -183,37 +183,39 @@ def test_step_physics(key: chex.PRNGKey, env: Environment):
 
 def test_step_termination_theta(key: chex.PRNGKey, env: Environment):
     """Test termination when pole angle exceeds threshold."""
-    # Start with pole at large angle
+    # Start with pole near threshold and high angular velocity to push it over
     state = EnvState(
         x=jnp.array(0.0),
         x_dot=jnp.array(0.0),
-        theta=jnp.array(env.config.theta_threshold + 0.1),  # Beyond threshold
-        theta_dot=jnp.array(0.0),
+        theta=jnp.array(env.config.theta_threshold * 0.9),  # Near threshold
+        theta_dot=jnp.array(10.0),  # High angular velocity
         t=jnp.array(0),
     )
 
     action = jnp.array(0)
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
-    # Should be done
+    # Next state should exceed threshold and be done
+    assert jnp.abs(next_state.theta) > env.config.theta_threshold
     assert done == 1.0
 
 
 def test_step_termination_x(key: chex.PRNGKey, env: Environment):
     """Test termination when cart position exceeds threshold."""
-    # Start with cart at boundary
+    # Start with cart near boundary with high velocity to push it over
     state = EnvState(
-        x=jnp.array(env.config.x_threshold + 0.1),  # Beyond threshold
-        x_dot=jnp.array(0.0),
+        x=jnp.array(env.config.x_threshold * 0.95),  # Very close to threshold
+        x_dot=jnp.array(15.0),  # High velocity to push over
         theta=jnp.array(0.0),
         theta_dot=jnp.array(0.0),
         t=jnp.array(0),
     )
 
-    action = jnp.array(0)
+    action = jnp.array(1)  # Push right to help exceed threshold
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
-    # Should be done
+    # Next state should exceed threshold and be done
+    assert jnp.abs(next_state.x) > env.config.x_threshold
     assert done == 1.0
 
 
