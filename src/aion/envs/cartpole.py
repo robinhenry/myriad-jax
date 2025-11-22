@@ -4,7 +4,7 @@ Classic cart-pole balancing problem where an agent must balance a pole on a cart
 by applying left or right forces to the cart.
 """
 
-from functools import partial
+import logging
 from typing import Any, Dict, NamedTuple
 
 import chex
@@ -15,6 +15,8 @@ from flax import struct
 from aion.core.spaces import Discrete
 
 from .environment import Environment
+
+logger = logging.getLogger(__name__)
 
 
 @struct.dataclass
@@ -80,13 +82,13 @@ def create_env_params(**kwargs) -> EnvParams:
 
 
 def _step(
-    key: chex.PRNGKey, state: EnvState, action: chex.Array, params: EnvParams, config: EnvConfig
+    _key: chex.PRNGKey, state: EnvState, action: chex.Array, params: EnvParams, config: EnvConfig
 ) -> tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[str, Any]]:
     """Step the environment forward one time step using Euler integration."""
     x, x_dot, theta, theta_dot, t = state
 
     # Convert action from {0, 1} to force direction {-1, 1}
-    force = jnp.where(action == 0, -config.force_magnitude, config.force_magnitude)
+    force = (2 * action - 1) * config.force_magnitude
 
     # Calculate physics (equations from OpenAI Gym CartPole-v1)
     cos_theta = jnp.cos(theta)
@@ -107,10 +109,11 @@ def _step(
     x_acc = temp - pole_mass_length * theta_acc * cos_theta / total_mass
 
     # Euler integration
-    x_next = x + config.dt * x_dot
     x_dot_next = x_dot + config.dt * x_acc
-    theta_next = theta + config.dt * theta_dot
+    x_next = x + config.dt * x_dot_next
+
     theta_dot_next = theta_dot + config.dt * theta_acc
+    theta_next = theta + config.dt * theta_dot_next
 
     # Update time step
     t_next = t + 1
@@ -153,7 +156,6 @@ step = jax.jit(_step, static_argnames=["config"])
 reset = jax.jit(_reset, static_argnames=["config"])
 
 
-@partial(jax.jit, static_argnames=["config"])
 def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array:
     """Get observation from state.
 
@@ -197,7 +199,7 @@ def make_env(
     if params is None:
         params = create_env_params(**kwargs)
     elif kwargs:
-        print(f"Warning: `params` object was provided, so keyword arguments ({list(kwargs.keys())}) will be ignored.")
+        logger.warning("`params` object was provided, so keyword arguments %s will be ignored.", list(kwargs.keys()))
 
     return Environment(
         step=step,
