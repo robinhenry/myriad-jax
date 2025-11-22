@@ -79,7 +79,7 @@ class Environment(NamedTuple, Generic[S, P, C]):
 
     # Action / observation helpers
     get_action_space: Callable[[C], Space]
-    get_obs_shape: Callable[[C], Tuple[int, ...]]
+    get_obs_shape: Callable[[C], Tuple]
 
     # Pure, jitted environment functions
     reset: Callable[[chex.PRNGKey, P, C], Tuple[chex.Array, S]]

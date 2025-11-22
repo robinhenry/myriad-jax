@@ -47,7 +47,7 @@ class EnvParams:
     but kept for consistency with the protocol.
     """
 
-    pass
+    ...
 
 
 class EnvState(NamedTuple):
@@ -109,11 +109,11 @@ def _step(
     x_acc = temp - pole_mass_length * theta_acc * cos_theta / total_mass
 
     # Euler integration
+    x_next = x + config.dt * x_dot
     x_dot_next = x_dot + config.dt * x_acc
-    x_next = x + config.dt * x_dot_next
 
+    theta_next = theta + config.dt * theta_dot
     theta_dot_next = theta_dot + config.dt * theta_acc
-    theta_next = theta + config.dt * theta_dot_next
 
     # Update time step
     t_next = t + 1
