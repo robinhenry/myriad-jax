@@ -1,4 +1,4 @@
-from . import ccas_ccar, example_env, toy_env
+from . import cartpole, ccas_ccar, example_env, toy_env
 from .environment import Environment
 
 # The registry mapping environment IDs to their factory functions
@@ -6,6 +6,7 @@ ENV_REGISTRY = {
     "toy_env_v1": toy_env.make_env,
     "example_env": example_env.make_env,
     "ccas_ccar_env": ccas_ccar.make_env,
+    "cartpole": cartpole.make_env,
 }
 
 
