@@ -61,18 +61,11 @@ def _reset(key: PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[Array, E
     return obs, state
 
 
-@partial(jax.jit, static_argnames=["config"])
-def step(
-    key: PRNGKey, state: EnvState, action: Array, params: EnvParams, config: EnvConfig
-) -> tuple[Array, EnvState, Array, Array, Dict[str, Any]]:
-    return _step(key, state, action, params, config)
+step = jax.jit(_step, static_argnames=["config"])
+reset = jax.jit(_reset, static_argnames=["config"])
 
 
 @partial(jax.jit, static_argnames=["config"])
-def reset(key: PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[Array, EnvState]:
-    return _reset(key, params, config)
-
-
 def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> Array:
     base_obs = jnp.array([state.F / params.F_obs_normalizer, state.U])
     F_target = state.F_target / params.F_obs_normalizer

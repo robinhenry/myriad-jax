@@ -76,8 +76,6 @@ def create_env_params(**kwargs) -> EnvParams:
     Returns:
         EnvParams instance.
     """
-    if kwargs:
-        print(f"Warning: CartPole has no dynamic parameters. Ignoring kwargs: {list(kwargs.keys())}")
     return EnvParams()
 
 
@@ -125,7 +123,7 @@ def _step(
     done = (theta_out_of_bounds | x_out_of_bounds | max_steps_reached).astype(jnp.float32)
 
     # Reward: +1 for each timestep the pole is balanced (no reward on terminal step)
-    reward = jnp.where(done == 1.0, 0.0, 1.0)
+    reward = 1.0 - done
 
     # Create next state and observation
     next_state = EnvState(x_next, x_dot_next, theta_next, theta_dot_next, t_next)
@@ -151,18 +149,11 @@ def _reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[che
     return obs, state
 
 
-@partial(jax.jit, static_argnames=["config"])
-def step(
-    key: chex.PRNGKey, state: EnvState, action: chex.Array, params: EnvParams, config: EnvConfig
-) -> tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[str, Any]]:
-    return _step(key, state, action, params, config)
+step = jax.jit(_step, static_argnames=["config"])
+reset = jax.jit(_reset, static_argnames=["config"])
 
 
 @partial(jax.jit, static_argnames=["config"])
-def reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[chex.Array, EnvState]:
-    return _reset(key, params, config)
-
-
 def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array:
     """Get observation from state.
 

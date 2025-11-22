@@ -88,18 +88,11 @@ def _reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[che
     return obs, state
 
 
-@partial(jax.jit, static_argnames=["config"])
-def step(
-    key: chex.PRNGKey, state: EnvState, action: chex.Array, params: EnvParams, config: EnvConfig
-) -> tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[str, Any]]:
-    return _step(key, state, action, params, config)
+step = jax.jit(_step, static_argnames=["config"])
+reset = jax.jit(_reset, static_argnames=["config"])
 
 
 @partial(jax.jit, static_argnames=["config"])
-def reset(key: chex.PRNGKey, params: EnvParams, config: EnvConfig) -> tuple[chex.Array, EnvState]:
-    return _reset(key, params, config)
-
-
 def get_obs(state: EnvState, params: EnvParams, config: EnvConfig) -> chex.Array:
     return jnp.array([state.x, params.x_target])
 
