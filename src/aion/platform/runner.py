@@ -258,6 +258,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
             train_payload = build_train_payload(metrics_host)
             if train_payload:
                 train_payload["train/global_env_steps"] = float(global_step)
+                train_payload["train/steps_per_env"] = float(steps_completed)
                 wandb.log(train_payload, step=global_step)
 
         # Periodically run evaluation rollouts without touching the training buffer

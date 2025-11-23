@@ -1,0 +1,85 @@
+program: scripts/train_sweep.py
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
+method: bayes
+metric:
+  name: eval/episode_return/mean
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 20000
+  eta: 3
+  s: 2
+
+parameters:
+  # Learning rate - critical for stability and convergence speed
+  agent.learning_rate:
+    distribution: log_uniform_values
+    min: 0.0001
+    max: 0.01
+
+  # Discount factor - affects long-term planning
+  agent.gamma:
+    distribution: uniform
+    min: 0.95
+    max: 0.999
+
+  # Epsilon decay - controls exploration schedule
+  agent.epsilon_start:
+    value: 1.0
+
+  agent.epsilon_end:
+    distribution: uniform
+    min: 0.01
+    max: 0.1
+
+  agent.epsilon_decay_steps:
+    distribution: int_uniform
+    min: 10000
+    max: 100000
+
+  # Target network update frequency - affects learning stability
+  agent.target_network_frequency:
+    distribution: categorical
+    values: [500, 1000, 2000, 5000]
+
+  # Soft vs hard target updates
+  agent.tau:
+    distribution: categorical
+    values: [1.0, 0.995, 0.99, 0.95]
+
+  # Training configuration
+  run.batch_size:
+    distribution: categorical
+    values: [32, 64, 128, 256]
+
+  run.buffer_size:
+    distribution: categorical
+    values: [10000, 50000, 100000]
+
+  # Environment parallelization - key parameter for understanding sample efficiency
+  run.num_envs:
+    distribution: categorical
+    values: [1, 2, 4, 8, 16]
+
+  # Fixed parameters
+  run.total_timesteps:
+    value: 150000
+
+  run.eval_frequency:
+    value: 1000
+
+  run.eval_rollouts:
+    value: 10
+
+  run.log_frequency:
+    value: 1000
+
+  wandb.mode:
+    value: online
+
+  wandb.group:
+    value: dqn_cartpole_sweep
