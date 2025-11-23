@@ -58,9 +58,14 @@ def summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
             return {}
         return {f"{prefix}{name}": scalar}
 
+    mean = float(np.nanmean(array))
+    std = float(np.nanstd(array))
+
     return {
-        f"{prefix}{name}/mean": float(np.nanmean(array)),
-        f"{prefix}{name}/std": float(np.nanstd(array)),
+        f"{prefix}{name}/mean": mean,
+        f"{prefix}{name}/std": std,
+        f"{prefix}{name}/mean-std": mean - std,
+        f"{prefix}{name}/mean+std": mean + std,
         f"{prefix}{name}/max": float(np.nanmax(array)),
         f"{prefix}{name}/min": float(np.nanmin(array)),
     }

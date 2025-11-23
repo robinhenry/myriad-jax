@@ -121,7 +121,7 @@ def _step(
     # Check termination conditions
     theta_out_of_bounds = jnp.abs(theta_next) > config.theta_threshold
     x_out_of_bounds = jnp.abs(x_next) > config.x_threshold
-    max_steps_reached = t_next >= config.max_steps
+    max_steps_reached = t_next > config.max_steps
 
     done = (theta_out_of_bounds | x_out_of_bounds | max_steps_reached).astype(jnp.float32)
 

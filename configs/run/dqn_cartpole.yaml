@@ -1,0 +1,22 @@
+# @package run
+# Optimized run configuration for DQN on CartPole
+# CartPole-v1 is considered solved at 195+ average reward over 100 episodes
+
+seed: 42
+total_timesteps: 150000  # 100k steps is usually sufficient for CartPole
+
+# Environment parallelization
+num_envs: 1  # Run 8 environments in parallel
+
+# Training settings
+batch_size: 64  # Standard batch size for DQN
+buffer_size: 50000  # Replay buffer capacity
+scan_chunk_size: 2048  # Chunk size for scan operations
+
+# Evaluation
+eval_frequency: 1000  # Evaluate every 5k steps
+eval_rollouts: 10  # Average over 10 episodes
+eval_max_steps: 500  # CartPole max episode length
+
+# Logging
+log_frequency: 1000  # Log metrics every 1k steps
