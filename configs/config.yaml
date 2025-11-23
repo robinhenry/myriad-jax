@@ -4,28 +4,10 @@
 # This section tells Hydra where to find the default
 # configurations for composable components.
 defaults:
-  - agent: random_agent
-  - env: example_env
+  - agent: dqn_agent
+  - env: cartpole
+  - run: dqn_cartpole
   - _self_
-
-run:
-  # --- Run Settings ---
-  seed: 42
-  total_timesteps: 1e7
-  num_envs: 124
-
-  # --- Training Settings ---
-  batch_size: 256
-  buffer_size: 10000
-  scan_chunk_size: 128
-
-  # --- Evaluation ---
-  eval_frequency: 1e3
-  eval_rollouts: 100
-  eval_max_steps: 1000
-
-  # --- Logging ---
-  log_frequency: 1e3
 
 wandb:
   enabled: true

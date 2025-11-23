@@ -1,9 +1,0 @@
-# @package agent
-name: pqn_agent
-learning_rate: 2.5e-4
-gamma: 0.99
-epsilon_start: 1.0
-epsilon_end: 0.05
-epsilon_decay_steps: 20000
-target_network_frequency: 500
-tau: 1.0
