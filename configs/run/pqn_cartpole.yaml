@@ -1,0 +1,26 @@
+# @package run
+# Run configuration for PQN on CartPole
+# PQN is an on-policy algorithm that collects rollouts and trains with multi-epoch updates
+# Hyperparameters match the original PureJaxQL implementation
+
+seed: 42
+total_timesteps: 500000  # 500k total environment steps (original uses 5e5)
+
+# Environment parallelization
+num_envs: 32  # Run 32 environments in parallel (original uses 32)
+
+# Training settings
+batch_size: 2048  # Batch size = num_envs * rollout_steps = 32 * 64
+buffer_size: 1  # PQN doesn't use replay buffer (on-policy), but need to set for compatibility
+scan_chunk_size: 2048  # Chunk size for scan operations
+
+# PQN-specific: rollout collection
+rollout_steps: 64  # Collect 64 steps per environment before training (original uses 64)
+
+# Evaluation
+eval_frequency: 1000  # Evaluate every 12.5k steps (approx 0.05 * 250 updates, where update = 2048 steps)
+eval_rollouts: 10  # Average over 10 episodes
+eval_max_steps: 500  # CartPole max episode length
+
+# Logging
+log_frequency: 2048  # Log metrics every update (2048 steps = 1 update)

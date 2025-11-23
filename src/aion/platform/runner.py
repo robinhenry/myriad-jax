@@ -29,7 +29,7 @@ from .shared import TrainingEnvState
 def _make_train_step_fn(
     agent: Agent,
     env: Environment,
-    replay_buffer: ReplayBuffer,
+    replay_buffer: ReplayBuffer | None,
     num_envs: int,
 ) -> Callable:
     """Factory to create a jitted, vmapped training step function"""
@@ -43,9 +43,9 @@ def _make_train_step_fn(
         key: chex.PRNGKey,
         agent_state: AgentState,
         training_env_states: TrainingEnvState,
-        buffer_state: ReplayBufferState,
+        buffer_state: ReplayBufferState | None,
         batch_size: int,
-    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState, dict]:
+    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState | None, dict]:
         """Executes one step of training across all parallel environments. This function is pure and jitted."""
 
         last_obs = training_env_states.obs
@@ -68,10 +68,16 @@ def _make_train_step_fn(
         )
         dones_bool = dones.astype(jnp.bool_)
 
-        # Store recent transitions and sample a learning batch from the buffer
-        key, buffer_key = jax.random.split(key)
+        # Create transition for this step
         transitions = Transition(last_obs, actions, rewards, next_obs, dones_bool)
-        buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
+
+        # Handle replay buffer if present (off-policy algorithms like DQN)
+        if replay_buffer is not None and buffer_state is not None:
+            key, buffer_key = jax.random.split(key)
+            buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
+        else:
+            # For on-policy algorithms, use the current transition directly
+            batch = transitions
 
         # Update the agent with the sampled batch and report metrics
         key, update_key = jax.random.split(key)
@@ -102,6 +108,76 @@ def _make_train_step_fn(
     return train_step
 
 
+def _make_rollout_collection_fn(
+    agent: Agent,
+    env: Environment,
+    num_envs: int,
+    rollout_steps: int,
+) -> Callable:
+    """Factory to create a jitted rollout collection function for on-policy algorithms."""
+
+    # Vmap the environment step and reset functions
+    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
+    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
+
+    @jax.jit
+    def collect_rollout(
+        key: chex.PRNGKey,
+        agent_state: AgentState,
+        training_env_states: TrainingEnvState,
+    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, Transition]:
+        """Collect a rollout of transitions for on-policy training."""
+
+        def step_fn(carry, _):
+            """Single step of rollout collection."""
+            key, agent_state, env_states = carry
+            last_obs = env_states.obs
+
+            # Select actions
+            key, action_key = jax.random.split(key)
+            action_keys = jax.random.split(action_key, num_envs)
+            actions, agent_state = jax.vmap(
+                agent.select_action,
+                in_axes=(0, 0, None, None),
+                out_axes=(0, None),
+            )(action_keys, last_obs, agent_state, agent.params)
+
+            # Step environments
+            key, step_key = jax.random.split(key)
+            step_keys = jax.random.split(step_key, num_envs)
+            next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
+                step_keys, env_states.env_state, actions, env.params, env.config
+            )
+            dones_bool = dones.astype(jnp.bool_)
+
+            # Handle auto-reset
+            key, reset_key = jax.random.split(key)
+            reset_keys = jax.random.split(reset_key, num_envs)
+            new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+
+            final_obs = where_mask(dones_bool, new_obs, next_obs)
+            final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
+            new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
+
+            # Store transition
+            transition = Transition(last_obs, actions, rewards, next_obs, dones_bool)
+
+            return (key, agent_state, new_training_env_state), transition
+
+        # Collect rollout_steps transitions
+        init_carry = (key, agent_state, training_env_states)
+        (key, agent_state, new_env_states), transitions = jax.lax.scan(step_fn, init_carry, None, length=rollout_steps)
+
+        # Reshape transitions: (rollout_steps, num_envs, ...) -> (rollout_steps * num_envs, ...)
+        batch_transitions = jax.tree_util.tree_map(
+            lambda x: x.reshape(-1, *x.shape[2:]) if x.ndim > 2 else x.reshape(-1), transitions
+        )
+
+        return key, agent_state, new_env_states, batch_transitions
+
+    return collect_rollout
+
+
 def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Callable:
     """Factory to create a jitted evaluation rollout aligned with the training loop style."""
 
@@ -125,7 +201,7 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
         max_steps = jnp.asarray(max_eval_steps, dtype=jnp.int32)
 
         def cond_fun(
-            carry: tuple[chex.PRNGKey, TrainingEnvState, chex.Array, chex.Array, chex.Array, chex.Array]
+            carry: tuple[chex.PRNGKey, TrainingEnvState, chex.Array, chex.Array, chex.Array, chex.Array],
         ) -> chex.Array:
             _, _, _, _, dones, step = carry
             continue_steps = step < max_steps
@@ -134,7 +210,7 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
             return jnp.logical_and(continue_steps, incomplete)
 
         def body_fun(
-            carry: tuple[chex.PRNGKey, TrainingEnvState, chex.Array, chex.Array, chex.Array, chex.Array]
+            carry: tuple[chex.PRNGKey, TrainingEnvState, chex.Array, chex.Array, chex.Array, chex.Array],
         ) -> tuple[chex.PRNGKey, TrainingEnvState, chex.Array, chex.Array, chex.Array, chex.Array]:
             key, env_state, returns, lengths, dones, step = carry
 
@@ -210,10 +286,20 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     sample_obs = obs[0]  # type: ignore
     agent_state = agent.init(agent_key, sample_obs, agent.params)
 
-    # Initialize replay buffer
-    replay_buffer = ReplayBuffer(buffer_size=config.run.buffer_size)
-    sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
-    buffer_state = replay_buffer.init(sample_transition)
+    # Determine training mode and initialize accordingly
+    use_rollout_training = config.run.rollout_steps is not None
+
+    if use_rollout_training:
+        # On-policy training (e.g., PQN): no replay buffer needed
+        replay_buffer = None
+        buffer_state = None
+        rollout_fn = _make_rollout_collection_fn(agent, env, config.run.num_envs, config.run.rollout_steps)
+    else:
+        # Off-policy training (e.g., DQN): use replay buffer
+        replay_buffer = ReplayBuffer(buffer_size=config.run.buffer_size)
+        sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
+        buffer_state = replay_buffer.init(sample_transition)
+        rollout_fn = None
 
     # Build jitted execution primitives
     train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
@@ -230,22 +316,36 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     while steps_completed < total_steps:
         remaining_steps = total_steps - steps_completed
 
-        def _steps_until_boundary(current_step: int, frequency: int) -> int:
-            if frequency <= 0:
-                return chunk_size
-            remainder = current_step % frequency
-            result = frequency if remainder == 0 else frequency - remainder
-            return result
+        if use_rollout_training:
+            # On-policy training: collect rollout, then update agent
+            key, agent_state, training_env_states, rollout_batch = rollout_fn(key, agent_state, training_env_states)
 
-        # Determine how many scan iterations to run before the next logging or eval boundary
-        steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
-        steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
-        steps_this_chunk = min(chunk_size, remaining_steps, steps_to_log, steps_to_eval)
-        active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
-        (key, agent_state, training_env_states, buffer_state), metrics_history = run_chunk_fn(
-            (key, agent_state, training_env_states, buffer_state),
-            active_mask,
-        )
+            # Update agent with collected rollout
+            key, update_key = jax.random.split(key)
+            agent_state, metrics = agent.update(update_key, agent_state, rollout_batch, agent.params)
+
+            # Convert single metrics dict to history format for logging
+            metrics_history = jax.tree_util.tree_map(lambda x: jnp.array([x]), metrics)
+            steps_this_chunk = config.run.rollout_steps * config.run.num_envs
+        else:
+            # Off-policy training: use chunked step-by-step updates
+
+            def _steps_until_boundary(current_step: int, frequency: int) -> int:
+                if frequency <= 0:
+                    return chunk_size
+                remainder = current_step % frequency
+                result = frequency if remainder == 0 else frequency - remainder
+                return result
+
+            # Determine how many scan iterations to run before the next logging or eval boundary
+            steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
+            steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
+            steps_this_chunk = min(chunk_size, remaining_steps, steps_to_log, steps_to_eval)
+            active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
+            (key, agent_state, training_env_states, buffer_state), metrics_history = run_chunk_fn(
+                (key, agent_state, training_env_states, buffer_state),
+                active_mask,
+            )
 
         steps_completed += steps_this_chunk
         global_step = steps_completed * config.run.num_envs
@@ -306,9 +406,15 @@ def train_and_evaluate(config: Config):
             wandb.finish()
 
 
-def _get_factory_kwargs(config: BaseModel) -> dict:
+def _get_factory_kwargs(config: BaseModel | dict) -> dict:
     """Converts a dataclass config object to a dict for factory functions."""
-    kwargs = config.model_dump()
+    # Check if it has model_dump (Pydantic BaseModel) or if it's dict-like (OmegaConf)
+    if hasattr(config, "model_dump") and callable(getattr(config, "model_dump")):
+        # Pydantic BaseModel
+        kwargs = config.model_dump()
+    else:
+        # OmegaConf DictConfig or regular dict
+        kwargs = dict(config)
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
     return kwargs
