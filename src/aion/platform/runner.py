@@ -293,6 +293,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
         # On-policy training (e.g., PQN): no replay buffer needed
         replay_buffer = None
         buffer_state = None
+        assert config.run.rollout_steps is not None  # should always be true if use_rollout_training is true
         rollout_fn = _make_rollout_collection_fn(agent, env, config.run.num_envs, config.run.rollout_steps)
     else:
         # Off-policy training (e.g., DQN): use replay buffer
@@ -317,6 +318,10 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
         remaining_steps = total_steps - steps_completed
 
         if use_rollout_training:
+            # Should always be true if use_rollout_training is true
+            assert config.run.rollout_steps is not None
+            assert rollout_fn is not None
+
             # On-policy training: collect rollout, then update agent
             key, agent_state, training_env_states, rollout_batch = rollout_fn(key, agent_state, training_env_states)
 
@@ -406,15 +411,9 @@ def train_and_evaluate(config: Config):
             wandb.finish()
 
 
-def _get_factory_kwargs(config: BaseModel | dict) -> dict:
+def _get_factory_kwargs(config: BaseModel) -> dict:
     """Converts a dataclass config object to a dict for factory functions."""
-    # Check if it has model_dump (Pydantic BaseModel) or if it's dict-like (OmegaConf)
-    if hasattr(config, "model_dump") and callable(getattr(config, "model_dump")):
-        # Pydantic BaseModel
-        kwargs = config.model_dump()
-    else:
-        # OmegaConf DictConfig or regular dict
-        kwargs = dict(config)
+    kwargs = config.model_dump()
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
     return kwargs
