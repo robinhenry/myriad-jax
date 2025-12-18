@@ -1,6 +1,9 @@
 # @package agent
 name: dqn_agent
 
+# Training settings
+batch_size: 64  # Number of transitions sampled from replay buffer per update
+
 # Optimizer settings
 learning_rate: 1e-3
 

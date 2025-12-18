@@ -52,7 +52,7 @@ parameters:
     values: [1.0, 0.995, 0.99, 0.95]
 
   # Training configuration
-  run.batch_size:
+  agent.batch_size:
     distribution: categorical
     values: [32, 64, 128, 256]
 

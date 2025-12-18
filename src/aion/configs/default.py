@@ -26,6 +26,7 @@ class AgentConfig(BaseModel):
     """Schema for the Agent's configuration."""
 
     name: str
+    batch_size: PositiveInt | None = None  # for off-policy agents: size of batches sampled from replay buffer
 
 
 class EnvConfig(BaseModel):
@@ -38,14 +39,13 @@ class RunConfig(BaseModel):
 
     # --- Run Settings ---
     seed: int
-    total_timesteps: PositiveInt
-    num_envs: PositiveInt
+    total_timesteps: PositiveInt  # total number of timesteps to train for across all envs
+    num_envs: PositiveInt  # number of envs to run in parallel, each doing `total_timesteps // num_envs` steps
 
     # --- Training Settings ---
-    batch_size: PositiveInt
-    buffer_size: PositiveInt
-    scan_chunk_size: PositiveInt
-    rollout_steps: PositiveInt | None = None  # For on-policy algorithms: steps per env before training
+    scan_chunk_size: PositiveInt  # number of steps batched together and executed using `jax.lax.scan`
+    buffer_size: PositiveInt | None = None  # for off-policy algorithms: replay buffer capacity
+    rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation ---
     eval_frequency: PositiveInt

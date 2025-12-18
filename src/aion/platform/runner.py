@@ -297,6 +297,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
         rollout_fn = _make_rollout_collection_fn(agent, env, config.run.num_envs, config.run.rollout_steps)
     else:
         # Off-policy training (e.g., DQN): use replay buffer
+        if config.run.buffer_size is None:
+            raise ValueError("buffer_size must be set in config for off-policy training (when rollout_steps is None)")
         replay_buffer = ReplayBuffer(buffer_size=config.run.buffer_size)
         sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
         buffer_state = replay_buffer.init(sample_transition)
@@ -307,7 +309,9 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
     chunk_size = max(1, config.run.scan_chunk_size)
-    run_chunk_fn = make_chunk_runner(train_step_fn, config.run.batch_size)
+    # For off-policy agents, batch_size is required; for on-policy, it's ignored
+    batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
+    run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
 
     total_steps = config.run.total_timesteps // config.run.num_envs
     log_frequency = config.run.log_frequency

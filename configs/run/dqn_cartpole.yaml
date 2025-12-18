@@ -9,7 +9,6 @@ total_timesteps: 150000  # 100k steps is usually sufficient for CartPole
 num_envs: 1  # Run 8 environments in parallel
 
 # Training settings
-batch_size: 64  # Standard batch size for DQN
 buffer_size: 50000  # Replay buffer capacity
 scan_chunk_size: 2048  # Chunk size for scan operations
 
