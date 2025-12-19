@@ -15,7 +15,6 @@ exclude = ["tests", "tests.*"]
 
 [tool.poetry.scripts]
 
-
 [tool.poetry.dependencies]
 python = "^3.11"
 plotly = "^6.0.0"
