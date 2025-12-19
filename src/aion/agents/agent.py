@@ -1,8 +1,8 @@
 """Base agent definitions for JAX-based agents.
 
-This module provides small, focused Protocols for the three environment
-components (config, params, state) and a typed container `Environment` which
-holds the environment's pure functions. The Protocols are intentionally small
+This module provides small, focused Protocols for the two agent
+components (params, state) and a typed container `Agent` which
+holds the agent's pure functions. The Protocols are intentionally small
 and permissive so concrete environments remain free to use dataclasses,
 Flax structs, NamedTuples, etc., while still providing helpful static typing
 and documentation.
@@ -19,8 +19,6 @@ class AgentParams(Protocol):
     """Protocol for agent parameter objects.
 
     Concrete agents can use dataclasses, Flax structs, or simple NamedTuples.
-    This Protocol is intentionally empty — it's a structural marker used only
-    for type consistency in the `Agent` container.
     """
 
     action_space: Space
