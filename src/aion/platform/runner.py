@@ -308,6 +308,10 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
     eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
+    # Chunking configuration:
+    # - scan_chunk_size controls how many training steps are batched into a single jax.lax.scan
+    # - Larger chunks reduce Python overhead but increase XLA compile time
+    # - chunk_size is ensured to be at least 1 to prevent errors
     chunk_size = max(1, config.run.scan_chunk_size)
     # For off-policy agents, batch_size is required; for on-policy, it's ignored
     batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
@@ -340,16 +344,40 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
             # Off-policy training: use chunked step-by-step updates
 
             def _steps_until_boundary(current_step: int, frequency: int) -> int:
+                """Calculate steps until next logging/eval boundary.
+
+                This helper ensures chunks align with logging and evaluation frequencies,
+                preventing partial metrics from being logged.
+
+                Args:
+                    current_step: The current training step counter
+                    frequency: The logging or eval frequency (0 or negative means disabled)
+
+                Returns:
+                    Number of steps until the next boundary
+                """
                 if frequency <= 0:
                     return chunk_size
                 remainder = current_step % frequency
                 result = frequency if remainder == 0 else frequency - remainder
                 return result
 
-            # Determine how many scan iterations to run before the next logging or eval boundary
+            # Boundary alignment:
+            # Determine how many steps to run before the next logging or eval boundary.
+            # This ensures we can log/eval at exact frequencies without partial metrics.
+            # steps_this_chunk is limited by:
+            # 1. chunk_size: The configured maximum chunk size
+            # 2. remaining_steps: Don't overshoot total_timesteps
+            # 3. steps_to_log: Align with logging frequency
+            # 4. steps_to_eval: Align with evaluation frequency
             steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
             steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
             steps_this_chunk = min(chunk_size, remaining_steps, steps_to_log, steps_to_eval)
+
+            # Create a boolean mask for the scan:
+            # - active_mask always has length chunk_size (for consistent JIT compilation)
+            # - Only the first steps_this_chunk elements are True
+            # - Inactive iterations (False elements) execute but don't update state
             active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
             (key, agent_state, training_env_states, buffer_state), metrics_history = run_chunk_fn(
                 (key, agent_state, training_env_states, buffer_state),

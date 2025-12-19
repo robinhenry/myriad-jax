@@ -3,7 +3,9 @@ Defines the schema for training run configurations using hierarchical dataclasse
 The default values are managed by Hydra in the .yaml files.
 """
 
-from pydantic import PositiveInt
+import warnings
+
+from pydantic import PositiveInt, model_validator
 
 from aion.core.types import BaseModel
 
@@ -48,12 +50,35 @@ class RunConfig(BaseModel):
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation ---
-    eval_frequency: PositiveInt
-    eval_rollouts: PositiveInt
-    eval_max_steps: PositiveInt
+    eval_frequency: PositiveInt  # frequency (# of steps per env) between subsequent evaluation events
+    eval_rollouts: PositiveInt  # number of episodes to run during each performance evaluation (# of parallel envs)
+    eval_max_steps: PositiveInt  # maximum number of steps per evaluation rollout
 
     # --- Logging ---
-    log_frequency: PositiveInt
+    log_frequency: PositiveInt  # frequency (# of steps per env) between training metrics logging events
+
+    @model_validator(mode="after")
+    def validate_scan_chunk_size_efficiency(self) -> "RunConfig":
+        """Warn if scan_chunk_size is configured inefficiently relative to logging/eval frequencies.
+
+        When scan_chunk_size is much larger than the logging or eval frequencies, the training loop
+        will frequently create partial chunks with many masked (inactive) iterations. These masked
+        iterations still execute but discard their results, wasting computation.
+        """
+        min_boundary_frequency = min(self.log_frequency, self.eval_frequency)
+
+        if self.scan_chunk_size > 2 * min_boundary_frequency:
+            warnings.warn(
+                f"Performance warning: scan_chunk_size ({self.scan_chunk_size}) is more than 2x "
+                f"the minimum boundary frequency ({min_boundary_frequency}). "
+                f"This may lead to wasted computation from masked iterations at logging/eval boundaries. "
+                f"Consider reducing scan_chunk_size or increasing log_frequency/eval_frequency. "
+                f"See src/aion/platform/scan_utils.py for details on the chunking strategy.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        return self
 
 
 class Config(BaseModel):

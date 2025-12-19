@@ -41,7 +41,48 @@ def mask_tree(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
 
 
 def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
-    """Wrap ``train_step_fn`` in a fixed-size, mask-aware scan."""
+    """Wrap ``train_step_fn`` in a fixed-size, mask-aware scan.
+
+    This function creates a chunk runner that executes multiple training steps in a batched
+    scan loop. The key design decision is to use a FIXED scan length (determined by the length
+    of active_mask) with mask-based state selection to avoid JAX recompilation overhead.
+
+    Design rationale:
+    -----------------
+    JAX's jit compilation creates optimized code for specific input shapes. If we used a
+    dynamic scan length (e.g., jax.lax.scan with length=steps_this_chunk where steps_this_chunk
+    varies), we would trigger recompilation every time the chunk size changes. This happens
+    frequently at logging/eval boundaries or at the end of training.
+
+    Instead, we:
+    1. Always scan for a FIXED number of iterations (len(active_mask))
+    2. Use boolean masks to control which iterations actually update state
+    3. Inactive iterations execute train_step_fn but discard results via jax.lax.select
+
+    Trade-offs:
+    -----------
+    - PRO: Single compilation for the chunk runner, avoiding expensive recompilation
+    - PRO: Predictable performance characteristics
+    - CON: Masked iterations still execute (select actions, step envs) but discard results
+    - CON: Wasted computation when steps_this_chunk << chunk_size
+
+    The compilation savings typically outweigh the masked iteration overhead, especially when
+    chunk_size is well-tuned relative to logging/eval frequencies.
+
+    Performance tips:
+    -----------------
+    - Set chunk_size to balance compilation overhead vs step-to-step overhead
+    - Avoid chunk_size >> min(log_frequency, eval_frequency) to minimize wasted masked iterations
+    - For very small chunk_size (1-5), consider if the overhead is acceptable for your use case
+
+    Args:
+        train_step_fn: The training step function to wrap. Must match the signature expected by
+            the training loop.
+        batch_size: Batch size for sampling from replay buffer (passed to train_step_fn)
+
+    Returns:
+        A jitted function that runs a chunk of training steps with mask-aware state updates.
+    """
 
     def run_chunk(
         carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],

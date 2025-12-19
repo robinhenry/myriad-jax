@@ -76,3 +76,90 @@ def test_where_mask_supports_higher_rank():
     result = scan_utils.where_mask(mask, new, old)
     expected = np.array([[1, 1], [0, 0], [3, 3]])
     np.testing.assert_array_equal(result, expected)
+
+
+def test_make_chunk_runner_with_partial_active_steps():
+    """Test that chunk runner correctly handles fewer active steps than chunk size."""
+    batch_size = 2
+    _chunk_size = 10
+    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+
+    key = jax.random.PRNGKey(42)
+    agent_state = jnp.array(0.0, dtype=jnp.float32)
+    env_state = jnp.array(0.0, dtype=jnp.float32)
+    buffer_state = jnp.array(0.0, dtype=jnp.float32)
+
+    # Only 3 active steps out of 10 total chunk size
+    active_mask = jnp.array([True, True, True, False, False, False, False, False, False, False])
+
+    (key_out, agent_out, env_out, buffer_out), metrics_history = run_chunk(
+        (key, agent_state, env_state, buffer_state),
+        active_mask,
+    )
+
+    # State should only advance by 3 (number of active steps)
+    assert agent_out == pytest.approx(3.0)
+    assert env_out == pytest.approx(3.0)
+    assert buffer_out == pytest.approx(3.0)
+
+    # Metrics should have full chunk_size length but only first 3 are non-zero
+    assert metrics_history["metric"].shape == (10, 1)
+    assert metrics_history["metric"][0] == pytest.approx(batch_size)
+    assert metrics_history["metric"][1] == pytest.approx(batch_size)
+    assert metrics_history["metric"][2] == pytest.approx(batch_size)
+    # Inactive steps have zeroed metrics
+    assert metrics_history["metric"][3] == pytest.approx(0.0)
+    assert metrics_history["metric"][9] == pytest.approx(0.0)
+
+
+def test_make_chunk_runner_with_single_step_chunks():
+    """Test edge case where chunk_size effectively equals 1."""
+    batch_size = 1
+    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+
+    key = jax.random.PRNGKey(123)
+    agent_state = jnp.array(5.0, dtype=jnp.float32)
+    env_state = jnp.array(10.0, dtype=jnp.float32)
+    buffer_state = jnp.array(15.0, dtype=jnp.float32)
+
+    # Single active step
+    active_mask = jnp.array([True])
+
+    (key_out, agent_out, env_out, buffer_out), metrics_history = run_chunk(
+        (key, agent_state, env_state, buffer_state),
+        active_mask,
+    )
+
+    assert agent_out == pytest.approx(6.0)
+    assert env_out == pytest.approx(11.0)
+    assert buffer_out == pytest.approx(16.0)
+    assert metrics_history["metric"].shape == (1, 1)
+    assert metrics_history["metric"][0] == pytest.approx(batch_size)
+
+
+def test_make_chunk_runner_all_inactive_steps():
+    """Test that chunk runner preserves state when all steps are inactive."""
+    batch_size = 2
+    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+
+    key = jax.random.PRNGKey(999)
+    agent_state = jnp.array(100.0, dtype=jnp.float32)
+    env_state = jnp.array(200.0, dtype=jnp.float32)
+    buffer_state = jnp.array(300.0, dtype=jnp.float32)
+
+    # All steps inactive
+    active_mask = jnp.array([False, False, False, False, False])
+
+    (key_out, agent_out, env_out, buffer_out), metrics_history = run_chunk(
+        (key, agent_state, env_state, buffer_state),
+        active_mask,
+    )
+
+    # State should be unchanged
+    assert agent_out == pytest.approx(100.0)
+    assert env_out == pytest.approx(200.0)
+    assert buffer_out == pytest.approx(300.0)
+
+    # All metrics should be zero
+    assert metrics_history["metric"].shape == (5, 1)
+    np.testing.assert_allclose(metrics_history["metric"], np.zeros((5, 1)))

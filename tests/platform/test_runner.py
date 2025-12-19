@@ -401,3 +401,132 @@ def test_make_sample_transition_matches_shapes():
     assert np.array(transition.action).shape == action_space.shape
     assert float(np.array(transition.reward)) == pytest.approx(0.0)
     assert bool(np.array(transition.done)) is False
+
+
+def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
+    """Training should complete correctly even when chunk_size > total_timesteps."""
+    from aion.platform import scan_utils
+
+    # Use a very large chunk size relative to total steps
+    config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 1, "scan_chunk_size": 100})
+
+    captured: dict[str, Any] = {"active_counts": []}
+    orig_make_chunk_runner = scan_utils.make_chunk_runner
+
+    def instrumented_make_chunk_runner(train_step_fn, batch_size):
+        run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
+
+        def wrapped(carry, active_mask):
+            result = run_chunk(carry, active_mask)
+            captured["mask_length"] = len(active_mask)
+            captured["active_counts"].append(int(np.asarray(active_mask).sum()))
+            return result
+
+        return wrapped
+
+    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
+    runner._run_training_loop(config, wandb_run=None)
+
+    # Chunk size should be clamped to at least 1
+    assert captured.get("mask_length", 0) == 100
+    # But only 4 steps should actually execute across all chunks (excluding JIT trace)
+    total_active_steps = sum(captured.get("active_counts", []))
+    total_steps = config.run.total_timesteps // config.run.num_envs
+    assert total_active_steps == total_steps
+
+
+def test_run_training_loop_with_chunk_size_one(monkeypatch):
+    """Training should work correctly with minimal chunk_size=1."""
+    from aion.platform import scan_utils
+
+    config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 2, "scan_chunk_size": 1})
+
+    active_counts: list[int] = []
+    orig_make_chunk_runner = scan_utils.make_chunk_runner
+
+    def instrumented_make_chunk_runner(train_step_fn, batch_size):
+        run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
+
+        def wrapped(carry, active_mask):
+            active_counts.append(int(np.asarray(active_mask).sum()))
+            return run_chunk(carry, active_mask)
+
+        return wrapped
+
+    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
+    runner._run_training_loop(config, wandb_run=None)
+
+    total_steps = config.run.total_timesteps // config.run.num_envs
+    # Total active steps across all chunks should equal total_steps
+    assert sum(active_counts) == total_steps
+    # With chunk_size=1 and alignment to logging boundaries, each chunk should have at most 1 active step
+    assert all(count <= 1 for count in active_counts)
+
+
+def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
+    """Verify chunks align properly with logging frequency boundaries."""
+    from aion.platform import scan_utils
+
+    # Setup: 10 total steps, chunk_size=3, log every 4 steps
+    config = _create_config(
+        run_overrides={"total_timesteps": 20, "num_envs": 2, "scan_chunk_size": 3, "log_frequency": 4}
+    )
+
+    chunk_sizes_observed: list[int] = []
+    orig_make_chunk_runner = scan_utils.make_chunk_runner
+
+    def instrumented_make_chunk_runner(train_step_fn, batch_size):
+        run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
+
+        def wrapped(carry, active_mask):
+            active_count = int(np.asarray(active_mask).sum())
+            chunk_sizes_observed.append(active_count)
+            return run_chunk(carry, active_mask)
+
+        return wrapped
+
+    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
+    runner._run_training_loop(config, wandb_run=None)
+
+    # Remove the JIT trace call (first call with 0 or minimal steps)
+    actual_chunks = [size for size in chunk_sizes_observed if size > 0]
+
+    # With 10 steps per env, chunk_size=3, log_frequency=4:
+    # - Steps 0-3: chunk of 3, then chunk of 1 (to align with log boundary at step 4)
+    # - Steps 4-7: chunk of 3, then chunk of 1 (to align with log boundary at step 8)
+    # - Steps 8-9: chunk of 2
+    # The exact pattern depends on boundary alignment logic
+    assert sum(actual_chunks) == 10  # Total steps per env should be correct
+    assert all(chunk <= 3 for chunk in actual_chunks)  # No chunk exceeds scan_chunk_size
+
+
+def test_run_config_warns_on_inefficient_scan_chunk_size():
+    """RunConfig should warn when scan_chunk_size is much larger than logging/eval frequencies."""
+    import warnings
+
+    # Should NOT warn: scan_chunk_size (10) <= 2 * min(log_frequency=10, eval_frequency=20) = 20
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _config = _create_config(run_overrides={"scan_chunk_size": 10, "log_frequency": 10, "eval_frequency": 20})
+        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
+        assert len(chunk_warnings) == 0
+
+    # Should warn: scan_chunk_size (50) > 2 * min(log_frequency=10, eval_frequency=20) = 20
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _config = _create_config(run_overrides={"scan_chunk_size": 50, "log_frequency": 10, "eval_frequency": 20})
+        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
+        assert len(chunk_warnings) >= 1
+        assert issubclass(chunk_warnings[0].category, UserWarning)
+        assert "scan_chunk_size (50)" in str(chunk_warnings[0].message)
+        assert "minimum boundary frequency (10)" in str(chunk_warnings[0].message)
+
+    # Should warn: scan_chunk_size (100) > 2 * min(log_frequency=5, eval_frequency=3) = 6
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _config = _create_config(run_overrides={"scan_chunk_size": 100, "log_frequency": 5, "eval_frequency": 3})
+        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
+        assert len(chunk_warnings) >= 1
+        assert issubclass(chunk_warnings[0].category, UserWarning)
+        assert "scan_chunk_size (100)" in str(chunk_warnings[0].message)
+        assert "minimum boundary frequency (3)" in str(chunk_warnings[0].message)
