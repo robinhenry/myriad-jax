@@ -530,3 +530,362 @@ def test_run_config_warns_on_inefficient_scan_chunk_size():
         assert issubclass(chunk_warnings[0].category, UserWarning)
         assert "scan_chunk_size (100)" in str(chunk_warnings[0].message)
         assert "minimum boundary frequency (3)" in str(chunk_warnings[0].message)
+
+
+# ============================================================================
+# Reproducibility Tests
+# ============================================================================
+# These tests ensure that runs with the same seed produce identical results
+# regardless of scan_chunk_size, log_frequency, and eval configuration params
+
+
+def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Helper to run training and extract final agent, env, and buffer states."""
+    from aion.platform import scan_utils
+
+    final_states: dict[str, Any] = {}
+
+    orig_make_chunk_runner = scan_utils.make_chunk_runner
+
+    def instrumented_make_chunk_runner(train_step_fn, batch_size):
+        run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
+
+        def wrapped(carry, active_mask):
+            result = run_chunk(carry, active_mask)
+            # Store final carry state (converting to numpy for easy comparison)
+            final_states["carry"] = jax.tree_util.tree_map(lambda x: np.asarray(jax.device_get(x)), result[0])
+            return result
+
+        return wrapped
+
+    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
+    runner._run_training_loop(config, wandb_run=None)
+
+    # Extract individual components from final carry
+    key, agent_state, training_env_state, buffer_state = final_states["carry"]
+
+    agent_dict = jax.tree_util.tree_map(np.asarray, agent_state)
+    env_dict = jax.tree_util.tree_map(np.asarray, training_env_state)
+    buffer_dict = jax.tree_util.tree_map(np.asarray, buffer_state) if buffer_state is not None else {}
+
+    return agent_dict, env_dict, buffer_dict
+
+
+def _assert_states_equal(state1: dict, state2: dict, state_name: str):
+    """Assert that two PyTree states are numerically identical."""
+    flat1, tree_def1 = jax.tree_util.tree_flatten(state1)
+    flat2, tree_def2 = jax.tree_util.tree_flatten(state2)
+
+    assert tree_def1 == tree_def2, f"{state_name} structure differs"
+    assert len(flat1) == len(flat2), f"{state_name} has different number of leaves"
+
+    for i, (leaf1, leaf2) in enumerate(zip(flat1, flat2)):
+        leaf1_arr = np.asarray(leaf1)
+        leaf2_arr = np.asarray(leaf2)
+        np.testing.assert_array_equal(
+            leaf1_arr,
+            leaf2_arr,
+            err_msg=f"{state_name} leaf {i} differs",
+        )
+
+
+def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
+    """Training with same seed but different scan_chunk_size should yield identical results."""
+    base_seed = 42
+    total_timesteps = 20
+    num_envs = 2
+
+    # Run 1: scan_chunk_size = 2
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 5,
+            "eval_frequency": 10,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: scan_chunk_size = 5 (different chunk size)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 5,
+            "log_frequency": 5,
+            "eval_frequency": 10,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Run 3: scan_chunk_size = 1 (edge case: minimal chunking)
+    config3 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 1,
+            "log_frequency": 5,
+            "eval_frequency": 10,
+        }
+    )
+    agent3, env3, buffer3 = _extract_final_states(monkeypatch, config3)
+
+    # All three runs should produce identical final states
+    _assert_states_equal(agent1, agent2, "Agent state (chunk_size 2 vs 5)")
+    _assert_states_equal(agent1, agent3, "Agent state (chunk_size 2 vs 1)")
+    _assert_states_equal(env1, env2, "Env state (chunk_size 2 vs 5)")
+    _assert_states_equal(env1, env3, "Env state (chunk_size 2 vs 1)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (chunk_size 2 vs 5)")
+    _assert_states_equal(buffer1, buffer3, "Buffer state (chunk_size 2 vs 1)")
+
+
+def test_reproducibility_different_log_frequencies(monkeypatch):
+    """Training with same seed but different log_frequency should yield identical results."""
+    base_seed = 123
+    total_timesteps = 16
+    num_envs = 2
+
+    # Run 1: log_frequency = 2
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 2,
+            "eval_frequency": 8,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: log_frequency = 4 (different logging frequency)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Run 3: log_frequency = 8 (same as eval, less frequent logging)
+    config3 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 8,
+            "eval_frequency": 8,
+        }
+    )
+    agent3, env3, buffer3 = _extract_final_states(monkeypatch, config3)
+
+    # All three runs should produce identical final states
+    _assert_states_equal(agent1, agent2, "Agent state (log_freq 2 vs 4)")
+    _assert_states_equal(agent1, agent3, "Agent state (log_freq 2 vs 8)")
+    _assert_states_equal(env1, env2, "Env state (log_freq 2 vs 4)")
+    _assert_states_equal(env1, env3, "Env state (log_freq 2 vs 8)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (log_freq 2 vs 4)")
+    _assert_states_equal(buffer1, buffer3, "Buffer state (log_freq 2 vs 8)")
+
+
+def test_reproducibility_different_eval_frequencies(monkeypatch):
+    """Training with same seed but different eval_frequency should yield identical results."""
+    base_seed = 456
+    total_timesteps = 24
+    num_envs = 2
+
+    # Run 1: eval_frequency = 4
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 3,
+            "log_frequency": 4,
+            "eval_frequency": 4,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: eval_frequency = 6 (different eval frequency)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 3,
+            "log_frequency": 4,
+            "eval_frequency": 6,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Run 3: eval_frequency = 12 (less frequent evaluation)
+    config3 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 3,
+            "log_frequency": 4,
+            "eval_frequency": 12,
+        }
+    )
+    agent3, env3, buffer3 = _extract_final_states(monkeypatch, config3)
+
+    # All three runs should produce identical final states
+    _assert_states_equal(agent1, agent2, "Agent state (eval_freq 4 vs 6)")
+    _assert_states_equal(agent1, agent3, "Agent state (eval_freq 4 vs 12)")
+    _assert_states_equal(env1, env2, "Env state (eval_freq 4 vs 6)")
+    _assert_states_equal(env1, env3, "Env state (eval_freq 4 vs 12)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (eval_freq 4 vs 6)")
+    _assert_states_equal(buffer1, buffer3, "Buffer state (eval_freq 4 vs 12)")
+
+
+def test_reproducibility_different_eval_rollouts(monkeypatch):
+    """Training with same seed but different eval_rollouts should yield identical results."""
+    base_seed = 789
+    total_timesteps = 16
+    num_envs = 2
+
+    # Run 1: eval_rollouts = 2
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+            "eval_rollouts": 2,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: eval_rollouts = 5 (more eval rollouts)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+            "eval_rollouts": 5,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Both runs should produce identical final states
+    _assert_states_equal(agent1, agent2, "Agent state (eval_rollouts 2 vs 5)")
+    _assert_states_equal(env1, env2, "Env state (eval_rollouts 2 vs 5)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (eval_rollouts 2 vs 5)")
+
+
+def test_reproducibility_different_eval_max_steps(monkeypatch):
+    """Training with same seed but different eval_max_steps should yield identical results."""
+    base_seed = 999
+    total_timesteps = 16
+    num_envs = 2
+
+    # Run 1: eval_max_steps = 5
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+            "eval_max_steps": 5,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: eval_max_steps = 10 (longer eval episodes)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+            "eval_max_steps": 10,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Both runs should produce identical final states
+    _assert_states_equal(agent1, agent2, "Agent state (eval_max_steps 5 vs 10)")
+    _assert_states_equal(env1, env2, "Env state (eval_max_steps 5 vs 10)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (eval_max_steps 5 vs 10)")
+
+
+def test_reproducibility_combined_config_variations(monkeypatch):
+    """Training with same seed but different combinations of config params should yield identical results."""
+    base_seed = 2024
+    total_timesteps = 24
+    num_envs = 3
+
+    # Run 1: Config A
+    config1 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 6,
+            "eval_rollouts": 2,
+            "eval_max_steps": 5,
+        }
+    )
+    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
+
+    # Run 2: Config B (all logging/eval params different, but same seed)
+    config2 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 4,
+            "log_frequency": 8,
+            "eval_frequency": 12,
+            "eval_rollouts": 4,
+            "eval_max_steps": 10,
+        }
+    )
+    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
+
+    # Run 3: Config C (extreme settings)
+    config3 = _create_config(
+        run_overrides={
+            "seed": base_seed,
+            "total_timesteps": total_timesteps,
+            "num_envs": num_envs,
+            "scan_chunk_size": 1,
+            "log_frequency": 2,
+            "eval_frequency": 4,
+            "eval_rollouts": 1,
+            "eval_max_steps": 3,
+        }
+    )
+    agent3, env3, buffer3 = _extract_final_states(monkeypatch, config3)
+
+    # All three runs should produce identical final states despite very different configs
+    _assert_states_equal(agent1, agent2, "Agent state (Config A vs B)")
+    _assert_states_equal(agent1, agent3, "Agent state (Config A vs C)")
+    _assert_states_equal(env1, env2, "Env state (Config A vs B)")
+    _assert_states_equal(env1, env3, "Env state (Config A vs C)")
+    _assert_states_equal(buffer1, buffer2, "Buffer state (Config A vs B)")
+    _assert_states_equal(buffer1, buffer3, "Buffer state (Config A vs C)")
