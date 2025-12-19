@@ -5,7 +5,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from flax import struct
 
+from aion.core.types import Transition
 from aion.platform import scan_utils
 
 
@@ -163,3 +165,111 @@ def test_make_chunk_runner_all_inactive_steps():
     # All metrics should be zero
     assert metrics_history["metric"].shape == (5, 1)
     np.testing.assert_allclose(metrics_history["metric"], np.zeros((5, 1)))
+
+
+@struct.dataclass
+class _DummyEnvState:
+    counter: chex.Array
+
+
+@struct.dataclass
+class _DummyAgentState:
+    step_count: chex.Array
+
+
+def _make_dummy_collection_step(num_envs: int):
+    """Create a simple collection step function for testing chunked collector."""
+
+    def collection_step(key, agent_state, env_states):
+        # Increment counters
+        new_env_counter = env_states.counter + 1
+        new_agent_step = agent_state.step_count + 1
+
+        # Create dummy transition with meaningful values
+        obs = jnp.full((num_envs,), env_states.counter[0], dtype=jnp.float32)
+        actions = jnp.ones((num_envs,), dtype=jnp.int32)
+        rewards = jnp.full((num_envs,), env_states.counter[0] * 0.1, dtype=jnp.float32)
+        next_obs = jnp.full((num_envs,), new_env_counter[0], dtype=jnp.float32)
+        dones = jnp.zeros((num_envs,), dtype=jnp.bool_)
+
+        transition = Transition(obs, actions, rewards, next_obs, dones)
+
+        new_env_states = _DummyEnvState(counter=new_env_counter)
+        new_agent_state = _DummyAgentState(step_count=new_agent_step)
+
+        key, _ = jax.random.split(key)
+        return (key, new_agent_state, new_env_states), transition
+
+    return collection_step
+
+
+def test_make_chunked_collector_basic_functionality():
+    """Test that chunked collector correctly collects rollouts across chunks."""
+    num_envs = 3
+    chunk_size = 4
+    total_steps = 10  # Will require 3 chunks (4 + 4 + 2)
+
+    collection_step = _make_dummy_collection_step(num_envs)
+    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+
+    key = jax.random.PRNGKey(42)
+    agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.zeros((num_envs,), dtype=jnp.int32))
+
+    key_out, agent_out, env_out, transitions = collect_rollout(key, agent_state, env_states)
+
+    # Agent should have taken total_steps
+    assert int(agent_out.step_count) == total_steps
+
+    # Env counters should have advanced by total_steps
+    np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), total_steps))
+
+    # Transitions should be shaped (total_steps * num_envs, ...)
+    expected_batch_size = total_steps * num_envs
+    assert transitions.obs.shape[0] == expected_batch_size
+    assert transitions.action.shape[0] == expected_batch_size
+    assert transitions.reward.shape[0] == expected_batch_size
+    assert transitions.next_obs.shape[0] == expected_batch_size
+    assert transitions.done.shape[0] == expected_batch_size
+
+    # Verify key changed
+    assert not np.array_equal(key, key_out)
+
+
+def test_make_chunked_collector_with_perfect_chunk_alignment():
+    """Test chunked collector when total_steps divides evenly into chunk_size."""
+    num_envs = 2
+    chunk_size = 5
+    total_steps = 15  # Exactly 3 chunks
+
+    collection_step = _make_dummy_collection_step(num_envs)
+    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+
+    key = jax.random.PRNGKey(123)
+    agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.zeros((num_envs,), dtype=jnp.int32))
+
+    key_out, agent_out, env_out, transitions = collect_rollout(key, agent_state, env_states)
+
+    assert int(agent_out.step_count) == total_steps
+    assert transitions.obs.shape[0] == total_steps * num_envs
+
+
+def test_make_chunked_collector_single_chunk():
+    """Test chunked collector when total_steps < chunk_size (single chunk)."""
+    num_envs = 4
+    chunk_size = 20
+    total_steps = 7  # Less than one full chunk
+
+    collection_step = _make_dummy_collection_step(num_envs)
+    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+
+    key = jax.random.PRNGKey(456)
+    agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.zeros((num_envs,), dtype=jnp.int32))
+
+    key_out, agent_out, env_out, transitions = collect_rollout(key, agent_state, env_states)
+
+    assert int(agent_out.step_count) == total_steps
+    np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), total_steps))
+    assert transitions.obs.shape[0] == total_steps * num_envs

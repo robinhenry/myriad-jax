@@ -80,6 +80,37 @@ class RunConfig(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_on_policy_frequencies(self) -> "RunConfig":
+        """Ensure rollout_steps aligns with logging/eval frequencies for on-policy algorithms.
+
+        On-policy algorithms collect full rollouts before updating. For efficient boundary alignment,
+        rollout_steps should divide evenly into the logging and evaluation frequencies.
+        """
+        if self.rollout_steps is not None:
+            # On-policy training mode: check if frequencies are divisible by rollout_steps for clean alignment
+            if self.log_frequency % self.rollout_steps != 0 or self.eval_frequency % self.rollout_steps != 0:
+                warnings.warn(
+                    f"On-policy training: For optimal boundary alignment, rollout_steps ({self.rollout_steps}) "
+                    f"should divide evenly into log_frequency ({self.log_frequency}) and "
+                    f"eval_frequency ({self.eval_frequency}). Current configuration may cause "
+                    f"logging/evaluation to occur at irregular intervals.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+            # Additionally warn if scan_chunk_size doesn't align with rollout_steps
+            if self.rollout_steps % self.scan_chunk_size != 0 and self.scan_chunk_size % self.rollout_steps != 0:
+                warnings.warn(
+                    f"On-policy training: For efficient chunked execution, scan_chunk_size ({self.scan_chunk_size}) "
+                    f"should divide evenly into rollout_steps ({self.rollout_steps}) or vice versa. "
+                    f"This ensures minimal wasted computation from masked iterations.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        return self
+
 
 class Config(BaseModel):
     """Schema for the top-level configuration of a training run."""

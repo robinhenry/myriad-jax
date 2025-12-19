@@ -22,7 +22,7 @@ from .logging_utils import (
     summarize_metric,
     wandb,
 )
-from .scan_utils import make_chunk_runner, mask_tree, where_mask
+from .scan_utils import make_chunk_runner, make_chunked_collector, mask_tree, where_mask
 from .shared import TrainingEnvState
 
 
@@ -108,79 +108,88 @@ def _make_train_step_fn(
     return train_step
 
 
-def _make_rollout_collection_fn(
+def _make_collection_step_fn(
     agent: Agent,
     env: Environment,
     num_envs: int,
-    rollout_steps: int,
 ) -> Callable:
-    """Factory to create a jitted rollout collection function for on-policy algorithms."""
+    """Factory to create a single-step collection function for on-policy algorithms.
 
+    This creates a step function that collects one transition without performing agent updates.
+    It's designed to be used with make_chunked_collector for efficient rollout collection.
+    """
     # Vmap the environment step and reset functions
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
 
-    @jax.jit
-    def collect_rollout(
+    def collection_step(
         key: chex.PRNGKey,
         agent_state: AgentState,
         training_env_states: TrainingEnvState,
-    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, Transition]:
-        """Collect a rollout of transitions for on-policy training."""
+    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], Transition]:
+        """Execute one step of rollout collection: select action, step env, collect transition."""
+        last_obs = training_env_states.obs
 
-        def step_fn(carry, _):
-            """Single step of rollout collection."""
-            key, agent_state, env_states = carry
-            last_obs = env_states.obs
+        # Select actions using per-env keys
+        key, action_key = jax.random.split(key)
+        action_keys = jax.random.split(action_key, num_envs)
+        actions, agent_state = jax.vmap(
+            agent.select_action,
+            in_axes=(0, 0, None, None),
+            out_axes=(0, None),
+        )(action_keys, last_obs, agent_state, agent.params)
 
-            # Select actions
-            key, action_key = jax.random.split(key)
-            action_keys = jax.random.split(action_key, num_envs)
-            actions, agent_state = jax.vmap(
-                agent.select_action,
-                in_axes=(0, 0, None, None),
-                out_axes=(0, None),
-            )(action_keys, last_obs, agent_state, agent.params)
-
-            # Step environments
-            key, step_key = jax.random.split(key)
-            step_keys = jax.random.split(step_key, num_envs)
-            next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
-                step_keys, env_states.env_state, actions, env.params, env.config
-            )
-            dones_bool = dones.astype(jnp.bool_)
-
-            # Handle auto-reset
-            key, reset_key = jax.random.split(key)
-            reset_keys = jax.random.split(reset_key, num_envs)
-            new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
-
-            final_obs = where_mask(dones_bool, new_obs, next_obs)
-            final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
-            new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
-
-            # Store transition
-            transition = Transition(last_obs, actions, rewards, next_obs, dones_bool)
-
-            return (key, agent_state, new_training_env_state), transition
-
-        # Collect rollout_steps transitions
-        init_carry = (key, agent_state, training_env_states)
-        (key, agent_state, new_env_states), transitions = jax.lax.scan(step_fn, init_carry, None, length=rollout_steps)
-
-        # Reshape transitions: (rollout_steps, num_envs, ...) -> (rollout_steps * num_envs, ...)
-        batch_transitions = jax.tree_util.tree_map(
-            lambda x: x.reshape(-1, *x.shape[2:]) if x.ndim > 2 else x.reshape(-1), transitions
+        # Step environments in parallel
+        key, step_key = jax.random.split(key)
+        step_keys = jax.random.split(step_key, num_envs)
+        next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
+            step_keys, training_env_states.env_state, actions, env.params, env.config
         )
+        dones_bool = dones.astype(jnp.bool_)
 
-        return key, agent_state, new_env_states, batch_transitions
+        # Handle auto-reset for completed episodes
+        key, reset_key = jax.random.split(key)
+        reset_keys = jax.random.split(reset_key, num_envs)
+        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
 
-    return collect_rollout
+        final_obs = where_mask(dones_bool, new_obs, next_obs)
+        final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
+        new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
+
+        # Create transition for this step
+        transition = Transition(last_obs, actions, rewards, next_obs, dones_bool)
+
+        return (key, agent_state, new_training_env_state), transition
+
+    return collection_step
 
 
 def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Callable:
-    """Factory to create a jitted evaluation rollout aligned with the training loop style."""
+    """Factory to create a jitted evaluation rollout aligned with the training loop style.
 
+    Design Note: Dynamic vs Static Control Flow
+    --------------------------------------------
+    This evaluation function uses jax.lax.while_loop (dynamic control flow) rather than the
+    fixed-size masked scans used in training. This is an intentional design choice:
+
+    Why while_loop for evaluation:
+    1. **Early termination benefit**: Episodes can finish at different times. Using while_loop
+       allows us to stop as soon as all episodes complete, avoiding wasted computation.
+    2. **Infrequent execution**: Evaluation happens much less frequently than training steps
+       (e.g., every 10k-100k steps), so the compilation overhead is negligible.
+    3. **Variable episode lengths**: Some environments have highly variable episode durations.
+       Early exit can save significant computation when episodes finish quickly.
+    4. **Accurate metrics**: We need to track exact episode returns and lengths without
+       padding artifacts that would occur with masked iterations.
+
+    Why fixed-size scans for training:
+    1. **Frequent execution**: Training steps run continuously, so avoiding recompilation is critical.
+    2. **Predictable boundaries**: Logging and eval frequencies create natural boundaries.
+    3. **Batch processing**: Training benefits from fixed batch sizes for stability.
+
+    The compilation cost of while_loop is amortized over many training steps between evaluations,
+    and the performance benefit from early termination outweighs this cost.
+    """
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
     num_eval_envs = config.run.eval_rollouts
@@ -290,11 +299,19 @@ def _run_training_loop(config: Config, wandb_run: Any) -> None:
     use_rollout_training = config.run.rollout_steps is not None
 
     if use_rollout_training:
-        # On-policy training (e.g., PQN): no replay buffer needed
+        # On-policy training (e.g., PPO, A2C, PQN): no replay buffer needed
         replay_buffer = None
         buffer_state = None
         assert config.run.rollout_steps is not None  # should always be true if use_rollout_training is true
-        rollout_fn = _make_rollout_collection_fn(agent, env, config.run.num_envs, config.run.rollout_steps)
+
+        # Create chunked collector for efficient rollout collection
+        collection_step_fn = _make_collection_step_fn(agent, env, config.run.num_envs)
+        rollout_fn = make_chunked_collector(
+            collection_step_fn=collection_step_fn,
+            num_envs=config.run.num_envs,
+            chunk_size=config.run.scan_chunk_size,
+            total_steps=config.run.rollout_steps,
+        )
     else:
         # Off-policy training (e.g., DQN): use replay buffer
         if config.run.buffer_size is None:

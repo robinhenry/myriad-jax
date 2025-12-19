@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
 import chex
 import jax
@@ -8,8 +8,12 @@ import jax.numpy as jnp
 
 from aion.agents.agent import AgentState
 from aion.core.replay_buffer import ReplayBufferState
+from aion.core.types import Transition
 
 from .shared import TrainingEnvState
+
+# Generic type for carry state
+CarryT = TypeVar("CarryT")
 
 
 def tree_select(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
@@ -118,3 +122,116 @@ def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
         return jax.lax.scan(body, carry, active_mask)
 
     return jax.jit(run_chunk)
+
+
+def make_chunked_collector(
+    collection_step_fn: Callable,
+    num_envs: int,
+    chunk_size: int,
+    total_steps: int,
+) -> Callable:
+    """Create a chunked rollout collector that gathers transitions efficiently using fixed-size scans.
+
+    This function enables on-policy algorithms to collect rollouts in chunks while maintaining the
+    ability to return a full batch of transitions for agent updates. The chunking strategy provides:
+
+    1. **Compilation efficiency**: Fixed chunk sizes avoid recompilation overhead
+    2. **Boundary alignment**: Can interleave logging/eval between chunks
+    3. **Full-rollout semantics**: Returns complete rollout for advantage computation
+
+    Design:
+    -------
+    Instead of collecting all rollout_steps at once in a single large scan (which bypasses chunking
+    and can cause compilation issues with large rollouts), this collector:
+
+    - Divides the rollout into fixed-size chunks
+    - Executes each chunk with mask-aware scanning
+    - Accumulates transitions across chunks
+    - Returns the full rollout batch for agent update
+
+    This enables on-policy algorithms (PPO, A2C) to use large rollouts (e.g., 2048 steps) while:
+    - Benefiting from chunked compilation
+    - Respecting logging/eval boundaries
+    - Maintaining full-rollout semantics for GAE and advantage computation
+
+    Args:
+        collection_step_fn: Function that performs one step of rollout collection.
+            Signature: (key, agent_state, env_states) -> ((key, agent_state, env_states), transition)
+        num_envs: Number of parallel environments
+        chunk_size: Maximum number of steps per chunk (for compilation)
+        total_steps: Total number of steps to collect in the rollout
+
+    Returns:
+        A jitted function that collects a full rollout in chunks and returns all transitions.
+    """
+    num_chunks = (total_steps + chunk_size - 1) // chunk_size  # Ceiling division
+
+    def collect_chunked_rollout(
+        key: chex.PRNGKey,
+        agent_state: AgentState,
+        env_states: TrainingEnvState,
+    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, Transition]:
+        """Collect a full rollout by executing multiple fixed-size chunks."""
+
+        def chunk_body(carry: tuple, chunk_idx: chex.Array):
+            """Execute one chunk of the rollout collection."""
+            key, agent_state, env_states = carry
+
+            # Determine how many steps are active in this chunk
+            steps_collected = chunk_idx * chunk_size
+            steps_remaining = total_steps - steps_collected
+            steps_this_chunk = jnp.minimum(chunk_size, steps_remaining)
+
+            # Create active mask: True for active iterations, False for inactive (padded) iterations
+            active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
+
+            def step_body(step_carry: tuple, active: chex.Array):
+                """Single step within a chunk."""
+                key, agent_state, env_states = step_carry
+
+                # Execute the collection step
+                (key_new, agent_state_new, env_states_new), transition = collection_step_fn(
+                    key, agent_state, env_states
+                )
+
+                # Only update state if this iteration is active
+                active_mask_scalar = jnp.asarray(active, dtype=jnp.bool_)
+                key = jax.lax.select(active_mask_scalar, key_new, key)
+                agent_state = tree_select(active_mask_scalar, agent_state_new, agent_state)
+                env_states = tree_select(active_mask_scalar, env_states_new, env_states)
+
+                # Zero out transition data for inactive iterations
+                transition = jax.tree_util.tree_map(
+                    lambda x: jax.lax.select(active_mask_scalar, x, jnp.zeros_like(x)),
+                    transition,
+                )
+
+                return (key, agent_state, env_states), transition
+
+            # Run one chunk using scan
+            (key, agent_state, env_states), chunk_transitions = jax.lax.scan(
+                step_body, (key, agent_state, env_states), active_mask
+            )
+
+            return (key, agent_state, env_states), chunk_transitions
+
+        # Collect all chunks
+        (key, agent_state, env_states), all_chunk_transitions = jax.lax.scan(
+            chunk_body, (key, agent_state, env_states), jnp.arange(num_chunks)
+        )
+
+        # Reshape transitions from (num_chunks, chunk_size, num_envs, ...) to (total_steps, num_envs, ...)
+        # Then flatten to (total_steps * num_envs, ...)
+        def reshape_transitions(x: chex.Array) -> chex.Array:
+            # First reshape: (num_chunks, chunk_size, num_envs, ...) -> (num_chunks * chunk_size, num_envs, ...)
+            flat_chunks = x.reshape(-1, num_envs, *x.shape[3:])
+            # Slice to remove padding: keep only first total_steps
+            valid_steps = flat_chunks[:total_steps]
+            # Final reshape: (total_steps, num_envs, ...) -> (total_steps * num_envs, ...)
+            return valid_steps.reshape(-1, *valid_steps.shape[2:])
+
+        full_rollout = jax.tree_util.tree_map(reshape_transitions, all_chunk_transitions)
+
+        return key, agent_state, env_states, full_rollout
+
+    return jax.jit(collect_chunked_rollout)
