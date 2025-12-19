@@ -198,8 +198,8 @@ def test_step_termination_theta(key: chex.PRNGKey, env: Environment):
 
     # Should be terminated (either already over threshold or pushed over by velocity)
     assert done == 1.0
-    # No reward on terminal step
-    assert reward == 0.0
+    # Gymnasium gives +1 reward even on terminal step (before termination is detected)
+    assert reward == 1.0
 
 
 def test_step_termination_x(key: chex.PRNGKey, env: Environment):
@@ -218,8 +218,8 @@ def test_step_termination_x(key: chex.PRNGKey, env: Environment):
 
     # Should be terminated (either already over threshold or pushed over by velocity)
     assert done == 1.0
-    # No reward on terminal step
-    assert reward == 0.0
+    # Gymnasium gives +1 reward even on terminal step (before termination is detected)
+    assert reward == 1.0
 
 
 def test_step_termination_max_steps(key: chex.PRNGKey, env: Environment):
@@ -239,8 +239,49 @@ def test_step_termination_max_steps(key: chex.PRNGKey, env: Environment):
     # Should be done
     assert next_state.t == env.config.max_steps
     assert done == 1.0
-    # No reward on terminal step
-    assert reward == 0.0
+    # Gymnasium gives +1 reward even on terminal step (before termination is detected)
+    assert reward == 1.0
+
+
+def test_max_episode_reward(key: chex.PRNGKey):
+    """Test that maximum achievable reward equals max_steps (not max_steps + 1)."""
+    # Create environment with very small max_steps to make testing easier
+    # Use large thresholds so the pole won't fall during our short test
+    config = EnvConfig(
+        max_steps=3,
+        theta_threshold=10.0,  # Very large to prevent early termination
+        x_threshold=100.0,  # Very large to prevent early termination
+    )
+    env = make_env(config=config)
+
+    # Start from initial state
+    state = EnvState(
+        x=jnp.array(0.0),
+        x_dot=jnp.array(0.0),
+        theta=jnp.array(0.0),
+        theta_dot=jnp.array(0.0),
+        t=jnp.array(0),
+    )
+
+    total_reward = 0.0
+    action = jnp.array(0)
+
+    # Step through entire episode
+    for step_num in range(config.max_steps + 2):  # Try to go beyond max_steps
+        key, step_key = jax.random.split(key)
+        obs, state, reward, done, info = _step(step_key, state, action, env.params, config)
+        total_reward += reward
+
+        if done == 1.0:
+            # Should terminate at exactly max_steps (3)
+            assert state.t == config.max_steps
+            # Total reward should be exactly max_steps
+            # (rewards earned at t=0, t=1, t=2, then terminate at t=3 with no reward)
+            assert total_reward == config.max_steps
+            break
+    else:
+        # Should never get here - episode should have terminated
+        assert False, "Episode did not terminate"
 
 
 def test_step_jit_compilation(key: chex.PRNGKey, env: Environment):

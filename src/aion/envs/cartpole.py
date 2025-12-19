@@ -118,15 +118,15 @@ def _step(
     # Update time step
     t_next = t + 1
 
-    # Check termination conditions
+    # Check termination conditions on next state
     theta_out_of_bounds = jnp.abs(theta_next) > config.theta_threshold
     x_out_of_bounds = jnp.abs(x_next) > config.x_threshold
-    max_steps_reached = t_next > config.max_steps
+    max_steps_reached = t_next >= config.max_steps
 
     done = (theta_out_of_bounds | x_out_of_bounds | max_steps_reached).astype(jnp.float32)
 
-    # Reward: +1 for each timestep the pole is balanced (no reward on terminal step)
-    reward = 1.0 - done
+    # Reward is always +1 per step (matching Gymnasium CartPole-v1 default behavior)
+    reward = jnp.float32(1.0)
 
     # Create next state and observation
     next_state = EnvState(x_next, x_dot_next, theta_next, theta_dot_next, t_next)
