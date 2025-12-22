@@ -1,4 +1,4 @@
-"""CartPole environment implemented as pure JAX functions.
+"""CartPole-v1 environment implemented as pure JAX functions.
 
 Classic cart-pole balancing problem where an agent must balance a pole on a cart
 by applying left or right forces to the cart.

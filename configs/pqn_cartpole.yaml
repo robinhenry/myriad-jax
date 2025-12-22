@@ -3,8 +3,8 @@
 
 defaults:
   - agent: pqn_agent
-  - env: cartpole
-  - run: pqn_cartpole
+  - env: cartpole_v1
+  - run: pqn_cartpole_v1
   - _self_
 
 wandb:

@@ -1,0 +1,20 @@
+# @package run
+# Run configuration for PQN on CartPole
+# Hyperparameters match the original PureJaxQL implementation:
+# https://github.com/mttga/purejaxql/blob/main/purejaxql/config/alg/pqn_cartpole.yaml
+
+# Run parameters
+seed: 42
+total_timesteps: 5e5  # Total number of timesteps across all environments
+num_envs: 32  # Run 32 environments in parallel (original uses 32)
+scan_chunk_size: 256  # Chunk size for scan operations
+rollout_steps: 2  # Collect 2 steps per environment before starting training
+
+# Evaluation
+eval_frequency: 10  # Evaluate every ... steps
+eval_rollouts: 16  # Number of parallel episodes to evaluate performance over
+eval_max_steps: 500  # CartPole max episode length
+eval_epsilon: 0.0  # Exploration epsilon during evaluation rollouts  # TODO: add
+
+# Logging
+log_frequency: 10  # Log metrics every update (2048 steps = 1 update)
