@@ -23,16 +23,13 @@ poetry install
 
 ## Quick Start
 
-Run a training experiment:
+Run a training experiment (with option to override configuration parameters):
 
 ```bash
-python -m aion.main
-```
-
-Override configuration:
-
-```bash
-python -m aion.main agent=random env=toy_env run.total_timesteps=1000000
+# One of these:
+python scripts/train.py
+python scripts/train.py --config-file=pqn_cartpole
+python scripts/train.py run.total_timesteps=1000 agent.gamma=0.98
 ```
 
 Configurations are in `configs/` and use Hydra's composition system.
@@ -41,19 +38,23 @@ Configurations are in `configs/` and use Hydra's composition system.
 
 **New Environment:**
 1. Implement the `Environment` protocol in `src/aion/envs/`
-2. Register in `ENV_REGISTRY` with a `make_env(**kwargs)` factory
+2. Register in `ENV_REGISTRY` with a `make_env(...)` factory
 3. Add config file in `configs/env/`
 
 **New Agent:**
 1. Implement the `Agent` protocol in `src/aion/agents/`
-2. Register in `AGENT_REGISTRY` with a `make_agent(action_space, **kwargs)` factory
+2. Register in `AGENT_REGISTRY` with a `make_agent(...)` factory
 3. Add config file in `configs/agent/`
+
+**New (Environment, Agent) run configuration**
+1. Add run config file in `configs/run/`
+2. Add overall config file in `configs/`
 
 ## Development
 
 ```bash
 # Run tests
-python -m pytest
+pytest
 
 # Format and lint
 black src/ tests/
@@ -71,4 +72,4 @@ Robin Henry (robin.henry012@gmail.com)
 
 ## Contributing
 
-Contributions welcome! Ensure tests pass and code follows style guidelines before submitting PRs.
+Contributions welcome!

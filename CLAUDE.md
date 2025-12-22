@@ -46,6 +46,7 @@ The project uses Hydra for configuration management. Config files are in `config
 - `configs/config.yaml` - Main configuration with defaults
 - `configs/agent/` - Agent configurations
 - `configs/env/` - Environment configurations
+- `configs/run/` - Agent-Environment run configurations
 
 ## Architecture
 
@@ -111,11 +112,14 @@ src/aion/
 │   └── shared.py         # Shared state containers
 ├── agents/         # Agent implementations
 │   ├── agent.py          # Agent protocol and base types
+│   ├── dqn.py            # DQN agent implementation
+│   ├── pqn.py            # PQN agent implementation
 │   └── random.py         # Random agent implementation
 ├── envs/           # Environment implementations
 │   ├── environment.py    # Environment protocol and base types
-│   ├── example_env.py    # Example environment template
-│   └── ccas_ccar.py      # CCAS-CCAR environment
+│   ├── example.py        # Example environment template
+│   ├── cartpole_v1.py    # Cartpole environment (v1)
+│   └── ccas_ccar_v1.py   # CCAS-CCAR environment (v1)
 ├── configs/        # Configuration schemas
 │   └── default.py        # Pydantic models for config validation
 └── utils/          # Utilities
