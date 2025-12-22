@@ -57,6 +57,7 @@ class AgentParams:
     learning_rate: float
     gamma: float
     lambda_: float  # Lambda for lambda-returns
+    reward_scale: float
     epsilon_start: float
     epsilon_end: float
     epsilon_decay_steps: int
@@ -255,7 +256,8 @@ def _update(
     next_q_max = jnp.max(next_q_values, axis=1)
 
     # Compute lambda-returns
-    rewards = batch.reward
+    # Scale rewards (using tree_map to handle ArrayTree type, though rewards are typically arrays)
+    rewards = jax.tree_util.tree_map(lambda x: x * params.reward_scale, batch.reward)
     dones = batch.done.astype(jnp.float32)
     lambda_returns = _compute_lambda_returns(
         rewards=rewards,
@@ -352,6 +354,7 @@ def _update(
 def make_agent(
     action_space: Space,
     learning_rate: float = 2.5e-4,
+    reward_scale: float = 1.0,
     gamma: float = 0.99,
     lambda_: float = 0.65,
     epsilon_start: float = 1.0,
@@ -368,6 +371,7 @@ def make_agent(
     Args:
         action_space: Action space (must be Discrete)
         learning_rate: Learning rate for Adam optimizer
+        reward_scale: Internal scaling factor for the rewards
         gamma: Discount factor
         lambda_: Lambda parameter for lambda-returns (0.0 = 1-step TD, 1.0 = Monte Carlo)
         epsilon_start: Initial exploration rate
@@ -385,6 +389,7 @@ def make_agent(
     params = AgentParams(
         action_space=action_space,
         learning_rate=learning_rate,
+        reward_scale=reward_scale,
         gamma=gamma,
         lambda_=lambda_,
         epsilon_start=epsilon_start,
