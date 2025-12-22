@@ -9,7 +9,7 @@ import pytest
 
 from aion.core import spaces
 from aion.envs import make_env as make_env_from_registry
-from aion.envs.cartpole import EnvConfig, EnvParams, EnvState, _reset, _step, create_env_params, make_env
+from aion.envs.cartpole_v1 import EnvConfig, EnvParams, EnvState, _reset, _step, create_env_params, make_env
 from aion.envs.environment import Environment
 
 
@@ -359,7 +359,7 @@ def test_observation_bounds(key: chex.PRNGKey, env: Environment):
 
 def test_env_registry_integration():
     """Test that CartPole can be created via ENV_REGISTRY."""
-    env = make_env_from_registry("cartpole")
+    env = make_env_from_registry("cartpole-v1")
 
     # Verify it's a valid Environment
     assert isinstance(env, Environment)
