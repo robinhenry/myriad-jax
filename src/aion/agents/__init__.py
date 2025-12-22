@@ -3,9 +3,9 @@ from .agent import Agent
 
 # The registry mapping environment IDs to their factory functions
 AGENT_REGISTRY = {
-    "random_agent": random.make_agent,
-    "dqn_agent": dqn.make_agent,
-    "pqn_agent": pqn.make_agent,
+    "random": random.make_agent,
+    "dqn": dqn.make_agent,
+    "pqn": pqn.make_agent,
 }
 
 

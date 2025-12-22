@@ -4,7 +4,7 @@
 # This section tells Hydra where to find the default
 # configurations for composable components.
 defaults:
-  - agent: dqn_agent
+  - agent: dqn
   - env: cartpole_v1
   - run: dqn_cartpole_v1
   - _self_

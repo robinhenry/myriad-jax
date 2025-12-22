@@ -1,5 +1,5 @@
 # @package agent
-name: pqn_agent
+name: pqn
 
 # Network architecture
 hidden_size: 256  # Hidden layer size (original PQN uses 256)
@@ -12,6 +12,7 @@ max_grad_norm: 10.0  # Gradient clipping (original uses 10)
 # RL algorithm parameters
 gamma: 0.99  # Discount factor
 lambda_: 0.95  # Lambda for lambda-returns (GAE-style, original uses 0.95)
+reward_scale: 0.1  # Scale rewards
 
 # Exploration schedule (epsilon-greedy)
 epsilon_start: 1.0

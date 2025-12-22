@@ -1,5 +1,5 @@
 # @package agent
-name: dqn_agent
+name: dqn
 
 # Training settings
 batch_size: 64  # Number of transitions sampled from replay buffer per update

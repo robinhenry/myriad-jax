@@ -6,7 +6,7 @@ import pytest
 
 from aion.core import spaces
 from aion.envs.environment import Environment
-from aion.envs.example_env import EnvConfig, EnvParams, EnvState, _reset, _step, create_env_params, make_env
+from aion.envs.example import EnvConfig, EnvParams, EnvState, _reset, _step, create_env_params, make_env
 
 
 @pytest.fixture

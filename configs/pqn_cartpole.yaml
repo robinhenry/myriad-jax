@@ -2,7 +2,7 @@
 # PQN agent configuration for CartPole environment
 
 defaults:
-  - agent: pqn_agent
+  - agent: pqn
   - env: cartpole_v1
   - run: pqn_cartpole_v1
   - _self_
