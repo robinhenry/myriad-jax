@@ -1,0 +1,89 @@
+site_name: Aion
+site_description: JAX-native platform for massively parallel system identification and control
+site_author: Robin Henry
+repo_url: https://github.com/robinhenry/aion
+repo_name: robinhenry/aion
+
+# 1. VISUAL SETTINGS (The "Research Lab" Look)
+theme:
+  name: material
+  logo: assets/logo.png # Make sure you have a logo here, or remove this line
+  favicon: assets/favicon.png # Optional
+  font:
+    text: Inter # Clean, modern sans-serif
+    code: JetBrains Mono # Best font for reading Python/JAX
+  palette:
+    # Scheme 1: Dark Mode (Default) - "Slate & Cyan"
+    # Using 'black' primary removes the heavy header bar for a sleek look
+    - scheme: slate
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    # Scheme 2: Light Mode - "White & Teal"
+    - scheme: default
+      primary: white
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes # Makes section titles clickable (if you have index.md in folders)
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+# 2. CUSTOM CSS LINK
+extra_css:
+  - stylesheets/extra.css
+
+# 3. PLUGINS (Kept your existing setup)
+plugins:
+  - search
+
+# 4. EXTENSIONS (Kept your existing setup)
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+# 5. NAVIGATION
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - User Guide:
+      - Core Concepts: user-guide/concepts.md
+      - Custom Environment: user-guide/custom_env.md
+      - Custom Agent: user-guide/custom_agent.md
+      - Running Experiments: user-guide/running_experiments.md
+  - API Reference:
+      - Environments: api-reference/environments.md
+      - Agents: api-reference/agents.md
+      - Core API: api-reference/api_core.md
+  - Contributing:
+      - Setup: contributing/setup.md
+      - Configuration System: contributing/configuration.md
+      - JAX Architecture: contributing/architecture.md
