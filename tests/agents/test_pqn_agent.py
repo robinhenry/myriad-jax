@@ -4,9 +4,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.agents.pqn import AgentState, _compute_lambda_returns, make_agent
-from aion.core.spaces import Discrete
-from aion.core.types import Transition
+from myriad.agents.pqn import AgentState, _compute_lambda_returns, make_agent
+from myriad.core.spaces import Discrete
+from myriad.core.types import Transition
 
 
 @pytest.fixture
@@ -159,7 +159,7 @@ def test_epsilon_decay(agent):
 
 def test_invalid_action_space():
     """Test that PQN raises error for non-Discrete action spaces."""
-    from aion.core.spaces import Box
+    from myriad.core.spaces import Box
 
     box_space = Box(low=-1.0, high=1.0, shape=(2,))
 

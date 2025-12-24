@@ -12,7 +12,7 @@ defaults:
 wandb:
   enabled: true
   entity: lugagne-lab  # team or user name
-  project: aion  # project name (will group runs)
+  project: myriad  # project name (will group runs)
   group: scrap  # sub-group within a project (eg, sweep or experiment name)
   job_type: train  # eg, train, eval, test
   run_name: null  # if null, a default name will be generated

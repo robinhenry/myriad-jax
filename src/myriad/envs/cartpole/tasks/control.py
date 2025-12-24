@@ -11,8 +11,8 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from aion.core.spaces import Discrete
-from aion.envs.environment import Environment
+from myriad.core.spaces import Discrete
+from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
 from .base import (

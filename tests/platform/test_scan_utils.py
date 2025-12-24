@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from flax import struct
 
-from aion.core.types import Transition
-from aion.platform import scan_utils
+from myriad.core.types import Transition
+from myriad.platform import scan_utils
 
 
 def test_tree_select_masking():

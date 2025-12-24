@@ -2,7 +2,7 @@
 
 ## The Three-Layer Architecture
 
-Aion separates your experiment into three independent layers. This architecture isn't just an implementation detail—it's designed to match how you actually think about scientific problems.
+Myriad separates your experiment into three independent layers. This architecture isn't just an implementation detail—it's designed to match how you actually think about scientific problems.
 
 ### Why this matters for your work
 
@@ -13,13 +13,13 @@ Traditional RL platforms force you to bundle physics, task objectives, and learn
 - **Experiment A**: Control the system to a target state (classic RL)
 - **Experiment B**: Learn the unknown parameters of the system (active learning)
 
-In Gym or Gymnax, you'd duplicate the entire physics implementation twice. In Aion, you write the physics once and wrap it with different task definitions.
+In Gym or Gymnax, you'd duplicate the entire physics implementation twice. In Myriad, you write the physics once and wrap it with different task definitions.
 
 **Scenario: You want to use model-based planning**
 
 Your MPC controller needs direct access to the dynamics function to simulate trajectories. Traditional environments hide this inside `step()`, forcing you to either hack around the API or rewrite the physics.
 
-In Aion, the physics layer is directly callable—no environment wrapper needed.
+In Myriad, the physics layer is directly callable—no environment wrapper needed.
 
 ## The layers
 
@@ -165,7 +165,7 @@ All agents work with all tasks automatically.
 ## The benefit: Modularity
 
 ```python
-from aion.envs.cartpole import physics
+from myriad.envs.cartpole import physics
 
 # Task 1: Balancing (control)
 control_env = make_env("cartpole-control")
@@ -191,13 +191,13 @@ def mpc_planner(state, horizon=10):
 ## File organization
 
 ```
-src/aion/envs/cartpole/
+src/myriad/envs/cartpole/
 ├── physics.py          # Layer A: Pure dynamics
 └── tasks/
     ├── control.py      # Layer B: Control wrapper
     └── sysid.py        # Layer B: SysID wrapper
 
-src/aion/agents/
+src/myriad/agents/
 ├── dqn.py              # Layer C: DQN agent
 ├── pqn.py              # Layer C: PQN agent
 └── random.py           # Layer C: Random agent

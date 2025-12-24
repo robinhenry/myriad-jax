@@ -1,9 +1,9 @@
 # Configuration System
 
 !!! info "Advanced Topic"
-    This document explains Aion's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
+    This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
 
-Aion uses [Hydra](https://hydra.cc) for composable configuration management. Configs are organized into three categories: `env/`, `agent/`, and `run/`.
+Myriad uses [Hydra](https://hydra.cc) for composable configuration management. Configs are organized into three categories: `env/`, `agent/`, and `run/`.
 
 ## Configuration hierarchy
 
@@ -35,7 +35,7 @@ defaults:
 wandb:
   enabled: true
   entity: your-team         # W&B team/user
-  project: aion            # W&B project name
+  project: myriad            # W&B project name
   group: experiment-1      # Group runs together
   job_type: train          # train, eval, etc.
   run_name: null           # Auto-generated if null
@@ -234,7 +234,7 @@ python scripts/train.py \
 
 ```python
 from omegaconf import OmegaConf
-from aion.configs.default import Config
+from myriad.configs.default import Config
 
 # Load from YAML
 cfg_dict = OmegaConf.load("configs/config.yaml")
@@ -247,7 +247,7 @@ cfg_dict.agent.learning_rate = 3e-4
 config = Config(**OmegaConf.to_object(cfg_dict))
 
 # Use in training
-from aion.platform.runner import train_and_evaluate
+from myriad.platform.runner import train_and_evaluate
 train_and_evaluate(config)
 ```
 

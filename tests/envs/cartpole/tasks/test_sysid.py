@@ -15,10 +15,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.core import spaces
-from aion.envs import make_env as make_env_from_registry
-from aion.envs.cartpole.physics import PhysicsState
-from aion.envs.cartpole.tasks.sysid import (
+from myriad.core import spaces
+from myriad.envs import make_env as make_env_from_registry
+from myriad.envs.cartpole.physics import PhysicsState
+from myriad.envs.cartpole.tasks.sysid import (
     SysIDTaskConfig,
     SysIDTaskParams,
     SysIDTaskState,
@@ -28,7 +28,7 @@ from aion.envs.cartpole.tasks.sysid import (
     create_randomized_params,
     make_env,
 )
-from aion.envs.environment import Environment
+from myriad.envs.environment import Environment
 
 
 @pytest.fixture

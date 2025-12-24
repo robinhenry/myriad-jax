@@ -1,6 +1,6 @@
 # Development Setup
 
-This guide is for contributors who want to modify Aion's internals. If you just want to use Aion to build experiments, see the [Installation guide](../get-started/installation.md) instead.
+This guide is for contributors who want to modify Myriad's internals. If you just want to use Myriad to build experiments, see the [Installation guide](../get-started/installation.md) instead.
 
 ## Requirements
 
@@ -12,8 +12,8 @@ This guide is for contributors who want to modify Aion's internals. If you just 
 ## Clone and install
 
 ```bash
-git clone https://github.com/robinhenry/aion.git
-cd aion
+git clone https://github.com/robinhenry/myriad.git
+cd myriad
 ```
 
 Install all dependencies including dev tools:
@@ -47,7 +47,7 @@ python -m pytest tests/envs/cartpole/test_physics.py
 Run with coverage:
 
 ```bash
-python -m pytest --cov=aion --cov-report=html
+python -m pytest --cov=myriad --cov-report=html
 ```
 
 ### Code formatting
@@ -67,7 +67,7 @@ ruff check --fix src/ tests/
 ### Type checking
 
 ```bash
-mypy src/aion/
+mypy src/myriad/
 ```
 
 ### Pre-commit hooks
@@ -83,8 +83,8 @@ Now `black`, `ruff`, and `mypy` will run automatically on `git commit`.
 ## Project structure
 
 ```
-aion/
-├── src/aion/
+myriad/
+├── src/myriad/
 │   ├── core/          # Protocols and base types (Three Layers)
 │   ├── envs/          # JAX environments (Physics implementations)
 │   ├── agents/        # RL/Control algorithms (PPO, SAC, etc.)
@@ -121,23 +121,23 @@ See [JAX Architecture](architecture.md) for details.
 
 ### Adding a new environment
 
-1. Create `src/aion/envs/your_env/physics.py` (pure dynamics)
-2. Create `src/aion/envs/your_env/tasks/control.py` (task wrapper)
-3. Register in `src/aion/envs/__init__.py`
+1. Create `src/myriad/envs/your_env/physics.py` (pure dynamics)
+2. Create `src/myriad/envs/your_env/tasks/control.py` (task wrapper)
+3. Register in `src/myriad/envs/__init__.py`
 4. Add Hydra config in `configs/env/your_env.yaml`
 5. Write tests in `tests/envs/your_env/`
 
-Reference implementation: `src/aion/envs/cartpole/`
+Reference implementation: `src/myriad/envs/cartpole/`
 
 ### Adding a new agent
 
-1. Create `src/aion/agents/your_agent.py`
+1. Create `src/myriad/agents/your_agent.py`
 2. Implement the `Agent` protocol (`select_action`, `update`)
-3. Register in `src/aion/agents/__init__.py`
+3. Register in `src/myriad/agents/__init__.py`
 4. Add Hydra config in `configs/agent/your_agent.yaml`
 5. Write tests in `tests/agents/test_your_agent.py`
 
-Reference implementation: `src/aion/agents/dqn.py`
+Reference implementation: `src/myriad/agents/dqn.py`
 
 ## Documentation
 

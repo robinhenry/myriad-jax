@@ -10,7 +10,7 @@ defaults:
 wandb:
   enabled: true
   entity: lugagne-lab
-  project: aion
+  project: myriad
   group: pqn-experiments
   job_type: train
   run_name: null

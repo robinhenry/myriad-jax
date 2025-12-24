@@ -2,8 +2,8 @@
 
 import pytest
 
-from aion.envs.cartpole.physics import PhysicsConfig, PhysicsParams
-from aion.envs.cartpole.tasks.base import TaskConfig
+from myriad.envs.cartpole.physics import PhysicsConfig, PhysicsParams
+from myriad.envs.cartpole.tasks.base import TaskConfig
 
 
 @pytest.fixture

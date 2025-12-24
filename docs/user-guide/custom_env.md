@@ -1,10 +1,10 @@
 # Add a custom environment
 
-Add your own physics to Aion by implementing the three-layer pattern. This guide shows how to create a simple damped oscillator environment.
+Add your own physics to Myriad by implementing the three-layer pattern. This guide shows how to create a simple damped oscillator environment.
 
 ## Step 1: Create the physics module
 
-Create `src/aion/envs/oscillator/physics.py`:
+Create `src/myriad/envs/oscillator/physics.py`:
 
 ```python
 """Pure stateless physics for a damped harmonic oscillator."""
@@ -74,7 +74,7 @@ def step_physics(
 
 ## Step 2: Create a task wrapper
 
-Create `src/aion/envs/oscillator/tasks/control.py`:
+Create `src/myriad/envs/oscillator/tasks/control.py`:
 
 ```python
 """Control task: Drive oscillator to origin."""
@@ -84,8 +84,8 @@ import chex
 import jax.numpy as jnp
 from flax import struct
 
-from aion.core.spaces import Box
-from aion.envs.environment import Environment
+from myriad.core.spaces import Box
+from myriad.envs.environment import Environment
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, step_physics
 
 
@@ -170,7 +170,7 @@ def make_env(**kwargs) -> Environment:
     params = ControlTaskParams()
 
     # Return Environment NamedTuple
-    from aion.envs.environment import Environment
+    from myriad.envs.environment import Environment
     return Environment(
         reset=_reset,
         step=_step,
@@ -184,7 +184,7 @@ def make_env(**kwargs) -> Environment:
 
 ## Step 3: Register the environment
 
-Edit `src/aion/envs/__init__.py`:
+Edit `src/myriad/envs/__init__.py`:
 
 ```python
 from .oscillator.tasks import control as oscillator_control  # Add this
@@ -223,7 +223,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.envs.oscillator.physics import (
+from myriad.envs.oscillator.physics import (
     PhysicsConfig,
     PhysicsParams,
     PhysicsState,
@@ -293,10 +293,10 @@ python scripts/train.py \
 Or programmatically:
 
 ```python
-from aion.envs import make_env
-from aion.agents import make_agent
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+from myriad.envs import make_env
+from myriad.agents import make_agent
+from myriad.configs.default import Config
+from myriad.platform.runner import train_and_evaluate
 
 # Create environment
 env = make_env("oscillator-control")

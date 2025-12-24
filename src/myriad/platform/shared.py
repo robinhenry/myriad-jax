@@ -1,7 +1,7 @@
 import chex
 from flax import struct
 
-from aion.envs.environment import EnvironmentState
+from myriad.envs.environment import EnvironmentState
 
 
 @struct.dataclass

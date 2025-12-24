@@ -1,4 +1,4 @@
-# Aion
+# Myriad
 
 **A JAX-native platform for massively parallel system identification and control.**
 
@@ -6,7 +6,7 @@
 
 Standard RL environments (Gym, Gymnax) give you one robot and ask you to control it.
 
-Aion gives you **100,000 uncertain physical systems** in parallel and asks you to:
+Myriad gives you **100,000 uncertain physical systems** in parallel and asks you to:
 
 1. **Identify** their hidden parameters (System ID)
 2. **Control** them to a target (RL/MPC)
@@ -15,8 +15,8 @@ Aion gives you **100,000 uncertain physical systems** in parallel and asks you t
 ## Quickstart
 
 ```python
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+from myriad.configs.default import Config
+from myriad.platform.runner import train_and_evaluate
 
 # Create config
 config = Config(
@@ -54,7 +54,7 @@ Separate physics from task logic from learning algorithms:
 See [Core Concepts](user-guide/concepts.md) for details.
 
 ### Direct differentiable access
-Unlike Gym-style environments that hide dynamics inside `step()`, Aion exposes pure physics functions. Use them for:
+Unlike Gym-style environments that hide dynamics inside `step()`, Myriad exposes pure physics functions. Use them for:
 
 - Model Predictive Control (MPC)
 - Gradient-based trajectory optimization
@@ -106,9 +106,9 @@ The gene circuit environment (`ccas_ccar_v1`) serves as the stress test. If the 
 
 ## Where to start
 
-**New to Aion?**
+**New to Myriad?**
 
-- [Installation](getting-started/installation.md): Set up Aion in 5 minutes
+- [Installation](getting-started/installation.md): Set up Myriad in 5 minutes
 - [Quickstart](getting-started/quickstart.md): Your first training run
 
 **Building experiments?**

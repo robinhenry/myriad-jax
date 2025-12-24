@@ -14,7 +14,7 @@ Organize all documentation into one of these four modes. Do not mix them.
 4. **Explanation:** Understanding-oriented. High-level concepts/architecture.
 
 ## "No Fluff" Rules
-1. **Zero Filler:** Delete intro phrases like "In this section...", "It is important to note...", "Aion provides a robust..."
+1. **Zero Filler:** Delete intro phrases like "In this section...", "It is important to note...", "Myriad provides a robust..."
 2. **Code First:** Developers read for code. Place snippets *before* text where possible.
 3. **Conciseness:** If a sentence adds no technical value, delete it.
 4. **No Marketing:** Banned words: "seamless", "game-changing", "comprehensive", "state-of-the-art".

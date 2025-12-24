@@ -5,10 +5,10 @@ import jax.numpy as jnp
 import jax.random
 import pytest
 
-from aion.agents.agent import Agent
-from aion.agents.dqn import AgentState, make_agent
-from aion.core.spaces import Discrete
-from aion.core.types import Transition
+from myriad.agents.agent import Agent
+from myriad.agents.dqn import AgentState, make_agent
+from myriad.core.spaces import Discrete
+from myriad.core.types import Transition
 
 
 @pytest.fixture

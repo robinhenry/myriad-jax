@@ -5,7 +5,7 @@
 ### Discrete
 
 ```python
-from aion.core.spaces import Discrete
+from myriad.core.spaces import Discrete
 
 action_space = Discrete(n=4)  # {0, 1, 2, 3}
 ```
@@ -13,7 +13,7 @@ action_space = Discrete(n=4)  # {0, 1, 2, 3}
 ### Box
 
 ```python
-from aion.core.spaces import Box
+from myriad.core.spaces import Box
 
 action_space = Box(
     low=-1.0,
@@ -25,7 +25,7 @@ action_space = Box(
 ## Transitions
 
 ```python
-from aion.core.types import Transition
+from myriad.core.types import Transition
 
 transition = Transition(
     obs=obs,
@@ -39,7 +39,7 @@ transition = Transition(
 ## Replay buffer
 
 ```python
-from aion.core.replay_buffer import ReplayBuffer
+from myriad.core.replay_buffer import ReplayBuffer
 
 # Create buffer
 buffer = ReplayBuffer(
@@ -64,7 +64,7 @@ batch, buffer_state = buffer.sample(
 ### make_env
 
 ```python
-from aion.envs import make_env
+from myriad.envs import make_env
 
 env = make_env("cartpole-control")
 ```
@@ -72,8 +72,8 @@ env = make_env("cartpole-control")
 ### make_agent
 
 ```python
-from aion.agents import make_agent
-from aion.core.spaces import Discrete
+from myriad.agents import make_agent
+from myriad.core.spaces import Discrete
 
 agent = make_agent(
     "dqn",
@@ -84,8 +84,8 @@ agent = make_agent(
 ## Training
 
 ```python
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+from myriad.configs.default import Config
+from myriad.platform.runner import train_and_evaluate
 
 config = Config(
     env={"_target_": "cartpole-control"},
@@ -98,5 +98,5 @@ train_and_evaluate(config)
 
 ## Next steps
 
-- [Source code](https://github.com/robinhenry/aion): Full implementation
+- [Source code](https://github.com/robinhenry/myriad): Full implementation
 - [Configuration System](../contributing/configuration.md): Hydra config reference

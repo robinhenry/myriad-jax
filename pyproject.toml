@@ -1,5 +1,5 @@
 [project]
-name = "aion"
+name = "myriad-jax"
 version = "0.1.0"
 description = "Platform for large-scale high-throughput control & decision-making experiments"
 authors = [
@@ -9,7 +9,7 @@ readme = "README.md"
 
 [tool.poetry]
 packages = [
-    { include = "aion", from = "src" },
+    { include = "myriad", from = "src" },
 ]
 exclude = ["tests", "tests.*"]
 
@@ -65,10 +65,10 @@ build-backend = "poetry_dynamic_versioning.backend"
 line-length = 120
 
 [tool.mypy]
-files = ["src/aion/**/*.py"]
+files = ["src/myriad/**/*.py"]
 
 [tool.coverage.run]
-source = ["aion"]
+source = ["myriad"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -117,6 +117,6 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.isort]
-known-first-party = ["aion"]
+known-first-party = ["myriad"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true

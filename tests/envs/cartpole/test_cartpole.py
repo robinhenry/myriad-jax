@@ -13,10 +13,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.envs import make_env as make_env_from_registry
-from aion.envs.cartpole.tasks.control import ControlTaskState
-from aion.envs.cartpole.tasks.sysid import SysIDTaskState
-from aion.envs.environment import Environment
+from myriad.envs import make_env as make_env_from_registry
+from myriad.envs.cartpole.tasks.control import ControlTaskState
+from myriad.envs.cartpole.tasks.sysid import SysIDTaskState
+from myriad.envs.environment import Environment
 
 
 @pytest.mark.parametrize("env_name", ["cartpole-control", "cartpole-sysid"])

@@ -12,9 +12,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.core.spaces import Discrete
-from aion.envs.cartpole.physics import PhysicsState
-from aion.envs.cartpole.tasks.base import (
+from myriad.core.spaces import Discrete
+from myriad.envs.cartpole.physics import PhysicsState
+from myriad.envs.cartpole.tasks.base import (
     TaskConfig,
     check_termination,
     get_cartpole_action_space,

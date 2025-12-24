@@ -6,14 +6,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from aion.agents import make_agent
-from aion.agents.agent import Agent, AgentState
-from aion.configs.default import Config
-from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
-from aion.core.spaces import Space
-from aion.core.types import BaseModel, Transition
-from aion.envs import make_env
-from aion.envs.environment import Environment
+from myriad.agents import make_agent
+from myriad.agents.agent import Agent, AgentState
+from myriad.configs.default import Config
+from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
+from myriad.core.spaces import Space
+from myriad.core.types import BaseModel, Transition
+from myriad.envs import make_env
+from myriad.envs.environment import Environment
 
 from .logging_utils import (
     build_train_payload,

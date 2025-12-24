@@ -1,4 +1,4 @@
-# AION Project Board
+# Myriad Project Board
 
 ## Todo
 

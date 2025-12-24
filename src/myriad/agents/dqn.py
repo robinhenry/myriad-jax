@@ -12,8 +12,8 @@ import jax.numpy as jnp
 from flax import linen as nn, struct
 from flax.training.train_state import TrainState
 
-from aion.core.spaces import Discrete, Space
-from aion.core.types import Transition
+from myriad.core.spaces import Discrete, Space
+from myriad.core.types import Transition
 
 from .agent import Agent
 

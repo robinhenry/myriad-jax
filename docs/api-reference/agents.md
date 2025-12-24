@@ -72,4 +72,4 @@ class Agent(Protocol):
 ## Next steps
 
 - [Custom Agent Guide](../user-guide/custom_agent.md): Implementation guide
-- [DQN source](https://github.com/robinhenry/aion/blob/main/src/aion/agents/dqn.py): Reference code
+- [DQN source](https://github.com/robinhenry/myriad/blob/main/src/myriad/agents/dqn.py): Reference code

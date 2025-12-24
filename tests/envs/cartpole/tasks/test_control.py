@@ -16,10 +16,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.core import spaces
-from aion.envs import make_env as make_env_from_registry
-from aion.envs.cartpole.physics import PhysicsState
-from aion.envs.cartpole.tasks.control import (
+from myriad.core import spaces
+from myriad.envs import make_env as make_env_from_registry
+from myriad.envs.cartpole.physics import PhysicsState
+from myriad.envs.cartpole.tasks.control import (
     ControlTaskConfig,
     ControlTaskParams,
     ControlTaskState,
@@ -27,7 +27,7 @@ from aion.envs.cartpole.tasks.control import (
     _step,
     make_env,
 )
-from aion.envs.environment import Environment
+from myriad.envs.environment import Environment
 
 
 @pytest.fixture

@@ -3,9 +3,9 @@ import jax.numpy as jnp
 import jax.random
 import pytest
 
-from aion.agents.agent import Agent
-from aion.agents.random import AgentState, make_agent
-from aion.core.spaces import Box
+from myriad.agents.agent import Agent
+from myriad.agents.random import AgentState, make_agent
+from myriad.core.spaces import Box
 
 
 @pytest.fixture

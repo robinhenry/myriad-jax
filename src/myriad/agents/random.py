@@ -3,7 +3,7 @@ from typing import Any, Tuple
 import chex
 from flax import struct
 
-from aion.core.spaces import Space
+from myriad.core.spaces import Space
 
 from .agent import Agent
 

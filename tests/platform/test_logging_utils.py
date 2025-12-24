@@ -2,8 +2,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from aion.configs.default import AgentConfig, Config, EnvConfig, RunConfig, WandbConfig
-from aion.platform import logging_utils
+from myriad.configs.default import AgentConfig, Config, EnvConfig, RunConfig, WandbConfig
+from myriad.platform import logging_utils
 
 
 class _WandbStub:

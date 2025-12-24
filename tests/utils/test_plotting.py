@@ -5,7 +5,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import pytest
 
-from aion.utils.plotting.episodes import plot_episodes
+from myriad.utils.plotting.episodes import plot_episodes
 
 
 class TestPlotting:

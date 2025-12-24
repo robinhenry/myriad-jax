@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from chex import Array, PRNGKey
 from flax import struct
 
-from aion.core import spaces
+from myriad.core import spaces
 
 from .environment import Environment
 

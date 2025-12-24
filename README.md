@@ -1,4 +1,6 @@
-# Aion
+# Myriad
+
+Myriad is named after the Greek 'myrias', representing the ten thousand parallel environments the engine simulates simultaneously. It provides a Myriad of viewpoints from which to observe, identify, and control complex systems.
 
 A scalable platform for large-scale high-throughput control and decision-making experiments built with JAX.
 
@@ -17,7 +19,7 @@ Requires Python ^3.11 and JAX.
 
 ```bash
 git clone <repository-url>
-cd aion
+cd myriad
 poetry install
 ```
 
@@ -37,12 +39,12 @@ Configurations are in `configs/` and use Hydra's composition system.
 ## Adding Components
 
 **New Environment:**
-1. Implement the `Environment` protocol in `src/aion/envs/`
+1. Implement the `Environment` protocol in `src/myriad/envs/`
 2. Register in `ENV_REGISTRY` with a `make_env(...)` factory
 3. Add config file in `configs/env/`
 
 **New Agent:**
-1. Implement the `Agent` protocol in `src/aion/agents/`
+1. Implement the `Agent` protocol in `src/myriad/agents/`
 2. Register in `AGENT_REGISTRY` with a `make_agent(...)` factory
 3. Add config file in `configs/agent/`
 
@@ -61,7 +63,7 @@ black src/ tests/
 ruff check --fix src/ tests/
 
 # Type checking
-mypy src/aion/
+mypy src/myriad/
 ```
 
 See `CLAUDE.md` for detailed architecture documentation and development guidelines.

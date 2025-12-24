@@ -12,7 +12,7 @@ from typing import Any, Callable, Generic, NamedTuple, Protocol, TypeVar
 
 import chex
 
-from aion.core.spaces import Space
+from myriad.core.spaces import Space
 
 
 class AgentParams(Protocol):

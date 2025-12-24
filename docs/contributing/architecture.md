@@ -1,11 +1,11 @@
 # JAX Architecture
 
 !!! warning "For Contributors"
-    This document explains Aion's internal JAX architecture for developers modifying the engine. If you're just using Aion to build experiments, you don't need most of this detail. See the [User Guide](../user-guide/concepts.md) instead.
+    This document explains Myriad's internal JAX architecture for developers modifying the engine. If you're just using Myriad to build experiments, you don't need most of this detail. See the [User Guide](../user-guide/concepts.md) instead.
 
 ## Pure Functional Design
 
-Aion's internals are built on **pure functional JAX**, where all core functions are stateless and side-effect free. As a contributor, you must maintain this constraint when adding features.
+Myriad's internals are built on **pure functional JAX**, where all core functions are stateless and side-effect free. As a contributor, you must maintain this constraint when adding features.
 
 **Why this constraint exists:**
 

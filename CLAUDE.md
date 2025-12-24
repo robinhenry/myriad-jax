@@ -1,6 +1,8 @@
-# Aion Project Context
+# Myriad Project Context
 Platform: JAX-based Digital Twin Engine for Active SysID, Model-Based, and Model-Free Control.
 Goal: Massively parallel experiments (Biological/Physics systems) on GPU/TPU.
+
+Myriad is named after the Greek 'myrias', representing the ten thousand parallel environments the engine simulates simultaneously. It provides a Myriad of viewpoints from which to observe, identify, and control complex systems.
 
 # Core Architecture & Terminology
 - **Three-Layer Pattern:** MUST maintain strict separation:
@@ -11,11 +13,11 @@ Goal: Massively parallel experiments (Biological/Physics systems) on GPU/TPU.
 - **Config:** Hydra (YAML) + Pydantic validation.
 
 # Architecture Map
-- `src/aion/core/`: Protocols and base types (the "Three Layers").
-- `src/aion/envs/`: JAX environments (Physics implementations).
-- `src/aion/agents/`: RL/Control algorithms (PPO, SAC, etc.).
-- `src/aion/platform/`: Infrastructure (logging, W&B, heavy compute).
-- `src/aion/utils/`: Utilities (plotting, math).
+- `src/myriad/core/`: Protocols and base types (the "Three Layers").
+- `src/myriad/envs/`: JAX environments (Physics implementations).
+- `src/myriad/agents/`: RL/Control algorithms (PPO, SAC, etc.).
+- `src/myriad/platform/`: Infrastructure (logging, W&B, heavy compute).
+- `src/myriad/utils/`: Utilities (plotting, math).
 - `configs/`: Hydra definitions. Structure: `env/`, `agent/`, `run/`.
 - `tests/`: Mirrors src structure. `tests/conftest.py` has global JAX fixtures.
 
@@ -35,13 +37,13 @@ Before writing complex JAX transformations (scan, cond, pmap), you MUST:
 - **Test:** `python -m pytest <files>` (Prefer single test files)
 - **Train:** `python scripts/train.py run.total_timesteps=1e6` (Hydra syntax)
 - **Lint/Format:** `ruff check --fix src/ tests/` | `black src/ tests/`
-- **Type Check:** `mypy src/aion/`
+- **Type Check:** `mypy src/myriad/`
 
 # Documentation Protocol
 - **Constraint:** Do NOT use generic AI marketing speak.
 - **Instruction:** When writing docs, READ `docs/WRITING_GUIDE.md` first.
 
 # Reference Implementations (Copy these patterns!)
-- **Ideal Agent:** `src/aion/agents/dqn.py`
-- **Ideal Environment:** `src/aion/envs/cartpole.py`
+- **Ideal Agent:** `src/myriad/agents/dqn.py`
+- **Ideal Environment:** `src/myriad/envs/cartpole.py`
 - **Ideal Test:** `tests/envs/cartpole/test_physics.py`

@@ -30,8 +30,8 @@ Coming soon: W&B sweep integration.
 ## Programmatic usage
 
 ```python
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+from myriad.configs.default import Config
+from myriad.platform.runner import train_and_evaluate
 
 config = Config(
     env={"_target_": "cartpole-control"},

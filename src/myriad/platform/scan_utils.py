@@ -6,9 +6,9 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from aion.agents.agent import AgentState
-from aion.core.replay_buffer import ReplayBufferState
-from aion.core.types import Transition
+from myriad.agents.agent import AgentState
+from myriad.core.replay_buffer import ReplayBufferState
+from myriad.core.types import Transition
 
 from .shared import TrainingEnvState
 

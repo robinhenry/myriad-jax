@@ -10,8 +10,8 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 import wandb
-from aion.configs.default import Config
-from aion.platform.runner import train_and_evaluate
+from myriad.configs.default import Config
+from myriad.platform.runner import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
 logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)

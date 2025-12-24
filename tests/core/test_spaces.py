@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from aion.core.spaces import Box, Discrete
+from myriad.core.spaces import Box, Discrete
 
 
 def test_box_sample_and_contains():

@@ -31,10 +31,10 @@ class Agent(Protocol):
 
 Coming soon.
 
-See `src/aion/agents/dqn.py` for reference implementation.
+See `src/myriad/agents/dqn.py` for reference implementation.
 
 ## Next steps
 
-- [DQN source](https://github.com/robinhenry/aion/blob/main/src/aion/agents/dqn.py): Reference code
+- [DQN source](https://github.com/robinhenry/myriad/blob/main/src/myriad/agents/dqn.py): Reference code
 - [Agents API Reference](../api-reference/agents.md): Protocol specification
 - [Core Concepts](concepts.md): Understanding the three-layer pattern

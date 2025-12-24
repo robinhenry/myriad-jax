@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from aion.core.replay_buffer import ReplayBuffer
+from myriad.core.replay_buffer import ReplayBuffer
 
 
 def make_sample_transition():

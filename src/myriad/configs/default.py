@@ -7,7 +7,7 @@ import warnings
 
 from pydantic import PositiveInt, model_validator
 
-from aion.core.types import BaseModel
+from myriad.core.types import BaseModel
 
 
 class WandbConfig(BaseModel):

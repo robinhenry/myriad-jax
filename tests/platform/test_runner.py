@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 from flax import struct
 
-from aion.agents.agent import Agent
-from aion.configs.default import AgentConfig, Config, EnvConfig, RunConfig, WandbConfig
-from aion.core.replay_buffer import ReplayBuffer, ReplayBufferState
-from aion.core.spaces import Box, Space
-from aion.core.types import BaseModel
-from aion.envs.environment import Environment
-from aion.platform import logging_utils, runner
-from aion.platform.runner import TrainingEnvState
+from myriad.agents.agent import Agent
+from myriad.configs.default import AgentConfig, Config, EnvConfig, RunConfig, WandbConfig
+from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
+from myriad.core.spaces import Box, Space
+from myriad.core.types import BaseModel
+from myriad.envs.environment import Environment
+from myriad.platform import logging_utils, runner
+from myriad.platform.runner import TrainingEnvState
 
 
 @struct.dataclass
@@ -229,12 +229,12 @@ def _create_training_setup(num_envs: int = 2) -> _TrainingSetup:
 
 @pytest.fixture(autouse=True)
 def _register_test_components(monkeypatch):
-    import aion.agents
-    import aion.envs
+    import myriad.agents
+    import myriad.envs
 
-    monkeypatch.setitem(aion.envs.ENV_REGISTRY, "deterministic_env", lambda **_: _make_test_env())
+    monkeypatch.setitem(myriad.envs.ENV_REGISTRY, "deterministic_env", lambda **_: _make_test_env())
     monkeypatch.setitem(
-        aion.agents.AGENT_REGISTRY,
+        myriad.agents.AGENT_REGISTRY,
         "deterministic_agent",
         lambda *, action_space, **__: _make_test_agent(action_space),
     )
@@ -304,7 +304,7 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
 
 def test_run_training_loop_without_wandb(monkeypatch):
     """Training loop executes without W&B logging when run is disabled."""
-    from aion.platform import scan_utils
+    from myriad.platform import scan_utils
 
     config = _create_config()
     orig_make_chunk_runner = scan_utils.make_chunk_runner
@@ -405,7 +405,7 @@ def test_make_sample_transition_matches_shapes():
 
 def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
     """Training should complete correctly even when chunk_size > total_timesteps."""
-    from aion.platform import scan_utils
+    from myriad.platform import scan_utils
 
     # Use a very large chunk size relative to total steps
     config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 1, "scan_chunk_size": 100})
@@ -437,7 +437,7 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
 
 def test_run_training_loop_with_chunk_size_one(monkeypatch):
     """Training should work correctly with minimal chunk_size=1."""
-    from aion.platform import scan_utils
+    from myriad.platform import scan_utils
 
     config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 2, "scan_chunk_size": 1})
 
@@ -465,7 +465,7 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
 
 def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
     """Verify chunks align properly with logging frequency boundaries."""
-    from aion.platform import scan_utils
+    from myriad.platform import scan_utils
 
     # Setup: 10 total steps, chunk_size=3, log every 4 steps
     config = _create_config(
@@ -541,7 +541,7 @@ def test_run_config_warns_on_inefficient_scan_chunk_size():
 
 def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Helper to run training and extract final agent, env, and buffer states."""
-    from aion.platform import scan_utils
+    from myriad.platform import scan_utils
 
     final_states: dict[str, Any] = {}
 

@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from aion.core.spaces import Discrete
+from myriad.core.spaces import Discrete
 
 from ..physics import PhysicsState
 

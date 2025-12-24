@@ -29,7 +29,7 @@ from typing import Callable, Generic, NamedTuple, Protocol, Tuple, TypeVar
 
 import chex
 
-from aion.core.spaces import Space
+from myriad.core.spaces import Space
 
 
 class EnvironmentConfig(Protocol):

@@ -11,8 +11,8 @@
 Clone the repository:
 
 ```bash
-git clone https://github.com/robinhenry/aion.git
-cd aion
+git clone https://github.com/robinhenry/myriad.git
+cd myriad
 ```
 
 Install dependencies with Poetry:
@@ -48,7 +48,7 @@ JAX Metal support is experimental. Use CPU for now.
 ## Verify installation
 
 ```bash
-python -c "import aion; print('Aion installed successfully')"
+python -c "import myriad; print('Myriad installed successfully')"
 ```
 
 Run tests:
@@ -60,5 +60,5 @@ python -m pytest
 ## Next steps
 
 - [Quickstart](quickstart.md): Your first training run
-- [Core Concepts](../user-guide/concepts.md): Understanding Aion's architecture
+- [Core Concepts](../user-guide/concepts.md): Understanding Myriad's architecture
 - [Custom Environment](../user-guide/custom_env.md): Implement your own physics

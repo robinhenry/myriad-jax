@@ -5,7 +5,7 @@ from typing import Any
 import jax
 import numpy as np
 
-from aion.configs.default import Config
+from myriad.configs.default import Config
 
 try:
     import wandb  # type: ignore[import]
