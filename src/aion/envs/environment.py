@@ -51,7 +51,9 @@ class EnvironmentConfig(Protocol):
     Implementation: Use `@struct.dataclass` from Flax for JAX compatibility.
     """
 
-    max_steps: int
+    @property
+    def max_steps(self) -> int:
+        ...
 
 
 class EnvironmentParams(Protocol):

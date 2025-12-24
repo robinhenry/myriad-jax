@@ -1,0 +1,27 @@
+# @package env
+name: cartpole-sysid
+
+# Physics configuration (base/nominal values)
+physics:
+  gravity: 9.8
+  cart_mass: 1.0
+  pole_mass: 0.1      # Nominal value (will be randomized per episode)
+  pole_length: 0.5    # Nominal value (will be randomized per episode)
+  force_magnitude: 10.0
+  dt: 0.02
+
+# Task configuration (same termination conditions as control)
+task:
+  max_steps: 500
+  theta_threshold: 0.2094395102393195  # 12 degrees
+  x_threshold: 2.4
+
+# SysID-specific configuration
+reward_type: "state_change"  # "state_change", "action_diversity", "sparse"
+reward_scale: 1.0
+
+# Domain randomization ranges for unknown parameters
+pole_mass_min: 0.05
+pole_mass_max: 0.15
+pole_length_min: 0.3
+pole_length_max: 0.7

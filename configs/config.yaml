@@ -5,8 +5,8 @@
 # configurations for composable components.
 defaults:
   - agent: dqn
-  - env: cartpole_v1
-  - run: dqn_cartpole_v1
+  - env: cartpole_control
+  - run: dqn_cartpole_control
   - _self_
 
 wandb:

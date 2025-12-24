@@ -1,0 +1,17 @@
+# @package env
+name: cartpole-control
+
+# Physics configuration
+physics:
+  gravity: 9.8
+  cart_mass: 1.0
+  pole_mass: 0.1
+  pole_length: 0.5
+  force_magnitude: 10.0
+  dt: 0.02
+
+# Task configuration
+task:
+  max_steps: 500
+  theta_threshold: 0.2094395102393195  # 12 degrees
+  x_threshold: 2.4
