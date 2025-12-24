@@ -1,8 +1,8 @@
-site_name: Aion
+site_name: Myriad
 site_description: JAX-native platform for massively parallel system identification and control
 site_author: Robin Henry
-repo_url: https://github.com/robinhenry/aion
-repo_name: robinhenry/aion
+repo_url: https://github.com/robinhenry/myriad-jax
+repo_name: robinhenry/myriad-jax
 
 # 1. VISUAL SETTINGS (The "Research Lab" Look)
 theme:

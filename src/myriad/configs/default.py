@@ -73,7 +73,7 @@ class RunConfig(BaseModel):
                 f"the minimum boundary frequency ({min_boundary_frequency}). "
                 f"This may lead to wasted computation from masked iterations at logging/eval boundaries. "
                 f"Consider reducing scan_chunk_size or increasing log_frequency/eval_frequency. "
-                f"See src/aion/platform/scan_utils.py for details on the chunking strategy.",
+                f"See src/myriad/platform/scan_utils.py for details on the chunking strategy.",
                 UserWarning,
                 stacklevel=2,
             )

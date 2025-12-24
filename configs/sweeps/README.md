@@ -23,7 +23,7 @@ The `dqn_cartpole_sweep.yaml` uses Bayesian optimization to find the fastest DQN
 wandb sweep configs/sweeps/dqn_cartpole_sweep.yaml
 
 # Run agent(s) - use the sweep ID from above
-wandb agent lugagne-lab/aion/<sweep_id>
+wandb agent lugagne-lab/myriad/<sweep_id>
 ```
 
-Monitor at: `https://wandb.ai/lugagne-lab/aion/sweeps/<sweep_id>`
+Monitor at: `https://wandb.ai/lugagne-lab/myriad/sweeps/<sweep_id>`

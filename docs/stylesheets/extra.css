@@ -16,7 +16,7 @@
     border-radius: 8px;
   }
 
-  /* 2. GRADIENT TEXT FOR BRANDING (Optional: Makes 'Aion' pop) */
+  /* 2. GRADIENT TEXT FOR BRANDING (Optional: Makes 'Myriad' pop) */
   /* Requires the site title to be wrapped or targeted, this targets main headers */
   .md-typeset h1 {
     font-weight: 700;
