@@ -1,6 +1,11 @@
 # Add a custom environment
 
-Add your own physics to Myriad by implementing the three-layer pattern. This guide shows how to create a simple damped oscillator environment.
+Add your own physics to Myriad by implementing the three-layer pattern.
+
+This guide covers two types of environments:
+
+1. **Deterministic systems** (ODE-based): Damped oscillator example
+2. **Stochastic systems** (Gillespie-based): Chemical reaction networks
 
 ## Step 1: Create the physics module
 
@@ -364,6 +369,151 @@ state = PhysicsState(x=np.array(0.0), ...)  # Will fail in JAX
 import jax.numpy as jnp
 state = PhysicsState(x=jnp.array(0.0), ...)  # JAX-compatible
 ```
+
+---
+
+## Gillespie-based environments (stochastic systems)
+
+For chemical reaction networks and other stochastic systems, use the shared Gillespie engine.
+
+### Create physics module
+
+Create `src/myriad/envs/my_circuit/physics.py`:
+
+```python
+"""Stochastic gene circuit physics using Gillespie algorithm."""
+
+from typing import NamedTuple
+import chex
+import jax
+import jax.numpy as jnp
+from flax import struct
+
+from myriad.physics.gillespie import run_gillespie_loop
+
+
+class PhysicsState(NamedTuple):
+    """Physical state of gene circuit."""
+    time: chex.Array
+    protein_A: chex.Array  # Concentration
+    protein_B: chex.Array
+
+
+@struct.dataclass
+class PhysicsConfig:
+    """Static physics constants."""
+    timestep_minutes: float = 5.0
+    max_gillespie_steps: int = 10000
+
+    # Reaction rates
+    k_production_A: float = 1.0
+    k_degradation: float = 0.01
+
+
+@struct.dataclass
+class PhysicsParams:
+    """Dynamic parameters (for domain randomization)."""
+    ...
+
+
+def compute_propensities(
+    state: PhysicsState,
+    action: chex.Array,
+    config: PhysicsConfig,
+) -> chex.Array:
+    """Compute reaction rates.
+
+    Reactions:
+    1. ∅ → A  (rate: k_production_A * action)
+    2. A → ∅  (rate: k_degradation * A)
+    3. A → B  (rate: k_conversion * A)
+    4. B → ∅  (rate: k_degradation * B)
+    """
+    A, B = state.protein_A, state.protein_B
+    U = action  # Control input
+
+    r1 = config.k_production_A * U
+    r2 = config.k_degradation * A
+    r3 = 0.5 * A  # Conversion rate
+    r4 = config.k_degradation * B
+
+    return jnp.array([r1, r2, r3, r4])
+
+
+def apply_reaction(
+    state: PhysicsState,
+    reaction_idx: chex.Array,
+) -> PhysicsState:
+    """Apply selected reaction to state.
+
+    Uses jax.lax.switch for efficiency.
+    """
+    def r0(s): return s._replace(protein_A=s.protein_A + 1)
+    def r1(s): return s._replace(protein_A=jnp.maximum(s.protein_A - 1, 0))
+    def r2(s): return s._replace(protein_A=jnp.maximum(s.protein_A - 1, 0),
+                                   protein_B=s.protein_B + 1)
+    def r3(s): return s._replace(protein_B=jnp.maximum(s.protein_B - 1, 0))
+
+    return jax.lax.switch(reaction_idx, [r0, r1, r2, r3], state)
+
+
+def step_physics(
+    key: chex.PRNGKey,
+    state: PhysicsState,
+    action: chex.Array,
+    params: PhysicsParams,
+    config: PhysicsConfig,
+) -> PhysicsState:
+    """Step physics using shared Gillespie engine."""
+    final_state = run_gillespie_loop(
+        key=key,
+        initial_state=state,
+        action=action,
+        config=config,
+        target_time=state.time + config.timestep_minutes,
+        max_steps=config.max_gillespie_steps,
+        compute_propensities_fn=compute_propensities,
+        apply_reaction_fn=apply_reaction,
+        get_time_fn=lambda s: s.time,
+        update_time_fn=lambda s, t: s._replace(time=t),
+    )
+    return final_state
+```
+
+!!! note "Shared Gillespie engine"
+    The `run_gillespie_loop()` function handles the stochastic simulation loop.
+    You only implement system-specific parts:
+
+    - `compute_propensities()`: Reaction rates based on current state
+    - `apply_reaction()`: How each reaction changes the state
+
+### Key differences from deterministic systems
+
+| Aspect | Deterministic (ODE) | Stochastic (Gillespie) |
+|--------|---------------------|------------------------|
+| **Physics step** | Euler/RK integration | Gillespie algorithm |
+| **State updates** | Continuous (floats) | Discrete (molecule counts) |
+| **Requires RNG key** | No | Yes (for `step_physics`) |
+| **Reproducibility** | Deterministic | Stochastic (seed-dependent) |
+| **Common use** | Mechanical systems | Biological/chemical systems |
+
+### Performance considerations
+
+The Gillespie algorithm runs many micro-steps per RL timestep. For efficiency:
+
+- Keep `max_gillespie_steps` reasonable (10,000 is typical)
+- Use `jax.lax.switch` for `apply_reaction()` (faster than matrix operations for <20 reactions)
+- Consider tau-leaping for systems with >50 reactions (approximate but 100x faster)
+
+### Example: CcaS-CcaR circuit
+
+See `src/myriad/envs/ccas_ccar/physics.py` for a real implementation with:
+
+- 5 chemical reactions
+- Hill function kinetics
+- Light-controlled gene expression
+
+---
 
 ## Next steps
 

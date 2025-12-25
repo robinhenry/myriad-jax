@@ -1,13 +1,15 @@
-from . import ccas_ccar_v1
 from .cartpole.tasks import control as cartpole_control, sysid as cartpole_sysid
+from .ccas_ccar.tasks import control as ccas_ccar_control, sysid as ccas_ccar_sysid
 from .environment import Environment
 
 # The registry mapping environment IDs to their factory functions
 ENV_REGISTRY = {
-    "ccas_ccar_v1": ccas_ccar_v1.make_env,
-    # Modular CartPole tasks (replaces cartpole-v1)
+    # Modular CartPole tasks
     "cartpole-control": cartpole_control.make_env,
     "cartpole-sysid": cartpole_sysid.make_env,
+    # Modular CcaS-CcaR tasks
+    "ccas-ccar-control": ccas_ccar_control.make_env,
+    "ccas-ccar-sysid": ccas_ccar_sysid.make_env,
 }
 
 

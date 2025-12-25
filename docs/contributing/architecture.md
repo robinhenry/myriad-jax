@@ -242,6 +242,50 @@ def process(x):
     return x[:10]  # Fixed shape
 ```
 
+## Shared physics modules
+
+For common physics patterns (stochastic simulation, numerical integration), Myriad provides shared utilities in `src/myriad/physics/`.
+
+### Gillespie algorithm (`myriad.physics.gillespie`)
+
+Exact stochastic simulation for chemical reaction networks.
+
+**When to use:**
+- Biological systems (gene circuits, protein networks)
+- Chemical kinetics
+- Population dynamics with discrete entities
+
+**Pattern:**
+```python
+from myriad.physics.gillespie import run_gillespie_loop
+
+def step_physics(key, state, action, params, config):
+    return run_gillespie_loop(
+        key=key,
+        initial_state=state,
+        action=action,
+        config=config,
+        target_time=state.time + config.timestep,
+        max_steps=config.max_gillespie_steps,
+        compute_propensities_fn=compute_propensities,  # You provide
+        apply_reaction_fn=apply_reaction,              # You provide
+        get_time_fn=lambda s: s.time,
+        update_time_fn=lambda s, t: s._replace(time=t),
+    )
+```
+
+**What you implement:**
+- `compute_propensities(state, action, config)`: Reaction rates for current state
+- `apply_reaction(state, reaction_idx)`: State update for each reaction (use `jax.lax.switch`)
+
+**Performance:**
+- For systems with <20 reactions: `jax.lax.switch` is fastest
+- For systems with >50 reactions: Consider tau-leaping approximation
+
+See `src/myriad/envs/ccas_ccar/physics.py` for example.
+
+---
+
 ## Performance tips
 
 1. **Batch operations**: Use `vmap` to process multiple items

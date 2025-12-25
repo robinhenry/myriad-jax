@@ -36,7 +36,7 @@ theme:
     - navigation.expand
     - navigation.top
     - navigation.indexes # Makes section titles clickable (if you have index.md in folders)
-    - toc.integrate
+    # - toc.integrate
     - search.suggest
     - search.highlight
     - content.code.copy

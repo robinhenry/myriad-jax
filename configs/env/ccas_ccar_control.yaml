@@ -1,0 +1,31 @@
+# @package env
+name: ccas-ccar-control
+
+# Physics configuration (Gillespie algorithm parameters)
+physics:
+  eta: 1.0              # CcaSR activation rate (1/min)
+  nu: 0.01              # Protein dilution rate (1/min)
+  a: 1.0                # Maximum promoter activity (1/min)
+  Kh: 90.0              # Half-maximal H concentration
+  nh: 3.6               # Hill coefficient for H cooperativity
+  Kf: 30.0              # Half-maximal F concentration
+  nf: 3.6               # Hill coefficient for F cooperativity
+  timestep_minutes: 5.0 # RL timestep duration (minutes)
+  max_gillespie_steps: 10000  # Safety limit for Gillespie loop
+
+# Task configuration
+task:
+  max_steps: 288        # 288 steps * 5 min/step = 24 hours
+  F_obs_normalizer: 80.0  # Normalization for F observations
+
+# Control task configuration
+target_type: "constant"  # "constant" or "sinewave"
+n_horizon: 1            # Number of future timesteps in observation
+
+# Constant target parameters
+F_target_constant: 25.0
+
+# Sinewave target parameters (used if target_type="sinewave")
+sinewave_period_minutes: 600.0  # 10 hours
+sinewave_amplitude: 20.0
+sinewave_vshift: 30.0
