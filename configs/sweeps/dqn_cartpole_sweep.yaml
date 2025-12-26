@@ -66,7 +66,10 @@ parameters:
     values: [1, 2, 4, 8, 16]
 
   # Fixed parameters
-  run.total_timesteps:
+  # Note: steps_per_env is fixed, so total budget scales with num_envs
+  # (e.g., num_envs=1 → 150k total, num_envs=16 → 2.4M total)
+  # This ensures each environment runs for the same duration across all sweep runs
+  run.steps_per_env:
     value: 150000
 
   run.eval_frequency:

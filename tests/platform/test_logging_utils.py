@@ -18,7 +18,7 @@ class _WandbStub:
 def _make_config(*, enabled: bool) -> Config:
     run_cfg = RunConfig(
         seed=0,
-        total_timesteps=4,
+        steps_per_env=4,
         num_envs=1,
         batch_size=1,
         buffer_size=4,

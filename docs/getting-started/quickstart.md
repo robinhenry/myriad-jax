@@ -54,7 +54,7 @@ python scripts/train.py \
   env=cartpole_sysid \
   agent=pqn \
   run.num_envs=50000 \
-  run.total_timesteps=1e6
+  run.steps_per_env=20
 ```
 
 ## What's happening

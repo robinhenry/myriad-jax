@@ -170,7 +170,7 @@ No configurable parameters. Used as baseline.
 
 ```yaml
 seed: 42
-total_timesteps: 150000     # Total environment steps
+steps_per_env: 150000       # Steps per environment (total = steps_per_env * num_envs)
 
 # Environment parallelization
 num_envs: 1                 # Parallel environments
@@ -198,17 +198,27 @@ log_frequency: 1000         # Steps between log writes
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `seed` | `int` | Random seed |
-| `total_timesteps` | `int` | Total environment steps (not episodes) |
+| `steps_per_env` | `int` | Steps each environment will take (total = steps_per_env × num_envs) |
 | `num_envs` | `int` | Parallel environments (vectorized) |
 | `buffer_size` | `int` | Replay buffer capacity (off-policy only) |
 | `scan_chunk_size` | `int` | JAX scan chunk size (affects compilation) |
-| `eval_frequency` | `int` | Evaluation interval (steps) |
+| `eval_frequency` | `int` | Evaluation interval (steps per env) |
 | `eval_rollouts` | `int` | Episodes to average for eval metrics |
 | `eval_max_steps` | `int` | Max steps per eval episode |
 | `eval_episode_save_frequency` | `int` | Episode save interval (0 = disabled) |
 | `eval_episode_save_count` | `int\|null` | Episodes to save per checkpoint (null = all) |
 | `eval_episode_save_dir` | `str` | Directory for saved episodes |
-| `log_frequency` | `int` | Logging interval (steps) |
+| `log_frequency` | `int` | Logging interval (steps per env) |
+
+!!! info "Terminology Note: steps_per_env vs total_timesteps"
+    Myriad uses `steps_per_env` as the primary configuration parameter, which differs from standard RL convention:
+
+    - **`steps_per_env`** (primary): Number of steps each environment will take during training
+    - **`total_timesteps`** (computed): Total environment interactions = `steps_per_env × num_envs`
+
+    This design aligns with the "digital twin" / parallel experiments mental model: you specify how long to run each experiment, and the total computational budget scales naturally with parallelism.
+
+    For RL sample efficiency comparisons in papers, use `total_timesteps = config.run.total_timesteps` (computed property).
 
 !!! note "Performance tuning"
     - Larger `num_envs` → Better GPU utilization
@@ -229,7 +239,7 @@ python scripts/train.py agent.learning_rate=3e-4
 # Override multiple values
 python scripts/train.py \
   run.num_envs=10000 \
-  run.total_timesteps=1e6 \
+  run.steps_per_env=100 \
   agent.batch_size=256
 
 # Switch entire config groups
@@ -290,7 +300,7 @@ Create `configs/run/my_experiment.yaml`:
 
 ```yaml
 seed: 123
-total_timesteps: 1000000
+steps_per_env: 20        # 20 steps/env * 50k envs = 1M total
 num_envs: 50000
 buffer_size: 100000
 scan_chunk_size: 4096

@@ -11,7 +11,7 @@ python scripts/train.py
 ```bash
 python scripts/train.py \
   run.num_envs=10000 \
-  run.total_timesteps=1e6 \
+  run.steps_per_env=100 \
   agent.learning_rate=3e-4
 ```
 
@@ -36,7 +36,7 @@ from myriad.platform import train_and_evaluate
 config = Config(
     env={"_target_": "cartpole-control"},
     agent={"_target_": "dqn"},
-    run={"num_envs": 10000, "total_timesteps": 1_000_000}
+    run={"num_envs": 10000, "steps_per_env": 100}
 )
 
 train_and_evaluate(config)

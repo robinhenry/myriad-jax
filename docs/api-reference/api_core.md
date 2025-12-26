@@ -92,7 +92,7 @@ from myriad.platform import train_and_evaluate
 config = Config(
     env={"_target_": "cartpole-control"},
     agent={"_target_": "dqn"},
-    run={"num_envs": 10000, "total_timesteps": 1_000_000}
+    run={"num_envs": 10000, "steps_per_env": 100}
 )
 
 results = train_and_evaluate(config)

@@ -143,7 +143,7 @@ def _make_test_agent(action_space: Space) -> Agent:
 def _create_config(*, wandb_enabled: bool = False, run_overrides: dict | None = None) -> Config:
     run_defaults = {
         "seed": 0,
-        "total_timesteps": 4,
+        "steps_per_env": 2,  # 2 steps per env * 2 envs = 4 total (was: total_timesteps=4)
         "num_envs": 2,
         "batch_size": 2,
         "buffer_size": 4,
@@ -329,14 +329,14 @@ def test_run_training_loop_without_wandb(monkeypatch):
     runner._run_training_loop(config, wandb_run=None)
 
     assert "carry" in captured
-    total_steps = config.run.total_timesteps // config.run.num_envs
+    steps_per_env = config.run.steps_per_env
     # JIT tracing executes the wrapped chunk runner once before real execution (hence the +1)
-    expected_calls = math.ceil(total_steps / max(1, config.run.scan_chunk_size)) + 1
+    expected_calls = math.ceil(steps_per_env / max(1, config.run.scan_chunk_size)) + 1
     assert captured.get("calls", 0) == expected_calls
-    assert captured.get("active_steps", 0) == total_steps
+    assert captured.get("active_steps", 0) == steps_per_env
     final_carry = captured["carry"]
     _, agent_state_final, _, buffer_state_final = final_carry
-    assert float(np.asarray(agent_state_final.marker)) == pytest.approx(float(total_steps))
+    assert float(np.asarray(agent_state_final.marker)) == pytest.approx(float(steps_per_env))
     assert int(np.asarray(buffer_state_final.size)) == min(config.run.total_timesteps, config.run.buffer_size)
     expected_position = config.run.total_timesteps % config.run.buffer_size
     assert int(np.asarray(buffer_state_final.position)) == expected_position
@@ -407,11 +407,11 @@ def test_make_sample_transition_matches_shapes():
 
 
 def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
-    """Training should complete correctly even when chunk_size > total_timesteps."""
+    """Training should complete correctly even when chunk_size > steps_per_env."""
     from myriad.platform import scan_utils
 
     # Use a very large chunk size relative to total steps
-    config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 1, "scan_chunk_size": 100})
+    config = _create_config(run_overrides={"steps_per_env": 4, "num_envs": 1, "scan_chunk_size": 100})
 
     captured: dict[str, Any] = {"active_counts": []}
     orig_make_chunk_runner = scan_utils.make_chunk_runner
@@ -434,15 +434,14 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
     assert captured.get("mask_length", 0) == 100
     # But only 4 steps should actually execute across all chunks (excluding JIT trace)
     total_active_steps = sum(captured.get("active_counts", []))
-    total_steps = config.run.total_timesteps // config.run.num_envs
-    assert total_active_steps == total_steps
+    assert total_active_steps == config.run.steps_per_env
 
 
 def test_run_training_loop_with_chunk_size_one(monkeypatch):
     """Training should work correctly with minimal chunk_size=1."""
     from myriad.platform import scan_utils
 
-    config = _create_config(run_overrides={"total_timesteps": 4, "num_envs": 2, "scan_chunk_size": 1})
+    config = _create_config(run_overrides={"steps_per_env": 2, "num_envs": 2, "scan_chunk_size": 1})
 
     active_counts: list[int] = []
     orig_make_chunk_runner = scan_utils.make_chunk_runner
@@ -459,9 +458,8 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
     monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
     runner._run_training_loop(config, wandb_run=None)
 
-    total_steps = config.run.total_timesteps // config.run.num_envs
-    # Total active steps across all chunks should equal total_steps
-    assert sum(active_counts) == total_steps
+    # Total active steps across all chunks should equal steps_per_env
+    assert sum(active_counts) == config.run.steps_per_env
     # With chunk_size=1 and alignment to logging boundaries, each chunk should have at most 1 active step
     assert all(count <= 1 for count in active_counts)
 
@@ -470,9 +468,9 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
     """Verify chunks align properly with logging frequency boundaries."""
     from myriad.platform import scan_utils
 
-    # Setup: 10 total steps, chunk_size=3, log every 4 steps
+    # Setup: 10 steps per env, chunk_size=3, log every 4 steps
     config = _create_config(
-        run_overrides={"total_timesteps": 20, "num_envs": 2, "scan_chunk_size": 3, "log_frequency": 4}
+        run_overrides={"steps_per_env": 10, "num_envs": 2, "scan_chunk_size": 3, "log_frequency": 4}
     )
 
     chunk_sizes_observed: list[int] = []
@@ -595,14 +593,14 @@ def _assert_states_equal(state1: dict, state2: dict, state_name: str):
 def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
     """Training with same seed but different scan_chunk_size should yield identical results."""
     base_seed = 42
-    total_timesteps = 20
+    steps_per_env = 10
     num_envs = 2
 
     # Run 1: scan_chunk_size = 2
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 5,
@@ -615,7 +613,7 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 5,
             "log_frequency": 5,
@@ -628,7 +626,7 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
     config3 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 1,
             "log_frequency": 5,
@@ -649,14 +647,14 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
 def test_reproducibility_different_log_frequencies(monkeypatch):
     """Training with same seed but different log_frequency should yield identical results."""
     base_seed = 123
-    total_timesteps = 16
+    steps_per_env = 8
     num_envs = 2
 
     # Run 1: log_frequency = 2
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 2,
@@ -669,7 +667,7 @@ def test_reproducibility_different_log_frequencies(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -682,7 +680,7 @@ def test_reproducibility_different_log_frequencies(monkeypatch):
     config3 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 8,
@@ -703,14 +701,14 @@ def test_reproducibility_different_log_frequencies(monkeypatch):
 def test_reproducibility_different_eval_frequencies(monkeypatch):
     """Training with same seed but different eval_frequency should yield identical results."""
     base_seed = 456
-    total_timesteps = 24
+    steps_per_env = 12
     num_envs = 2
 
     # Run 1: eval_frequency = 4
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
             "log_frequency": 4,
@@ -723,7 +721,7 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
             "log_frequency": 4,
@@ -736,7 +734,7 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
     config3 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
             "log_frequency": 4,
@@ -757,14 +755,14 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
 def test_reproducibility_different_eval_rollouts(monkeypatch):
     """Training with same seed but different eval_rollouts should yield identical results."""
     base_seed = 789
-    total_timesteps = 16
+    steps_per_env = 8
     num_envs = 2
 
     # Run 1: eval_rollouts = 2
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -778,7 +776,7 @@ def test_reproducibility_different_eval_rollouts(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -797,14 +795,14 @@ def test_reproducibility_different_eval_rollouts(monkeypatch):
 def test_reproducibility_different_eval_max_steps(monkeypatch):
     """Training with same seed but different eval_max_steps should yield identical results."""
     base_seed = 999
-    total_timesteps = 16
+    steps_per_env = 8
     num_envs = 2
 
     # Run 1: eval_max_steps = 5
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -818,7 +816,7 @@ def test_reproducibility_different_eval_max_steps(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -837,14 +835,14 @@ def test_reproducibility_different_eval_max_steps(monkeypatch):
 def test_reproducibility_combined_config_variations(monkeypatch):
     """Training with same seed but different combinations of config params should yield identical results."""
     base_seed = 2024
-    total_timesteps = 24
+    steps_per_env = 8
     num_envs = 3
 
     # Run 1: Config A
     config1 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
             "log_frequency": 4,
@@ -859,7 +857,7 @@ def test_reproducibility_combined_config_variations(monkeypatch):
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 4,
             "log_frequency": 8,
@@ -874,7 +872,7 @@ def test_reproducibility_combined_config_variations(monkeypatch):
     config3 = _create_config(
         run_overrides={
             "seed": base_seed,
-            "total_timesteps": total_timesteps,
+            "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 1,
             "log_frequency": 2,
@@ -895,7 +893,7 @@ def test_reproducibility_combined_config_variations(monkeypatch):
 
 
 def test_training_reaches_exact_total_timesteps():
-    """Training should reach exactly total_timesteps, not stop short.
+    """Training should reach exactly the expected total timesteps (steps_per_env * num_envs), not stop short.
 
     This test verifies that the training loop completes all requested timesteps,
     even when boundary alignment with logging/eval frequencies might cause issues.
@@ -905,7 +903,7 @@ def test_training_reaches_exact_total_timesteps():
     # Test case 1: Simple case - should complete all steps
     config1 = _create_config(
         run_overrides={
-            "total_timesteps": 100,
+            "steps_per_env": 25,
             "num_envs": 4,
             "scan_chunk_size": 3,
             "log_frequency": 10,
@@ -913,14 +911,15 @@ def test_training_reaches_exact_total_timesteps():
         }
     )
     results1 = runner.train_and_evaluate(config1)
+    expected_total1 = 25 * 4  # = 100
     assert (
-        results1.training_metrics.global_steps[-1] == 100
-    ), f"Expected final global_steps=100, got {results1.training_metrics.global_steps[-1]}"
+        results1.training_metrics.global_steps[-1] == expected_total1
+    ), f"Expected final global_steps={expected_total1}, got {results1.training_metrics.global_steps[-1]}"
 
-    # Test case 2: Tutorial notebook configuration - 50000 timesteps with 16 envs
+    # Test case 2: Tutorial notebook configuration - 3125 steps/env * 16 envs = 50000 total
     config2 = _create_config(
         run_overrides={
-            "total_timesteps": 50000,
+            "steps_per_env": 3125,
             "num_envs": 16,
             "scan_chunk_size": 10,
             "log_frequency": 1000,
@@ -928,15 +927,15 @@ def test_training_reaches_exact_total_timesteps():
         }
     )
     results2 = runner.train_and_evaluate(config2)
+    expected_total2 = 3125 * 16  # = 50000
     assert (
-        results2.training_metrics.global_steps[-1] == 50000
-    ), f"Expected final global_steps=50000, got {results2.training_metrics.global_steps[-1]}"
+        results2.training_metrics.global_steps[-1] == expected_total2
+    ), f"Expected final global_steps={expected_total2}, got {results2.training_metrics.global_steps[-1]}"
 
-    # Test case 3: Edge case - total_timesteps not divisible by num_envs
-    # Should still reach the floor(total_timesteps / num_envs) * num_envs
+    # Test case 3: Another configuration
     config3 = _create_config(
         run_overrides={
-            "total_timesteps": 103,  # Not divisible by 4
+            "steps_per_env": 25,
             "num_envs": 4,
             "scan_chunk_size": 5,
             "log_frequency": 10,
@@ -944,7 +943,7 @@ def test_training_reaches_exact_total_timesteps():
         }
     )
     results3 = runner.train_and_evaluate(config3)
-    expected_steps3 = (103 // 4) * 4  # Should be 100 (floor division)
+    expected_total3 = 25 * 4  # = 100
     assert (
-        results3.training_metrics.global_steps[-1] == expected_steps3
-    ), f"Expected final global_steps={expected_steps3}, got {results3.training_metrics.global_steps[-1]}"
+        results3.training_metrics.global_steps[-1] == expected_total3
+    ), f"Expected final global_steps={expected_total3}, got {results3.training_metrics.global_steps[-1]}"

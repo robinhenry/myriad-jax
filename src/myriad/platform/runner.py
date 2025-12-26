@@ -545,7 +545,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
     run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
 
-    total_steps = config.run.total_timesteps // config.run.num_envs
+    # Training runs for steps_per_env steps in each environment
+    steps_per_env = config.run.steps_per_env
     log_frequency = config.run.log_frequency
     eval_frequency = config.run.eval_frequency
 
@@ -553,8 +554,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     metrics_logger = MetricsLogger(wandb_run=wandb_run)
 
     steps_completed = 0
-    while steps_completed < total_steps:
-        remaining_steps = total_steps - steps_completed
+    while steps_completed < steps_per_env:
+        remaining_steps = steps_per_env - steps_completed
 
         if use_rollout_training:
             # Should always be true if use_rollout_training is true
@@ -598,7 +599,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
             # This ensures we can log/eval at exact frequencies without partial metrics.
             # steps_this_chunk is limited by:
             # 1. chunk_size: The configured maximum chunk size
-            # 2. remaining_steps: Don't overshoot total_timesteps
+            # 2. remaining_steps: Don't overshoot steps_per_env
             # 3. steps_to_log: Align with logging frequency
             # 4. steps_to_eval: Align with evaluation frequency
             steps_to_log = _steps_until_boundary(steps_completed, log_frequency)

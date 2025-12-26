@@ -3,10 +3,10 @@
 # CartPole-v1 is considered solved at 195+ average reward over 100 episodes
 
 seed: 42
-total_timesteps: 150000  # 100k steps is usually sufficient for CartPole
+steps_per_env: 150000  # 150k steps per environment (total_timesteps = 150k * 1 = 150k)
 
 # Environment parallelization
-num_envs: 1  # Run 8 environments in parallel
+num_envs: 1  # Run 1 environment (no parallelization for single-env baseline)
 
 # Training settings
 buffer_size: 50000  # Replay buffer capacity

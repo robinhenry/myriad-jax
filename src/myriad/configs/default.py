@@ -38,11 +38,20 @@ class EnvConfig(BaseModel):
 
 
 class RunConfig(BaseModel):
+    """Configuration for training runs.
+
+    Note on terminology (diverges from standard RL convention):
+    - `steps_per_env`: Number of steps each environment will take (primary parameter).
+      This aligns with the "digital twin" / parallel experiments mental model where
+      you think "run each experiment for N steps" rather than "total budget of N steps".
+    - `total_timesteps`: Total environment interactions across all envs (computed property).
+      This is the standard RL metric for sample efficiency comparisons in papers.
+    """
 
     # --- Run Settings ---
     seed: int
-    total_timesteps: PositiveInt  # total number of timesteps to train for across all envs
-    num_envs: PositiveInt  # number of envs to run in parallel, each doing `total_timesteps // num_envs` steps
+    steps_per_env: PositiveInt  # number of steps each environment will take during training
+    num_envs: PositiveInt  # number of envs to run in parallel
 
     # --- Training Settings ---
     scan_chunk_size: PositiveInt  # number of steps batched together and executed using `jax.lax.scan`
@@ -59,6 +68,16 @@ class RunConfig(BaseModel):
 
     # --- Logging ---
     log_frequency: PositiveInt  # frequency (# of steps per env) between training metrics logging events
+
+    @property
+    def total_timesteps(self) -> int:
+        """Total environment interactions across all environments (for RL sample efficiency comparisons).
+
+        This is a derived quantity computed as steps_per_env * num_envs.
+        It represents the total number of environment interactions, which is the standard
+        metric reported in RL papers for sample efficiency comparisons.
+        """
+        return self.steps_per_env * self.num_envs
 
     @model_validator(mode="after")
     def validate_scan_chunk_size_efficiency(self) -> "RunConfig":

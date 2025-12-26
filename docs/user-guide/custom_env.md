@@ -365,7 +365,7 @@ python scripts/train.py \
   env=oscillator_control \
   agent=pqn \
   run.num_envs=10000 \
-  run.total_timesteps=1e6
+  run.steps_per_env=100
 ```
 
 Or programmatically:
@@ -383,7 +383,7 @@ env = make_env("oscillator-control")
 config = Config(
     env={"_target_": "oscillator-control"},
     agent={"_target_": "pqn"},
-    run={"num_envs": 10000, "total_timesteps": 1_000_000}
+    run={"num_envs": 10000, "steps_per_env": 100}
 )
 
 # Train
