@@ -31,11 +31,13 @@ class MetricsLogger:
         # Local metric storage
         self.training_metrics = TrainingMetrics(
             global_steps=[],
+            steps_per_env=[],
             agent_metrics={},
         )
 
         self.eval_metrics = EvaluationMetrics(
             global_steps=[],
+            steps_per_env=[],
             episode_returns=[],
             episode_lengths=[],
             mean_return=[],
@@ -66,6 +68,7 @@ class MetricsLogger:
 
         # Capture to local storage
         self.training_metrics.global_steps.append(global_step)
+        self.training_metrics.steps_per_env.append(steps_per_env)
 
         # Extract common metrics
         if "loss" in metrics_host:
@@ -91,12 +94,14 @@ class MetricsLogger:
     def log_evaluation(
         self,
         global_step: int,
+        steps_per_env: int,
         eval_results: dict[str, Any],
     ) -> None:
         """Log evaluation metrics for a single checkpoint.
 
         Args:
             global_step: Global environment steps
+            steps_per_env: Steps per individual environment
             eval_results: Dictionary with 'episode_return', 'episode_length', 'dones'
         """
         eval_returns = eval_results.get("episode_return")
@@ -104,6 +109,7 @@ class MetricsLogger:
 
         # Capture to local storage
         self.eval_metrics.global_steps.append(global_step)
+        self.eval_metrics.steps_per_env.append(steps_per_env)
 
         if eval_returns is not None:
             self.eval_metrics.episode_returns.append(np.asarray(eval_returns))

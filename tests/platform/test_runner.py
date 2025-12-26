@@ -947,3 +947,180 @@ def test_training_reaches_exact_total_timesteps():
     assert (
         results3.training_metrics.global_steps[-1] == expected_total3
     ), f"Expected final global_steps={expected_total3}, got {results3.training_metrics.global_steps[-1]}"
+
+
+# ========================================================================================
+# On-Policy Training Tests (PPO/PQN with rollout_steps)
+# ========================================================================================
+
+
+def test_on_policy_training_steps_increment_correctly():
+    """On-policy training should increment steps_completed by rollout_steps (not rollout_steps * num_envs).
+
+    Regression test for bug where steps_this_chunk = rollout_steps * num_envs caused
+    training to complete after only (steps_per_env / num_envs) steps instead of steps_per_env.
+
+    This test verifies that with rollout_steps=4 and num_envs=4, training runs for
+    the full 20 steps_per_env (not 20/4=5 steps).
+    """
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 20,
+            "num_envs": 4,
+            "rollout_steps": 4,  # On-policy mode
+            "scan_chunk_size": 2,
+            "log_frequency": 4,
+            "eval_frequency": 8,
+        }
+    )
+
+    results = runner.train_and_evaluate(config)
+
+    # With the bug, training would complete after 20/4=5 steps per env
+    # With the fix, training should complete after full 20 steps per env
+    assert (
+        results.training_metrics.steps_per_env[-1] == 20
+    ), f"Expected final steps_per_env=20, got {results.training_metrics.steps_per_env[-1]}"
+
+    # Total steps should be steps_per_env * num_envs
+    expected_total = 20 * 4  # = 80
+    assert (
+        results.training_metrics.global_steps[-1] == expected_total
+    ), f"Expected {expected_total} total steps, got {results.training_metrics.global_steps[-1]}"
+
+    # With log_frequency=4, should have 5 logs: at steps 4, 8, 12, 16, 20
+    assert (
+        len(results.training_metrics.global_steps) == 5
+    ), f"Expected 5 training logs, got {len(results.training_metrics.global_steps)}"
+
+
+def test_on_policy_training_logging_frequency(monkeypatch):
+    """On-policy training should log at correct intervals based on steps_per_env."""
+
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 24,
+            "num_envs": 2,
+            "rollout_steps": 4,  # On-policy mode
+            "scan_chunk_size": 2,
+            "log_frequency": 8,  # Should log at steps 8, 16, 24
+            "eval_frequency": 100,  # Disable eval for this test
+        }
+    )
+
+    log_checkpoints: list[int] = []
+
+    # Capture when logging happens
+    original_log_training_step = runner.MetricsLogger.log_training_step
+
+    def instrumented_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk):
+        log_checkpoints.append(steps_per_env)
+        return original_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk)
+
+    monkeypatch.setattr(runner.MetricsLogger, "log_training_step", instrumented_log_training_step)
+    runner._run_training_loop(config, wandb_run=None)
+
+    # Should log at: 8, 16, 24 (every log_frequency=8 steps per env)
+    expected_checkpoints = [8, 16, 24]
+    assert (
+        log_checkpoints == expected_checkpoints
+    ), f"Expected logging at steps {expected_checkpoints}, got {log_checkpoints}"
+
+
+def test_on_policy_training_completes_full_duration():
+    """On-policy training should run for the full steps_per_env duration."""
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 16,
+            "num_envs": 4,
+            "rollout_steps": 4,
+            "scan_chunk_size": 2,
+            "log_frequency": 8,
+            "eval_frequency": 16,
+        }
+    )
+
+    results = runner.train_and_evaluate(config)
+
+    # Check that training ran for full duration
+    expected_total_steps = 16 * 4  # steps_per_env * num_envs = 64
+    assert (
+        results.training_metrics.global_steps[-1] == expected_total_steps
+    ), f"Expected {expected_total_steps} total steps, got {results.training_metrics.global_steps[-1]}"
+
+    # Check steps_per_env metrics
+    assert (
+        results.training_metrics.steps_per_env[-1] == 16
+    ), f"Expected final steps_per_env=16, got {results.training_metrics.steps_per_env[-1]}"
+
+
+def test_on_policy_training_produces_correct_number_of_logs():
+    """On-policy training should produce the expected number of training and eval logs."""
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 20,
+            "num_envs": 2,
+            "rollout_steps": 4,
+            "scan_chunk_size": 2,
+            "log_frequency": 4,  # Should log at: 4, 8, 12, 16, 20 → 5 logs
+            "eval_frequency": 8,  # Should eval at: 8, 16 → 2 evals (20 not divisible by 8, so no eval at 20)
+        }
+    )
+
+    results = runner.train_and_evaluate(config)
+
+    # Training logs: every 4 steps → 5 logs
+    assert (
+        len(results.training_metrics.global_steps) == 5
+    ), f"Expected 5 training logs, got {len(results.training_metrics.global_steps)}"
+
+    # Eval logs: at steps 8, 16 → 2 evals
+    assert (
+        len(results.eval_metrics.global_steps) == 2
+    ), f"Expected 2 eval logs, got {len(results.eval_metrics.global_steps)}"
+
+    # Verify exact checkpoint positions
+    assert results.training_metrics.steps_per_env == [4, 8, 12, 16, 20]
+    assert results.eval_metrics.steps_per_env == [8, 16]
+
+
+def test_on_policy_vs_off_policy_same_total_steps():
+    """On-policy and off-policy training with same steps_per_env should reach same total_timesteps."""
+
+    # On-policy config
+    config_on_policy = _create_config(
+        run_overrides={
+            "steps_per_env": 12,
+            "num_envs": 3,
+            "rollout_steps": 4,  # ON-POLICY
+            "scan_chunk_size": 2,
+            "log_frequency": 12,
+            "eval_frequency": 12,
+        }
+    )
+
+    # Off-policy config (same steps, no rollout_steps)
+    config_off_policy = _create_config(
+        run_overrides={
+            "steps_per_env": 12,
+            "num_envs": 3,
+            "rollout_steps": None,  # OFF-POLICY
+            "buffer_size": 20,
+            "batch_size": 2,
+            "scan_chunk_size": 2,
+            "log_frequency": 12,
+            "eval_frequency": 12,
+        }
+    )
+
+    results_on = runner.train_and_evaluate(config_on_policy)
+    results_off = runner.train_and_evaluate(config_off_policy)
+
+    # Both should complete with same total steps
+    expected_total = 12 * 3  # = 36
+    assert results_on.training_metrics.global_steps[-1] == expected_total
+    assert results_off.training_metrics.global_steps[-1] == expected_total
+
+    # Both should have same steps_per_env
+    assert results_on.training_metrics.steps_per_env[-1] == 12
+    assert results_off.training_metrics.steps_per_env[-1] == 12

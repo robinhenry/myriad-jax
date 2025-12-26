@@ -571,7 +571,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
 
             # Convert single metrics dict to history format for logging
             metrics_history = jax.tree_util.tree_map(lambda x: jnp.array([x]), metrics)
-            steps_this_chunk = config.run.rollout_steps * config.run.num_envs
+            steps_this_chunk = config.run.rollout_steps  # steps per env (not total)
         else:
             # Off-policy training: use chunked step-by-step updates
 
@@ -652,7 +652,9 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
                     eval_results_host[name] = jax.device_get(value)
 
             # Log metrics (always)
-            metrics_logger.log_evaluation(global_step=global_step, eval_results=eval_results_host)
+            metrics_logger.log_evaluation(
+                global_step=global_step, steps_per_env=steps_completed, eval_results=eval_results_host
+            )
 
             # Save episodes to disk and log to W&B if collected
             if should_save_episodes and "episodes" in eval_results_host:
@@ -778,7 +780,7 @@ def evaluate(
         # Log to wandb if enabled
         if wandb_run is not None:
             metrics_logger = MetricsLogger(wandb_run=wandb_run)
-            metrics_logger.log_evaluation(global_step=0, eval_results=eval_results)
+            metrics_logger.log_evaluation(global_step=0, steps_per_env=0, eval_results=eval_results)
             metrics_logger.log_final(0)
 
         return eval_results

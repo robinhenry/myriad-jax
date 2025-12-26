@@ -19,7 +19,10 @@ class TrainingMetrics:
     """
 
     global_steps: list[int]
-    """Global environment steps at each checkpoint."""
+    """Global environment steps at each checkpoint (total across all envs)."""
+
+    steps_per_env: list[int]
+    """Steps per individual environment at each checkpoint."""
 
     loss: list[float] | None = None
     """Training loss values (if available from agent)."""
@@ -40,7 +43,10 @@ class EvaluationMetrics:
     """
 
     global_steps: list[int]
-    """Global environment steps at each evaluation."""
+    """Global environment steps at each evaluation (total across all envs)."""
+
+    steps_per_env: list[int]
+    """Steps per individual environment at each evaluation."""
 
     episode_returns: list[np.ndarray]
     """Raw episode returns from each evaluation. Each array contains returns from eval_rollouts episodes."""
