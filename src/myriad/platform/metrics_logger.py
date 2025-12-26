@@ -15,7 +15,7 @@ class MetricsLogger:
     """Unified logger for training and evaluation metrics.
 
     Handles local metric capture (for return values) and delegates remote logging
-    (W&B, TensorBoard, etc.) to RemoteLogger. Metrics are processed once and sent
+    (W&B, etc.) to RemoteLogger. Metrics are processed once and sent
     to all configured destinations.
     """
 
@@ -85,7 +85,7 @@ class MetricsLogger:
                     self.training_metrics.agent_metrics[metric_name] = []
                 self.training_metrics.agent_metrics[metric_name].append(float(metric_values[-1]))
 
-        # Send to remote logging services (W&B, TensorBoard, etc.)
+        # Send to remote logging services (W&B, etc.)
         self.remote_logger.log_train(metrics_host, global_step, steps_per_env)
 
     def log_evaluation(
@@ -114,7 +114,7 @@ class MetricsLogger:
             self.eval_metrics.episode_lengths.append(np.asarray(eval_lengths))
             self.eval_metrics.mean_length.append(float(np.mean(eval_lengths)))
 
-        # Send to remote logging services (W&B, TensorBoard, etc.)
+        # Send to remote logging services (W&B, etc.)
         self.remote_logger.log_eval(eval_results, global_step)
 
     def log_episodes(self, episode_dir: str, global_step: int) -> None:
@@ -124,7 +124,7 @@ class MetricsLogger:
             episode_dir: Path to directory containing saved episodes
             global_step: Global environment steps (for artifact versioning)
         """
-        # Send to remote logging services (W&B, TensorBoard, etc.)
+        # Send to remote logging services (W&B, etc.)
         self.remote_logger.log_episodes(episode_dir, global_step)
 
     def log_final(self, total_env_steps: int) -> None:
@@ -133,7 +133,7 @@ class MetricsLogger:
         Args:
             total_env_steps: Total environment steps completed
         """
-        # Send to remote logging services (W&B, TensorBoard, etc.)
+        # Send to remote logging services (W&B, etc.)
         self.remote_logger.log_final(total_env_steps)
 
     def get_results(self) -> tuple[TrainingMetrics, EvaluationMetrics]:

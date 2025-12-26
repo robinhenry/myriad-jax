@@ -536,11 +536,17 @@ def test_vmap_step(key: chex.PRNGKey, env: Environment):
     vmap_step = jax.vmap(_step, in_axes=(0, 0, 0, None, None))
     obs_batch, next_states, rewards, dones, infos = vmap_step(keys, states, actions, env.params, env.config)
 
-    # Check shapes
-    assert obs_batch.shape == (batch_size, 4)
+    # Check shapes - obs_batch is a batched PhysicsState
+    assert isinstance(obs_batch, PhysicsState)
+    assert obs_batch.x.shape == (batch_size,)
     assert next_states.physics.x.shape == (batch_size,)
     assert rewards.shape == (batch_size,)
     assert dones.shape == (batch_size,)
+
+    # Verify array conversion works
+    vmap_to_array = jax.vmap(lambda obs: obs.to_array())
+    obs_arrays = vmap_to_array(obs_batch)
+    assert obs_arrays.shape == (batch_size, 4)
 
 
 def test_vmap_reset(key: chex.PRNGKey, env: Environment):
@@ -552,13 +558,19 @@ def test_vmap_reset(key: chex.PRNGKey, env: Environment):
     vmap_reset = jax.vmap(_reset, in_axes=(0, None, None))
     obs_batch, states = vmap_reset(keys, env.params, env.config)
 
-    # Check shapes
-    assert obs_batch.shape == (batch_size, 4)
+    # Check shapes - obs_batch is a batched PhysicsState
+    assert isinstance(obs_batch, PhysicsState)
+    assert obs_batch.x.shape == (batch_size,)
     assert states.physics.x.shape == (batch_size,)
     assert states.t.shape == (batch_size,)
 
     # All timesteps should be 0
     assert jnp.all(states.t == 0)
+
+    # Verify array conversion works
+    vmap_to_array = jax.vmap(lambda obs: obs.to_array())
+    obs_arrays = vmap_to_array(obs_batch)
+    assert obs_arrays.shape == (batch_size, 4)
 
 
 def test_different_params_produce_different_dynamics(key: chex.PRNGKey):
@@ -588,5 +600,5 @@ def test_different_params_produce_different_dynamics(key: chex.PRNGKey):
     obs1, state1, _, _, _ = _step(step_key, state, action, params1, config)
     obs2, state2, _, _, _ = _step(step_key, state, action, params2, config)
 
-    # Should produce different next states
-    assert not jnp.allclose(obs1.to_array(), obs2, atol=1e-6)
+    # Should produce different next states (compare array representations)
+    assert not jnp.allclose(obs1.to_array(), obs2.to_array(), atol=1e-6)

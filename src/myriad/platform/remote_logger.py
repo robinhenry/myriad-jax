@@ -1,4 +1,4 @@
-"""Remote logging handlers for external services (W&B, TensorBoard, etc)."""
+"""Remote logging handlers for external services (W&B, etc)."""
 
 from __future__ import annotations
 
@@ -12,19 +12,17 @@ from .logging_utils import build_train_payload, summarize_metric, wandb
 class RemoteLogger:
     """Handles sending metrics to remote logging services.
 
-    Supports multiple destinations (W&B, TensorBoard, etc.) without coupling
+    Supports multiple destinations (W&B, etc.) without coupling
     the core metrics capture logic to specific logging implementations.
     """
 
-    def __init__(self, wandb_run: Any | None = None, tensorboard_writer: Any | None = None):
+    def __init__(self, wandb_run: Any | None = None):
         """Initialize remote logger with configured destinations.
 
         Args:
             wandb_run: W&B run instance (None to disable)
-            tensorboard_writer: TensorBoard SummaryWriter (None to disable)
         """
         self.wandb_run = wandb_run
-        self.tensorboard_writer = tensorboard_writer
         self.use_wandb = wandb_run is not None and wandb is not None
 
     def log_train(self, metrics_host: dict[str, Any], global_step: int, steps_per_env: int) -> None:
@@ -43,11 +41,6 @@ class RemoteLogger:
             train_payload["train/global_env_steps"] = float(global_step)
             train_payload["train/steps_per_env"] = float(steps_per_env)
             wandb.log(train_payload, step=global_step)
-
-        # Future: TensorBoard support
-        # if self.tensorboard_writer:
-        #     for key, value in train_payload.items():
-        #         self.tensorboard_writer.add_scalar(key, value, global_step)
 
     def log_eval(self, eval_results: dict[str, Any], global_step: int) -> None:
         """Send evaluation metrics to configured remote services.
@@ -80,11 +73,6 @@ class RemoteLogger:
             eval_payload["eval/global_env_steps"] = float(global_step)
             wandb.log(eval_payload, step=global_step)
 
-        # Future: TensorBoard support
-        # if self.tensorboard_writer:
-        #     for key, value in eval_payload.items():
-        #         self.tensorboard_writer.add_scalar(key, value, global_step)
-
     def log_episodes(self, episode_dir: str, global_step: int) -> None:
         """Log saved episodes to W&B as artifacts.
 
@@ -116,9 +104,3 @@ class RemoteLogger:
         """
         if self.use_wandb:
             wandb.log({"train/final_env_steps": float(total_env_steps)}, step=total_env_steps)
-
-        # Future: TensorBoard support
-        # if self.tensorboard_writer:
-        #     self.tensorboard_writer.add_scalar(
-        #         "train/final_env_steps", float(total_env_steps), total_env_steps
-        #     )

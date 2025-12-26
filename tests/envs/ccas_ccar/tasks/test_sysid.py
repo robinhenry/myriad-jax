@@ -124,14 +124,19 @@ class TestObservations:
 
     def test_obs_shape(self):
         """Test that observation has correct shape (no target)."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
+
         config = SysIDTaskConfig()
         physics = PhysicsState(time=jnp.array(0.0), H=jnp.array(0.0), F=jnp.array(50.0))
         state = SysIDTaskState(physics=physics, t=jnp.array(0))
 
         obs = get_obs(state, SysIDTaskParams(), config)
 
-        # Shape should be (3,): [F_normalized, U_prev, 0]
-        assert obs.shape == (3,)
+        # Observation is a CcasCcarSysIDObs NamedTuple
+        assert isinstance(obs, CcasCcarSysIDObs)
+
+        # Verify array conversion gives shape (3,): [F_normalized, U_prev, 0]
+        assert obs.to_array().shape == (3,)
 
     def test_get_obs(self):
         """Test observation extraction."""
@@ -233,6 +238,7 @@ class TestResetFunction:
 
     def test_reset_observation_shape(self):
         """Test that reset produces correct observation shape."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
         from myriad.envs.ccas_ccar.tasks.sysid import _reset
 
         config = SysIDTaskConfig()
@@ -241,8 +247,11 @@ class TestResetFunction:
 
         obs, new_state = _reset(key, params, config)
 
-        # Observation shape: [F_normalized, U_prev, 0]
-        assert obs.shape == (3,)
+        # Observation is a CcasCcarSysIDObs NamedTuple
+        assert isinstance(obs, CcasCcarSysIDObs)
+
+        # Verify array shape: [F_normalized, U_prev, 0]
+        assert obs.to_array().shape == (3,)
 
     def test_reset_determinism(self):
         """Test that same seed produces same initial conditions."""
@@ -256,8 +265,8 @@ class TestResetFunction:
         obs1, state1 = _reset(key, params, config)
         obs2, state2 = _reset(key, params, config)
 
-        # Should be identical
-        assert jnp.allclose(obs1, obs2)
+        # Should be identical (compare array representations)
+        assert jnp.allclose(obs1.to_array(), obs2.to_array())
         assert jnp.isclose(state1.physics.H, state2.physics.H)
         assert jnp.isclose(state1.physics.F, state2.physics.F)
 
@@ -274,8 +283,8 @@ class TestResetFunction:
 
         # Initial state is actually always the same (zero concentrations)
         # The randomization is in the params, not the initial state
-        # So this test should check that obs is the same
-        assert jnp.allclose(obs1, obs2)
+        # So this test should check that obs is the same (compare array representations)
+        assert jnp.allclose(obs1.to_array(), obs2.to_array())
         assert jnp.isclose(state1.physics.F, state2.physics.F)
 
 
@@ -365,6 +374,7 @@ class TestStepFunction:
 
     def test_step_observation_shape(self):
         """Test step observation shape."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
         from myriad.envs.ccas_ccar.tasks.sysid import _step
 
         config = SysIDTaskConfig()
@@ -377,8 +387,11 @@ class TestStepFunction:
 
         obs, next_state, reward, done, info = _step(key, state, action, params, config)
 
-        # Observation: [F_normalized, U_prev, 0]
-        assert obs.shape == (3,)
+        # Observation is a CcasCcarSysIDObs NamedTuple
+        assert isinstance(obs, CcasCcarSysIDObs)
+
+        # Verify array shape: [F_normalized, U_prev, 0]
+        assert obs.to_array().shape == (3,)
 
     def test_step_info_dict(self):
         """Test that info dict contains true parameters."""
@@ -433,8 +446,8 @@ class TestStepFunction:
         obs2, state2, reward2, done2, info2 = _step(jax.random.PRNGKey(1), state, action, params, config)
 
         # Outcomes should be different (stochastic Gillespie)
-        # With high probability, at least one state variable differs
-        assert not jnp.allclose(obs1, obs2) or not jnp.isclose(state1.physics.F, state2.physics.F)
+        # With high probability, at least one state variable differs (compare array representations)
+        assert not jnp.allclose(obs1.to_array(), obs2.to_array()) or not jnp.isclose(state1.physics.F, state2.physics.F)
 
 
 class TestEnvironmentCreation:
@@ -486,6 +499,7 @@ class TestFullEpisode:
 
     def test_full_episode(self):
         """Test running a full episode."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
         from myriad.envs.ccas_ccar.tasks.sysid import _reset, _step
 
         config = SysIDTaskConfig()
@@ -505,7 +519,8 @@ class TestFullEpisode:
 
             # Check validity
             assert not jnp.isnan(reward)
-            assert obs.shape == (3,)
+            assert isinstance(obs, CcasCcarSysIDObs)
+            assert obs.to_array().shape == (3,)
             assert state.t == i + 1
 
             if done:
@@ -513,6 +528,7 @@ class TestFullEpisode:
 
     def test_jit_compatibility(self):
         """Test JIT compilation of reset and step."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
         from myriad.envs.ccas_ccar.tasks.sysid import _reset, _step
 
         config = SysIDTaskConfig()
@@ -525,7 +541,8 @@ class TestFullEpisode:
         # Test reset
         key = jax.random.PRNGKey(0)
         obs, state = reset_jit(key, params, config)
-        assert obs.shape == (3,)
+        assert isinstance(obs, CcasCcarSysIDObs)
+        assert obs.to_array().shape == (3,)
 
         # Test step
         key = jax.random.PRNGKey(1)
@@ -535,6 +552,7 @@ class TestFullEpisode:
 
     def test_vmap_compatibility(self):
         """Test vmap for batched environments."""
+        from myriad.envs.ccas_ccar.tasks.base import CcasCcarSysIDObs
         from myriad.envs.ccas_ccar.tasks.sysid import _reset, _step
 
         config = SysIDTaskConfig()
@@ -546,7 +564,9 @@ class TestFullEpisode:
         keys = jax.random.split(jax.random.PRNGKey(0), n_envs)
         obs_batch, states = reset_vmap(keys, params, config)
 
-        assert obs_batch.shape == (n_envs, 3)
+        # obs_batch is a batched CcasCcarSysIDObs
+        assert isinstance(obs_batch, CcasCcarSysIDObs)
+        assert obs_batch.F_normalized.shape == (n_envs,)
 
         # Vmap step
         step_vmap = jax.vmap(_step, in_axes=(0, 0, 0, None, None))
@@ -555,6 +575,13 @@ class TestFullEpisode:
 
         obs_batch, states, rewards, dones, infos = step_vmap(keys, states, actions, params, config)
 
-        assert obs_batch.shape == (n_envs, 3)
+        # Verify batched observations
+        assert isinstance(obs_batch, CcasCcarSysIDObs)
+        assert obs_batch.F_normalized.shape == (n_envs,)
         assert rewards.shape == (n_envs,)
         assert dones.shape == (n_envs,)
+
+        # Verify array conversion works for batch
+        vmap_to_array = jax.vmap(lambda obs: obs.to_array())
+        obs_arrays = vmap_to_array(obs_batch)
+        assert obs_arrays.shape == (n_envs, 3)

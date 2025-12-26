@@ -30,12 +30,13 @@ def test_env_registry_integration(env_name: str):
     # Verify it can be used
     key = jax.random.key(0)
     obs, state = env.reset(key, env.params, env.config)
-    assert obs.shape == (4,)
+    # Observation is a PhysicsState NamedTuple
+    assert obs.to_array().shape == (4,)
 
     # Verify step works
     action = jnp.array(1)
     obs, state, reward, done, info = env.step(key, state, action, env.params, env.config)
-    assert obs.shape == (4,)
+    assert obs.to_array().shape == (4,)
     assert reward.shape == ()
     assert done.shape == ()
 
@@ -131,7 +132,8 @@ def test_vectorized_environments():
     vmap_reset = jax.vmap(env.reset, in_axes=(0, None, None))
     obs_batch, states = vmap_reset(keys, env.params, env.config)
 
-    assert obs_batch.shape == (batch_size, 4)
+    # obs_batch is a batched PhysicsState
+    assert obs_batch.x.shape == (batch_size,)
     assert states.t.shape == (batch_size,)
 
     # Vectorize step
@@ -139,9 +141,15 @@ def test_vectorized_environments():
     vmap_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     obs_batch, states, rewards, dones, infos = vmap_step(keys, states, actions, env.params, env.config)
 
-    assert obs_batch.shape == (batch_size, 4)
+    # Verify batched observations
+    assert obs_batch.x.shape == (batch_size,)
     assert rewards.shape == (batch_size,)
     assert dones.shape == (batch_size,)
+
+    # Verify array conversion works for batch
+    vmap_to_array = jax.vmap(lambda obs: obs.to_array())
+    obs_arrays = vmap_to_array(obs_batch)
+    assert obs_arrays.shape == (batch_size, 4)
 
 
 def test_jit_compilation():
@@ -155,12 +163,13 @@ def test_jit_compilation():
 
     # Reset
     obs, state = jitted_reset(key, env.params, env.config)
-    assert obs.shape == (4,)
+    # Observation is a PhysicsState NamedTuple
+    assert obs.to_array().shape == (4,)
 
     # Step
     action = jnp.array(1)
     obs, state, reward, done, info = jitted_step(key, state, action, env.params, env.config)
-    assert obs.shape == (4,)
+    assert obs.to_array().shape == (4,)
     assert reward == 1.0
 
 

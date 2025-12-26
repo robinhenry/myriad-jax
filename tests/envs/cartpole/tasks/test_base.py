@@ -188,10 +188,18 @@ def test_get_cartpole_obs(physics_state: PhysicsState):
     """Test observation extraction from physics state."""
     obs = get_cartpole_obs(physics_state)
 
-    # Should be 1D array of shape (4,)
-    assert obs.shape == (4,)
+    # For CartPole, observation is the PhysicsState itself (fully observable)
+    assert isinstance(obs, PhysicsState)
 
-    # Should contain [x, x_dot, theta, theta_dot]
+    # Verify named fields match input
+    assert obs.x == physics_state.x
+    assert obs.x_dot == physics_state.x_dot
+    assert obs.theta == physics_state.theta
+    assert obs.theta_dot == physics_state.theta_dot
+
+    # Verify array conversion works correctly
+    obs_array = obs.to_array()
+    assert obs_array.shape == (4,)
     expected_obs = jnp.array(
         [
             physics_state.x,
@@ -200,7 +208,7 @@ def test_get_cartpole_obs(physics_state: PhysicsState):
             physics_state.theta_dot,
         ]
     )
-    chex.assert_trees_all_close(obs, expected_obs)
+    chex.assert_trees_all_close(obs_array, expected_obs)
 
 
 def test_get_cartpole_obs_shape():
@@ -330,12 +338,23 @@ def test_get_cartpole_obs_vmap_compatibility():
     vmap_obs = jax.vmap(get_cartpole_obs)
     obs_batch = vmap_obs(states)
 
-    # Should be batch of observations
-    assert obs_batch.shape == (batch_size, 4)
+    # Should be batch of PhysicsState observations
+    assert isinstance(obs_batch, PhysicsState)
+    assert obs_batch.x.shape == (batch_size,)
 
-    # Check first observation
+    # Check first observation fields
+    assert obs_batch.x[0] == states.x[0]
+    assert obs_batch.x_dot[0] == states.x_dot[0]
+    assert obs_batch.theta[0] == states.theta[0]
+    assert obs_batch.theta_dot[0] == states.theta_dot[0]
+
+    # Verify array conversion for batch
+    vmap_to_array = jax.vmap(lambda obs: obs.to_array())
+    obs_arrays = vmap_to_array(obs_batch)
+    assert obs_arrays.shape == (batch_size, 4)
+
     expected_first = jnp.array([states.x[0], states.x_dot[0], states.theta[0], states.theta_dot[0]])
-    chex.assert_trees_all_close(obs_batch[0], expected_first)
+    chex.assert_trees_all_close(obs_arrays[0], expected_first)
 
 
 def test_sample_initial_physics_vmap_compatibility():
