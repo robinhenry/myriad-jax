@@ -31,7 +31,9 @@ def _select_action(
     _obs: chex.Array,
     agent_state: AgentState,
     params: AgentParams,
+    deterministic: bool = False,  # noqa: ARG001
 ) -> Tuple[chex.Array, AgentState]:
+    """Select a random action (deterministic flag ignored for random agent)."""
     return params.action_space.sample(key), agent_state
 
 

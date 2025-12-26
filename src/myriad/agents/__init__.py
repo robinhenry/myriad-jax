@@ -1,4 +1,4 @@
-from . import dqn, pqn, random
+from . import bangbang, dqn, pqn, random
 from .agent import Agent
 
 # The registry mapping environment IDs to their factory functions
@@ -6,6 +6,7 @@ AGENT_REGISTRY = {
     "random": random.make_agent,
     "dqn": dqn.make_agent,
     "pqn": pqn.make_agent,
+    "bangbang": bangbang.make_agent,
 }
 
 

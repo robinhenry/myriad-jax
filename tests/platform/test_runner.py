@@ -117,6 +117,7 @@ def _agent_select_action(
     _obs: chex.Array,
     _state: _TestAgentState,
     params: _TestAgentParams,
+    deterministic: bool = False,  # noqa: ARG001
 ) -> tuple[chex.Array, _TestAgentState]:
     action_space = cast(Box, params.action_space)
     action = jnp.zeros(action_space.shape, dtype=jnp.float32)

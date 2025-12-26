@@ -124,6 +124,82 @@ def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
     return jax.jit(run_chunk)
 
 
+def make_on_policy_chunk_runner(
+    rollout_fn: Callable,
+    agent,  # Agent type - avoiding circular import
+    chunk_size: int,
+    rollout_steps: int,
+) -> Callable:
+    """Create a chunked runner for on-policy training that batches multiple rollout-update cycles.
+
+    This function addresses the regression from the previous platform where the entire training
+    loop was a single jitted scan. By batching multiple rollout-update cycles together, we avoid
+    returning to Python after each cycle, dramatically reducing Python overhead.
+
+    Design:
+    -------
+    Instead of the Python while loop calling rollout->update->Python for each cycle, this runner:
+    - Batches multiple rollout-update cycles into a single jitted scan
+    - Uses mask-aware execution for boundary alignment (logging/eval)
+    - Accumulates metrics across all cycles
+    - Returns to Python only after completing the entire chunk
+
+    This enables efficient training even with small rollout_steps (e.g., 2-4 steps) by amortizing
+    Python overhead across many cycles.
+
+    Args:
+        rollout_fn: Jitted function that collects a rollout (from make_chunked_collector)
+        agent: The agent instance (needs agent.update and agent.params)
+        chunk_size: Maximum number of rollout-update cycles per chunk
+        rollout_steps: Number of steps per rollout (for calculating steps_this_chunk)
+
+    Returns:
+        A jitted function that runs a chunk of rollout-update cycles.
+        Signature: (carry, active_mask) -> (carry, metrics_history)
+        where carry = (key, agent_state, training_env_states)
+    """
+
+    def run_on_policy_chunk(
+        carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState],
+        active_mask: chex.Array,
+    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], dict]:
+        """Run multiple rollout-update cycles in a single jitted scan."""
+        active_mask = active_mask.astype(jnp.bool_)
+
+        def body(
+            carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState],
+            active: chex.Array,
+        ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], dict]:
+            key, agent_state, training_env_states = carry
+
+            # Collect rollout (jitted)
+            key_new, agent_state_new, training_env_states_new, rollout_batch = rollout_fn(
+                key, agent_state, training_env_states
+            )
+
+            # Update agent with collected rollout (jitted)
+            key_new, update_key = jax.random.split(key_new)
+            agent_state_new, metrics = agent.update(update_key, agent_state_new, rollout_batch, agent.params)
+
+            # Only update state if this iteration is active
+            active_mask_scalar = jnp.asarray(active, dtype=jnp.bool_)
+            key = jax.lax.select(active_mask_scalar, key_new, key)
+            agent_state = tree_select(active_mask_scalar, agent_state_new, agent_state)
+            training_env_states = tree_select(active_mask_scalar, training_env_states_new, training_env_states)
+
+            # Zero out metrics for inactive iterations
+            metrics = jax.tree_util.tree_map(
+                lambda x: jax.lax.select(active_mask_scalar, x, jnp.zeros_like(x)),
+                metrics,
+            )
+
+            return (key, agent_state, training_env_states), metrics
+
+        return jax.lax.scan(body, carry, active_mask)
+
+    return jax.jit(run_on_policy_chunk)
+
+
 def make_chunked_collector(
     collection_step_fn: Callable,
     num_envs: int,

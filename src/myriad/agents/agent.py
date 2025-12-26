@@ -53,5 +53,5 @@ class Agent(NamedTuple, Generic[S, P]):
     params: P
 
     init: Callable[[chex.PRNGKey, chex.Array, P], S]
-    select_action: Callable[[chex.PRNGKey, chex.Array, S, P], tuple[chex.Array, S]]
+    select_action: Callable[[chex.PRNGKey, chex.Array, S, P, bool], tuple[chex.Array, S]]
     update: Callable[[chex.PRNGKey, S, Any, P], tuple[S, dict]]

@@ -6,6 +6,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
+from tqdm import tqdm
 
 from myriad.agents import make_agent
 from myriad.agents.agent import Agent, AgentState
@@ -19,7 +20,13 @@ from myriad.utils import to_array
 
 from .logging_utils import maybe_init_wandb, wandb
 from .metrics_logger import MetricsLogger
-from .scan_utils import make_chunk_runner, make_chunked_collector, mask_tree, where_mask
+from .scan_utils import (
+    make_chunk_runner,
+    make_chunked_collector,
+    make_on_policy_chunk_runner,
+    mask_tree,
+    where_mask,
+)
 from .shared import TrainingEnvState
 from .types import TrainingResults
 
@@ -73,9 +80,9 @@ def _make_train_step_fn(
         # Keep a shared agent_state while still batching per-env actions by using `out_axes=(0, None)`
         actions, agent_state = jax.vmap(
             agent.select_action,
-            in_axes=(0, 0, None, None),
+            in_axes=(0, 0, None, None, None),
             out_axes=(0, None),
-        )(action_keys, last_obs, agent_state, agent.params)
+        )(action_keys, last_obs, agent_state, agent.params, False)
 
         # Step environments in parallel and capture the resulting transitions
         key, step_key = jax.random.split(key)
@@ -158,9 +165,9 @@ def _make_collection_step_fn(
         action_keys = jax.random.split(action_key, num_envs)
         actions, agent_state = jax.vmap(
             agent.select_action,
-            in_axes=(0, 0, None, None),
+            in_axes=(0, 0, None, None, None),
             out_axes=(0, None),
-        )(action_keys, last_obs, agent_state, agent.params)
+        )(action_keys, last_obs, agent_state, agent.params, False)
 
         # Step environments in parallel
         key, step_key = jax.random.split(key)
@@ -256,7 +263,9 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
         # Initialize episode data collectors if requested
         if return_episodes:
             # Get a sample action to determine shape
-            sample_action = agent.select_action(jax.random.PRNGKey(0), obs_array[0], agent_state, agent.params)[0]
+            sample_action = agent.select_action(jax.random.PRNGKey(0), obs_array[0], agent_state, agent.params, False)[
+                0
+            ]
 
             # Pre-allocate arrays for collecting full trajectories
             # Shape: (num_eval_envs, max_eval_steps, ...)
@@ -289,8 +298,8 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
             # Drive each evaluation environment independently but under one loop
             key, action_key, step_key = jax.random.split(key, 3)
             action_keys = jax.random.split(action_key, num_eval_envs)
-            actions, _ = jax.vmap(agent.select_action, in_axes=(0, 0, None, None))(
-                action_keys, env_state.obs, agent_state, agent.params
+            actions, _ = jax.vmap(agent.select_action, in_axes=(0, 0, None, None, None))(
+                action_keys, env_state.obs, agent_state, agent.params, True
             )
 
             step_keys = jax.random.split(step_key, num_eval_envs)
@@ -503,7 +512,9 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     training_env_states = TrainingEnvState(env_state=env_states, obs=obs_array)
 
     # Initialize agent using the initial observation from one environment
-    sample_obs = obs_array[0]  # type: ignore
+    # Use original NamedTuple observation (not converted array) to allow field introspection
+    # Extract first element from batched NamedTuple using tree.map
+    sample_obs = jax.tree.map(lambda x: x[0], obs)
     agent_state = agent.init(agent_key, sample_obs, agent.params)
 
     # Determine training mode and initialize accordingly
@@ -528,22 +539,37 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         if config.run.buffer_size is None:
             raise ValueError("buffer_size must be set in config for off-policy training (when rollout_steps is None)")
         replay_buffer = ReplayBuffer(buffer_size=config.run.buffer_size)
-        sample_transition = _make_sample_transition(buffer_key, sample_obs, action_space)
+        # Convert sample_obs to array for buffer initialization (matches training transition structure)
+        sample_obs_array = to_array(sample_obs)
+        sample_transition = _make_sample_transition(buffer_key, sample_obs_array, action_space)
         buffer_state = replay_buffer.init(sample_transition)
         rollout_fn = None
 
     # Build jitted execution primitives
-    train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
     eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
 
     # Chunking configuration:
-    # - scan_chunk_size controls how many training steps are batched into a single jax.lax.scan
+    # - scan_chunk_size controls how many rollout-update cycles (on-policy) or training steps (off-policy)
+    #   are batched into a single jax.lax.scan
     # - Larger chunks reduce Python overhead but increase XLA compile time
     # - chunk_size is ensured to be at least 1 to prevent errors
     chunk_size = max(1, config.run.scan_chunk_size)
-    # For off-policy agents, batch_size is required; for on-policy, it's ignored
-    batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
-    run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
+
+    if use_rollout_training:
+        # On-policy: create chunk runner that batches multiple rollout-update cycles
+        # This avoids returning to Python after each rollout, addressing the regression
+        # from the previous platform where everything was in a single jitted scan
+        run_chunk_fn = make_on_policy_chunk_runner(
+            rollout_fn=rollout_fn,
+            agent=agent,
+            chunk_size=chunk_size,
+            rollout_steps=config.run.rollout_steps,
+        )
+    else:
+        # Off-policy: create chunk runner that batches multiple step-update cycles
+        train_step_fn = _make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
+        batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
+        run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
 
     # Training runs for steps_per_env steps in each environment
     steps_per_env = config.run.steps_per_env
@@ -553,57 +579,74 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     # Initialize unified metrics logger
     metrics_logger = MetricsLogger(wandb_run=wandb_run)
 
+    # Initialize progress bar for training loop
     steps_completed = 0
+    pbar = tqdm(
+        total=steps_per_env,
+        desc="Training",
+        unit="steps",
+        dynamic_ncols=True,
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
+    )
+    # Track metrics for progress bar display
+    pbar_metrics = {}
+
     while steps_completed < steps_per_env:
         remaining_steps = steps_per_env - steps_completed
 
+        # Helper function for boundary alignment
+        def _steps_until_boundary(current_step: int, frequency: int) -> int:
+            """Calculate steps until next logging/eval boundary.
+
+            This helper ensures chunks align with logging and evaluation frequencies,
+            preventing partial metrics from being logged.
+
+            Args:
+                current_step: The current training step counter
+                frequency: The logging or eval frequency (0 or negative means disabled)
+
+            Returns:
+                Number of steps until the next boundary
+            """
+            if frequency <= 0:
+                return chunk_size
+            remainder = current_step % frequency
+            result = frequency if remainder == 0 else frequency - remainder
+            return result
+
+        # Unified chunked training for both on-policy and off-policy
+        # Boundary alignment:
+        # Determine how many steps/cycles to run before the next logging or eval boundary.
+        # For on-policy: steps = rollout-update cycles
+        # For off-policy: steps = individual training steps
+        steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
+        steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
+
         if use_rollout_training:
-            # Should always be true if use_rollout_training is true
+            # On-policy: Calculate number of rollout-update cycles to run
+            # Each cycle advances by rollout_steps, so we need to scale boundaries
             assert config.run.rollout_steps is not None
-            assert rollout_fn is not None
+            cycles_to_log = steps_to_log // config.run.rollout_steps if steps_to_log > 0 else chunk_size
+            cycles_to_eval = steps_to_eval // config.run.rollout_steps if steps_to_eval > 0 else chunk_size
+            cycles_remaining = (remaining_steps + config.run.rollout_steps - 1) // config.run.rollout_steps
+            num_cycles = min(chunk_size, cycles_remaining, cycles_to_log, cycles_to_eval)
 
-            # On-policy training: collect rollout, then update agent
-            key, agent_state, training_env_states, rollout_batch = rollout_fn(key, agent_state, training_env_states)
+            # Ensure we run at least one cycle if there are remaining steps
+            num_cycles = max(1, num_cycles) if remaining_steps > 0 else 0
 
-            # Update agent with collected rollout
-            key, update_key = jax.random.split(key)
-            agent_state, metrics = agent.update(update_key, agent_state, rollout_batch, agent.params)
+            # Create active mask for cycles
+            active_mask = (jnp.arange(chunk_size) < num_cycles).astype(jnp.bool_)
 
-            # Convert single metrics dict to history format for logging
-            metrics_history = jax.tree_util.tree_map(lambda x: jnp.array([x]), metrics)
-            steps_this_chunk = config.run.rollout_steps  # steps per env (not total)
+            # Run chunked on-policy training
+            (key, agent_state, training_env_states), metrics_history = run_chunk_fn(
+                (key, agent_state, training_env_states),
+                active_mask,
+            )
+
+            # Calculate actual steps completed (num_cycles * rollout_steps, capped at remaining)
+            steps_this_chunk = min(num_cycles * config.run.rollout_steps, remaining_steps)
         else:
-            # Off-policy training: use chunked step-by-step updates
-
-            def _steps_until_boundary(current_step: int, frequency: int) -> int:
-                """Calculate steps until next logging/eval boundary.
-
-                This helper ensures chunks align with logging and evaluation frequencies,
-                preventing partial metrics from being logged.
-
-                Args:
-                    current_step: The current training step counter
-                    frequency: The logging or eval frequency (0 or negative means disabled)
-
-                Returns:
-                    Number of steps until the next boundary
-                """
-                if frequency <= 0:
-                    return chunk_size
-                remainder = current_step % frequency
-                result = frequency if remainder == 0 else frequency - remainder
-                return result
-
-            # Boundary alignment:
-            # Determine how many steps to run before the next logging or eval boundary.
-            # This ensures we can log/eval at exact frequencies without partial metrics.
-            # steps_this_chunk is limited by:
-            # 1. chunk_size: The configured maximum chunk size
-            # 2. remaining_steps: Don't overshoot steps_per_env
-            # 3. steps_to_log: Align with logging frequency
-            # 4. steps_to_eval: Align with evaluation frequency
-            steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
-            steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
+            # Off-policy: Calculate number of individual training steps to run
             steps_this_chunk = min(chunk_size, remaining_steps, steps_to_log, steps_to_eval)
 
             # Create a boolean mask for the scan:
@@ -611,6 +654,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
             # - Only the first steps_this_chunk elements are True
             # - Inactive iterations (False elements) execute but don't update state
             active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
+
+            # Run chunked off-policy training
             (key, agent_state, training_env_states, buffer_state), metrics_history = run_chunk_fn(
                 (key, agent_state, training_env_states, buffer_state),
                 active_mask,
@@ -618,6 +663,24 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
 
         steps_completed += steps_this_chunk
         global_step = steps_completed * config.run.num_envs
+
+        # Update progress bar
+        pbar.update(steps_this_chunk)
+
+        # Extract latest metrics for progress bar display
+        try:
+            # Get the most recent metrics from the history (last value in each array)
+            if "loss" in metrics_history:
+                latest_loss = float(jax.device_get(metrics_history["loss"][-1]))
+                pbar_metrics["loss"] = f"{latest_loss:.3f}"
+            if "reward" in metrics_history:
+                latest_reward = float(jax.device_get(metrics_history["reward"][-1]))
+                pbar_metrics["reward"] = f"{latest_reward:.2f}"
+            if pbar_metrics:
+                pbar.set_postfix(pbar_metrics, refresh=False)
+        except (KeyError, IndexError, TypeError):
+            # Metrics might not be available in first iteration or for some agents
+            pass
 
         # Log training metrics (handles both local capture and W&B)
         should_log = steps_completed % log_frequency == 0
@@ -656,6 +719,12 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
                 global_step=global_step, steps_per_env=steps_completed, eval_results=eval_results_host
             )
 
+            # Update progress bar with evaluation results
+            if "episode_return" in eval_results_host:
+                mean_return = float(np.mean(eval_results_host["episode_return"]))
+                pbar_metrics["eval_return"] = f"{mean_return:.2f}"
+                pbar.set_postfix(pbar_metrics, refresh=False)
+
             # Save episodes to disk and log to W&B if collected
             if should_save_episodes and "episodes" in eval_results_host:
                 save_count = config.run.eval_episode_save_count or config.run.eval_rollouts
@@ -676,6 +745,9 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         )
 
     metrics_logger.log_final(total_env_steps)
+
+    # Close progress bar
+    pbar.close()
 
     # Get captured metrics and return complete results
     training_metrics, eval_metrics = metrics_logger.get_results()
@@ -759,9 +831,9 @@ def evaluate(
         # Initialize agent state if not provided
         if agent_state is None:
             # Get a sample observation to initialize the agent
+            # Use original NamedTuple observation (not converted array) to allow field introspection
             obs, _ = env.reset(env_key, env.params, env.config)
-            obs_array = to_array(obs)
-            agent_state = agent.init(agent_key, obs_array, agent.params)
+            agent_state = agent.init(agent_key, obs, agent.params)
 
         # Create and run evaluation rollout
         eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)

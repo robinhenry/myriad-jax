@@ -127,6 +127,7 @@ def _select_action(
     obs: chex.Array,
     agent_state: AgentState,
     params: AgentParams,
+    deterministic: bool = False,
 ) -> Tuple[chex.Array, AgentState]:
     """Select action using epsilon-greedy policy.
 
@@ -135,16 +136,18 @@ def _select_action(
         obs: Current observation
         agent_state: Current agent state
         params: Agent hyperparameters
+        deterministic: If True, use greedy policy (epsilon=0). Default False.
 
     Returns:
         Tuple of (action, unchanged agent_state)
     """
-    # Calculate current epsilon with linear decay
-    epsilon = jnp.maximum(
+    # Calculate current epsilon with linear decay (or use 0 if deterministic)
+    epsilon_decayed = jnp.maximum(
         params.epsilon_end,
         params.epsilon_start
         - (params.epsilon_start - params.epsilon_end) * agent_state.global_step / params.epsilon_decay_steps,
     )
+    epsilon = jax.lax.select(deterministic, jnp.array(0.0), epsilon_decayed)
 
     # Get Q-values
     q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs)
