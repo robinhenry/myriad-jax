@@ -14,14 +14,14 @@ class WandbConfig(BaseModel):
     """Schema for optional Weights & Biases tracking configuration."""
 
     enabled: bool
-    project: str | None
-    entity: str | None
-    group: str | None
-    job_type: str | None
-    run_name: str | None
-    mode: str | None
-    dir: str | None
-    tags: tuple[str, ...] | None
+    project: str | None = None
+    entity: str | None = None
+    group: str | None = None
+    job_type: str | None = None
+    run_name: str | None = None
+    mode: str | None = None
+    dir: str | None = None
+    tags: tuple[str, ...] | None = None
 
 
 class AgentConfig(BaseModel):

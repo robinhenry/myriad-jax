@@ -892,3 +892,59 @@ def test_reproducibility_combined_config_variations(monkeypatch):
     _assert_states_equal(env1, env3, "Env state (Config A vs C)")
     _assert_states_equal(buffer1, buffer2, "Buffer state (Config A vs B)")
     _assert_states_equal(buffer1, buffer3, "Buffer state (Config A vs C)")
+
+
+def test_training_reaches_exact_total_timesteps():
+    """Training should reach exactly total_timesteps, not stop short.
+
+    This test verifies that the training loop completes all requested timesteps,
+    even when boundary alignment with logging/eval frequencies might cause issues.
+
+    Regression test for: Training stopping at 48000/50000 steps in tutorial notebook.
+    """
+    # Test case 1: Simple case - should complete all steps
+    config1 = _create_config(
+        run_overrides={
+            "total_timesteps": 100,
+            "num_envs": 4,
+            "scan_chunk_size": 3,
+            "log_frequency": 10,
+            "eval_frequency": 15,
+        }
+    )
+    results1 = runner.train_and_evaluate(config1)
+    assert (
+        results1.training_metrics.global_steps[-1] == 100
+    ), f"Expected final global_steps=100, got {results1.training_metrics.global_steps[-1]}"
+
+    # Test case 2: Tutorial notebook configuration - 50000 timesteps with 16 envs
+    config2 = _create_config(
+        run_overrides={
+            "total_timesteps": 50000,
+            "num_envs": 16,
+            "scan_chunk_size": 10,
+            "log_frequency": 1000,
+            "eval_frequency": 5000,
+        }
+    )
+    results2 = runner.train_and_evaluate(config2)
+    assert (
+        results2.training_metrics.global_steps[-1] == 50000
+    ), f"Expected final global_steps=50000, got {results2.training_metrics.global_steps[-1]}"
+
+    # Test case 3: Edge case - total_timesteps not divisible by num_envs
+    # Should still reach the floor(total_timesteps / num_envs) * num_envs
+    config3 = _create_config(
+        run_overrides={
+            "total_timesteps": 103,  # Not divisible by 4
+            "num_envs": 4,
+            "scan_chunk_size": 5,
+            "log_frequency": 10,
+            "eval_frequency": 20,
+        }
+    )
+    results3 = runner.train_and_evaluate(config3)
+    expected_steps3 = (103 // 4) * 4  # Should be 100 (floor division)
+    assert (
+        results3.training_metrics.global_steps[-1] == expected_steps3
+    ), f"Expected final global_steps={expected_steps3}, got {results3.training_metrics.global_steps[-1]}"

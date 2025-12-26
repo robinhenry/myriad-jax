@@ -661,7 +661,17 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
                 if episode_dir is not None:
                     metrics_logger.log_episodes(episode_dir, global_step)
 
+    # Always log the final step if it wasn't just logged
+    # This ensures training_metrics.global_steps[-1] reflects actual completion
     total_env_steps = steps_completed * config.run.num_envs
+    if steps_completed % log_frequency != 0:
+        metrics_logger.log_training_step(
+            global_step=total_env_steps,
+            steps_per_env=steps_completed,
+            metrics_history=metrics_history,
+            steps_this_chunk=steps_this_chunk,
+        )
+
     metrics_logger.log_final(total_env_steps)
 
     # Get captured metrics and return complete results
