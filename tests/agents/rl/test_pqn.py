@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from myriad.agents.pqn import AgentState, _compute_lambda_returns, make_agent
+from myriad.agents.rl.pqn import AgentState, _compute_lambda_returns, make_agent
 from myriad.core.spaces import Discrete
 from myriad.core.types import Transition
 

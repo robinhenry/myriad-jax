@@ -5,7 +5,7 @@ from flax import struct
 
 from myriad.core.spaces import Space
 
-from .agent import Agent
+from ..agent import Agent
 
 
 @struct.dataclass

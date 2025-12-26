@@ -21,7 +21,7 @@ from flax.training.train_state import TrainState
 from myriad.core.spaces import Discrete, Space
 from myriad.core.types import Transition
 
-from .agent import Agent
+from ..agent import Agent
 
 
 class QNetwork(nn.Module):

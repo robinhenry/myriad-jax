@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import pytest
 
 from myriad.agents.agent import Agent
-from myriad.agents.bangbang import AgentState, make_agent
+from myriad.agents.classical.bangbang import AgentState, make_agent
 from myriad.core.spaces import Box, Discrete
 from myriad.envs.cartpole.physics import PhysicsState
 

@@ -4,7 +4,7 @@ import jax.random
 import pytest
 
 from myriad.agents.agent import Agent
-from myriad.agents.random import AgentState, make_agent
+from myriad.agents.classical.random import AgentState, make_agent
 from myriad.core.spaces import Box
 
 

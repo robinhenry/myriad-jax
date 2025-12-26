@@ -6,7 +6,7 @@ import jax.random
 import pytest
 
 from myriad.agents.agent import Agent
-from myriad.agents.dqn import AgentState, make_agent
+from myriad.agents.rl.dqn import AgentState, make_agent
 from myriad.core.spaces import Discrete
 from myriad.core.types import Transition
 

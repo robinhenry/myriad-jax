@@ -16,7 +16,7 @@ from myriad.core.spaces import Discrete, Space
 from myriad.core.types import Transition
 from myriad.utils.observations import to_array
 
-from .agent import Agent
+from ..agent import Agent
 
 
 class QNetwork(nn.Module):

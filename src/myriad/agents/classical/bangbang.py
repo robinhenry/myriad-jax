@@ -29,7 +29,7 @@ from flax import struct
 from myriad.core.spaces import Box, Discrete, Space
 from myriad.utils.observations import get_field_index, to_array
 
-from .agent import Agent
+from ..agent import Agent
 
 
 @struct.dataclass
