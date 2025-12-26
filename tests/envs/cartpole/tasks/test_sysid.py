@@ -178,10 +178,13 @@ def test_reset(key: chex.PRNGKey, env: Environment):
     assert -0.05 <= state.physics.theta_dot <= 0.05
 
     # Observation should match state
-    assert obs.shape == env.get_obs_shape(env.config)
-    chex.assert_trees_all_close(
-        obs, jnp.array([state.physics.x, state.physics.x_dot, state.physics.theta, state.physics.theta_dot])
-    )
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == env.get_obs_shape(env.config)
+    # Check individual fields
+    assert obs.x == state.physics.x
+    assert obs.x_dot == state.physics.x_dot
+    assert obs.theta == state.physics.theta
+    assert obs.theta_dot == state.physics.theta_dot
 
 
 def test_reset_is_random(env: Environment):
@@ -192,8 +195,8 @@ def test_reset_is_random(env: Environment):
     obs1, state1 = _reset(key1, env.params, env.config)
     obs2, state2 = _reset(key2, env.params, env.config)
 
-    # States should be different
-    assert not jnp.allclose(obs1, obs2)
+    # States should be different (convert to arrays for comparison)
+    assert not jnp.allclose(obs1.to_array(), obs2.to_array())
 
 
 def test_step_basic(key: chex.PRNGKey, env: Environment):
@@ -212,7 +215,8 @@ def test_step_basic(key: chex.PRNGKey, env: Environment):
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
     # Check output shapes and types
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert isinstance(next_state, SysIDTaskState)
     assert reward.shape == ()
     assert done.shape == ()
@@ -224,13 +228,11 @@ def test_step_basic(key: chex.PRNGKey, env: Environment):
     # Should still be running (not done)
     assert done == 0.0
 
-    # Observation should match state
-    chex.assert_trees_all_close(
-        obs,
-        jnp.array(
-            [next_state.physics.x, next_state.physics.x_dot, next_state.physics.theta, next_state.physics.theta_dot]
-        ),
-    )
+    # Observation should match state (check individual fields)
+    assert obs.x == next_state.physics.x
+    assert obs.x_dot == next_state.physics.x_dot
+    assert obs.theta == next_state.physics.theta
+    assert obs.theta_dot == next_state.physics.theta_dot
 
 
 def test_step_info_contains_true_params(key: chex.PRNGKey, env: Environment):
@@ -263,7 +265,8 @@ def test_step_with_randomized_params(key: chex.PRNGKey):
     obs, state, reward, done, info = _step(step_key, state, jnp.array(1), params, config)
 
     # Should work fine
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert state.t == 1
 
     # Info should contain the randomized parameters
@@ -501,7 +504,8 @@ def test_env_registry_integration():
     # Verify it can be used
     key = jax.random.key(0)
     obs, state = env.reset(key, env.params, env.config)
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert isinstance(state, SysIDTaskState)
 
 
@@ -585,4 +589,4 @@ def test_different_params_produce_different_dynamics(key: chex.PRNGKey):
     obs2, state2, _, _, _ = _step(step_key, state, action, params2, config)
 
     # Should produce different next states
-    assert not jnp.allclose(obs1, obs2, atol=1e-6)
+    assert not jnp.allclose(obs1.to_array(), obs2, atol=1e-6)

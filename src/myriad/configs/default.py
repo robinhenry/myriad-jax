@@ -53,6 +53,9 @@ class RunConfig(BaseModel):
     eval_frequency: PositiveInt  # frequency (# of steps per env) between subsequent evaluation events
     eval_rollouts: PositiveInt  # number of episodes to run during each performance evaluation (# of parallel envs)
     eval_max_steps: PositiveInt  # maximum number of steps per evaluation rollout
+    eval_episode_save_frequency: int = 0  # frequency to save full episodes (0 = disabled, >0 = save every N steps)
+    eval_episode_save_count: int | None = None  # number of episodes to save (None = save all eval_rollouts)
+    eval_episode_save_dir: str = "episodes"  # directory for saving episode trajectories
 
     # --- Logging ---
     log_frequency: PositiveInt  # frequency (# of steps per env) between training metrics logging events

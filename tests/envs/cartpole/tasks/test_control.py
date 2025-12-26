@@ -119,6 +119,9 @@ def test_reset(key: chex.PRNGKey, env: Environment):
     """Test reset produces valid initial state."""
     obs, state = _reset(key, env.params, env.config)
 
+    # Check observation type
+    assert isinstance(obs, PhysicsState)
+
     # Check state is properly initialized
     assert isinstance(state, ControlTaskState)
     assert state.t == 0
@@ -129,11 +132,14 @@ def test_reset(key: chex.PRNGKey, env: Environment):
     assert -0.05 <= state.physics.theta <= 0.05
     assert -0.05 <= state.physics.theta_dot <= 0.05
 
-    # Observation should match state
-    assert obs.shape == env.get_obs_shape(env.config)
-    chex.assert_trees_all_close(
-        obs, jnp.array([state.physics.x, state.physics.x_dot, state.physics.theta, state.physics.theta_dot])
-    )
+    # Observation should match state (check named fields)
+    assert obs.x == state.physics.x
+    assert obs.x_dot == state.physics.x_dot
+    assert obs.theta == state.physics.theta
+    assert obs.theta_dot == state.physics.theta_dot
+
+    # Check array conversion works
+    assert obs.to_array().shape == env.get_obs_shape(env.config)
 
 
 def test_reset_is_random(env: Environment):
@@ -144,8 +150,8 @@ def test_reset_is_random(env: Environment):
     obs1, state1 = _reset(key1, env.params, env.config)
     obs2, state2 = _reset(key2, env.params, env.config)
 
-    # States should be different
-    assert not jnp.allclose(obs1, obs2)
+    # States should be different (convert to arrays for comparison)
+    assert not jnp.allclose(obs1.to_array(), obs2.to_array())
 
 
 def test_reset_is_deterministic_with_same_key(env: Environment):
@@ -177,12 +183,15 @@ def test_step_basic(key: chex.PRNGKey, env: Environment):
     action = jnp.array(1)
     obs, next_state, reward, done, info = _step(key, state, action, env.params, env.config)
 
-    # Check output shapes and types
-    assert obs.shape == (4,)
+    # Check output types
+    assert isinstance(obs, PhysicsState)
     assert isinstance(next_state, ControlTaskState)
     assert reward.shape == ()
     assert done.shape == ()
     assert isinstance(info, dict)
+
+    # Check array conversion has correct shape
+    assert obs.to_array().shape == (4,)
 
     # Time should increment
     assert next_state.t == 1
@@ -193,13 +202,11 @@ def test_step_basic(key: chex.PRNGKey, env: Environment):
     # Should get reward
     assert reward == 1.0
 
-    # Observation should match state
-    chex.assert_trees_all_close(
-        obs,
-        jnp.array(
-            [next_state.physics.x, next_state.physics.x_dot, next_state.physics.theta, next_state.physics.theta_dot]
-        ),
-    )
+    # Observation should match state (check named fields)
+    assert obs.x == next_state.physics.x
+    assert obs.x_dot == next_state.physics.x_dot
+    assert obs.theta == next_state.physics.theta
+    assert obs.theta_dot == next_state.physics.theta_dot
 
 
 @pytest.mark.parametrize("action", [0, 1])
@@ -213,7 +220,8 @@ def test_step_actions(key: chex.PRNGKey, env: Environment, action: int):
     obs, next_state, reward, done, info = _step(key, state, jnp.array(action), env.params, env.config)
 
     # Both actions should work
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert reward == 1.0
     assert done == 0.0
 
@@ -367,7 +375,8 @@ def test_step_jit_compilation(key: chex.PRNGKey, env: Environment):
     action = jnp.array(1)
     obs_next, next_state, reward, done, info = env.step(key, state, action, env.params, env.config)
 
-    assert obs_next.shape == (4,)
+    assert isinstance(obs_next, PhysicsState)
+    assert obs_next.to_array().shape == (4,)
     assert reward == 1.0
 
 
@@ -375,7 +384,8 @@ def test_reset_jit_compilation(key: chex.PRNGKey, env: Environment):
     """Test that reset function can be JIT compiled."""
     obs, state = env.reset(key, env.params, env.config)
 
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert state.t == 0
 
 
@@ -429,7 +439,7 @@ def test_observation_bounds(key: chex.PRNGKey, env: Environment):
 
         if done == 0.0:
             # While episode is running, observations should be reasonable
-            assert jnp.all(jnp.isfinite(obs))
+            assert jnp.all(jnp.isfinite(obs.to_array()))
 
 
 def test_env_registry_integration():
@@ -444,7 +454,8 @@ def test_env_registry_integration():
     # Verify it can be used
     key = jax.random.key(0)
     obs, state = env.reset(key, env.params, env.config)
-    assert obs.shape == (4,)
+    assert isinstance(obs, PhysicsState)
+    assert obs.to_array().shape == (4,)
     assert isinstance(state, ControlTaskState)
 
 
@@ -486,8 +497,13 @@ def test_vmap_step(key: chex.PRNGKey, env: Environment):
     vmap_step = jax.vmap(_step, in_axes=(0, 0, 0, None, None))
     obs_batch, next_states, rewards, dones, infos = vmap_step(keys, states, actions, env.params, env.config)
 
-    # Check shapes
-    assert obs_batch.shape == (batch_size, 4)
+    # Check types and shapes
+    # vmap over NamedTuples gives NamedTuple with batched fields
+    assert isinstance(obs_batch, PhysicsState)
+    assert obs_batch.x.shape == (batch_size,)
+    assert obs_batch.x_dot.shape == (batch_size,)
+    assert obs_batch.theta.shape == (batch_size,)
+    assert obs_batch.theta_dot.shape == (batch_size,)
     assert next_states.physics.x.shape == (batch_size,)
     assert rewards.shape == (batch_size,)
     assert dones.shape == (batch_size,)
@@ -505,8 +521,13 @@ def test_vmap_reset(key: chex.PRNGKey, env: Environment):
     vmap_reset = jax.vmap(_reset, in_axes=(0, None, None))
     obs_batch, states = vmap_reset(keys, env.params, env.config)
 
-    # Check shapes
-    assert obs_batch.shape == (batch_size, 4)
+    # Check types and shapes
+    # vmap over NamedTuples gives NamedTuple with batched fields
+    assert isinstance(obs_batch, PhysicsState)
+    assert obs_batch.x.shape == (batch_size,)
+    assert obs_batch.x_dot.shape == (batch_size,)
+    assert obs_batch.theta.shape == (batch_size,)
+    assert obs_batch.theta_dot.shape == (batch_size,)
     assert states.physics.x.shape == (batch_size,)
     assert states.t.shape == (batch_size,)
 

@@ -66,7 +66,7 @@ def _step(
     action: chex.Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[chex.Array, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> Tuple[PhysicsState, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -77,7 +77,7 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation [x, x_dot, theta, theta_dot]
+        obs_next: Next observation (PhysicsState - fully observable)
         next_state: Next task state
         reward: Reward (+1.0 per step)
         done: Termination flag (1.0 if done, 0.0 otherwise)
@@ -108,7 +108,7 @@ def _reset(
     key: chex.PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[chex.Array, ControlTaskState]:
+) -> Tuple[PhysicsState, ControlTaskState]:
     """Reset the control task to initial state.
 
     Initializes the pole with small random perturbations around the upright position.
@@ -119,7 +119,7 @@ def _reset(
         config: Task configuration (static)
 
     Returns:
-        obs: Initial observation
+        obs: Initial observation (PhysicsState with named fields)
         state: Initial task state
     """
     # Sample initial physics state with small random perturbations
@@ -140,10 +140,11 @@ def get_obs(
     state: ControlTaskState,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> chex.Array:
+) -> PhysicsState:
     """Extract observation from state.
 
-    For control task, observation is just the physical state: [x, x_dot, theta, theta_dot]
+    For control task, observation is the physical state as a NamedTuple with named fields.
+    Neural network agents can call `.to_array()` for flat array representation.
 
     Args:
         state: Current task state
@@ -151,7 +152,7 @@ def get_obs(
         config: Task configuration (unused)
 
     Returns:
-        Observation array of shape (4,)
+        PhysicsState with named fields (x, x_dot, theta, theta_dot)
     """
     return get_cartpole_obs(state.physics)
 

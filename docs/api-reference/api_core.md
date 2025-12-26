@@ -81,11 +81,13 @@ agent = make_agent(
 )
 ```
 
-## Training
+## Training and evaluation
+
+### train_and_evaluate
 
 ```python
 from myriad.configs.default import Config
-from myriad.platform.runner import train_and_evaluate
+from myriad.platform import train_and_evaluate
 
 config = Config(
     env={"_target_": "cartpole-control"},
@@ -93,8 +95,45 @@ config = Config(
     run={"num_envs": 10000, "total_timesteps": 1_000_000}
 )
 
-train_and_evaluate(config)
+results = train_and_evaluate(config)
+# Returns: TrainingResults with agent_state, metrics, config
 ```
+
+### evaluate
+
+```python
+from myriad.platform import evaluate
+
+# Evaluation-only (no training)
+results = evaluate(config)
+# Returns: dict with episode_return, episode_length, dones
+
+# With episode trajectories
+results = evaluate(config, return_episodes=True)
+# Returns: dict with additional 'episodes' key containing full trajectories
+
+# With pre-trained agent
+results = evaluate(config, agent_state=trained_agent_state)
+```
+
+**Parameters:**
+
+- `config` (Config): Training configuration
+- `agent_state` (AgentState | None): Pre-initialized agent state. If None, agent initialized with random weights
+- `return_episodes` (bool): Return full episode trajectories (observations, actions, rewards, dones)
+
+**Returns:**
+
+Dictionary containing:
+
+- `episode_return`: Array of episode returns (num_eval_rollouts,)
+- `episode_length`: Array of episode lengths (num_eval_rollouts,)
+- `dones`: Boolean array indicating episode completion
+- `episodes` (if return_episodes=True): Dictionary with:
+    - `observations`: (num_eval_rollouts, max_steps, obs_dim)
+    - `actions`: (num_eval_rollouts, max_steps, action_dim)
+    - `rewards`: (num_eval_rollouts, max_steps)
+    - `dones`: (num_eval_rollouts, max_steps)
 
 ## Next steps
 

@@ -17,6 +17,10 @@ from flax import struct
 class PhysicsState(NamedTuple):
     """Pure physical state of the cart-pole system.
 
+    For CartPole, this is a fully observable system, so PhysicsState
+    serves as both the internal state and the observation. This eliminates
+    duplication and makes observability explicit.
+
     Attributes:
         x: Cart position (m)
         x_dot: Cart velocity (m/s)
@@ -28,6 +32,32 @@ class PhysicsState(NamedTuple):
     x_dot: chex.Array
     theta: chex.Array
     theta_dot: chex.Array
+
+    def to_array(self) -> chex.Array:
+        """Convert to flat array for NN-based agents.
+
+        Returns:
+            Array of shape (4,) with [x, x_dot, theta, theta_dot]
+        """
+        return jnp.stack([self.x, self.x_dot, self.theta, self.theta_dot])
+
+    @classmethod
+    def from_array(cls, arr: chex.Array) -> "PhysicsState":
+        """Create state from flat array.
+
+        Args:
+            arr: Array of shape (4,) with [x, x_dot, theta, theta_dot]
+
+        Returns:
+            PhysicsState instance
+        """
+        chex.assert_shape(arr, (4,))
+        return cls(
+            x=arr[0],  # type: ignore
+            x_dot=arr[1],  # type: ignore
+            theta=arr[2],  # type: ignore
+            theta_dot=arr[3],  # type: ignore
+        )
 
 
 @struct.dataclass

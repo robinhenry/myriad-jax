@@ -91,7 +91,7 @@ def _step(
     action: chex.Array,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> Tuple[chex.Array, SysIDTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> Tuple[PhysicsState, SysIDTaskState, chex.Array, chex.Array, Dict[str, Any]]:
     """Step the SysID task forward one timestep.
 
     Args:
@@ -102,7 +102,7 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation [x, x_dot, theta, theta_dot]
+        obs_next: Next observation (PhysicsState with named fields)
         next_state: Next task state
         reward: Information-seeking reward
         done: Termination flag (1.0 if done, 0.0 otherwise)
@@ -146,7 +146,7 @@ def _reset(
     key: chex.PRNGKey,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> Tuple[chex.Array, SysIDTaskState]:
+) -> Tuple[PhysicsState, SysIDTaskState]:
     """Reset the SysID task to initial state.
 
     Initializes the pole with small random perturbations and randomizes physics parameters.
@@ -157,7 +157,7 @@ def _reset(
         config: Task configuration (static)
 
     Returns:
-        obs: Initial observation
+        obs: Initial observation (PhysicsState with named fields)
         state: Initial task state
 
     Note:
@@ -229,11 +229,11 @@ def get_obs(
     state: SysIDTaskState,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> chex.Array:
+) -> PhysicsState:
     """Extract observation from state.
 
     For SysID task, observation is pure physics (same as control task).
-    Agent receives [x, x_dot, theta, theta_dot] and learns to infer parameters from dynamics.
+    Agent receives PhysicsState with named fields and learns to infer parameters from dynamics.
 
     Args:
         state: Current task state
@@ -241,7 +241,7 @@ def get_obs(
         config: Task configuration (unused)
 
     Returns:
-        Observation array of shape (4,)
+        PhysicsState with named fields (x, x_dot, theta, theta_dot)
     """
     return get_cartpole_obs(state.physics)
 

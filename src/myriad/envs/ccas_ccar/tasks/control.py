@@ -20,6 +20,7 @@ from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
 from .base import (
+    CcasCcarControlObs,
     TaskConfig,
     check_termination,
     generate_constant_target,
@@ -84,7 +85,7 @@ def _step(
     action: chex.Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[chex.Array, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> Tuple[CcasCcarControlObs, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -95,7 +96,7 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation [F_normalized, U, F_target_normalized]
+        obs_next: Next observation (CcasCcarControlObs with named fields)
         next_state: Next task state
         reward: Reward (negative absolute error)
         done: Termination flag (1.0 if done, 0.0 otherwise)
@@ -150,7 +151,7 @@ def _reset(
     key: chex.PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[chex.Array, ControlTaskState]:
+) -> Tuple[CcasCcarControlObs, ControlTaskState]:
     """Reset the control task to initial state.
 
     Initializes the system at zero protein concentrations and generates initial target.
@@ -161,7 +162,7 @@ def _reset(
         config: Task configuration (static)
 
     Returns:
-        obs: Initial observation
+        obs: Initial observation (CcasCcarControlObs with named fields)
         state: Initial task state
     """
     key_physics, key_target = jax.random.split(key)
@@ -199,11 +200,11 @@ def get_obs(
     state: ControlTaskState,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> chex.Array:
+) -> CcasCcarControlObs:
     """Extract observation from state.
 
-    Observation format: [F_normalized, U (always 0 in obs), F_target_normalized]
-    where F_target includes current + n_horizon future targets.
+    Returns a structured observation with named fields for semantic access
+    by classical controllers. Neural network agents can call `.to_array()`.
 
     Note: U is not directly observable (it's the action), so we set it to 0.
     The agent must infer system state from F measurements and its own action history.
@@ -214,7 +215,7 @@ def get_obs(
         config: Task configuration
 
     Returns:
-        Observation array of shape (2 + n_horizon + 1,)
+        CcasCcarControlObs with named fields (F_normalized, U_obs, F_target)
     """
     # Normalize F by observation normalizer
     F_normalized = state.physics.F / config.task.F_obs_normalizer
@@ -226,8 +227,11 @@ def get_obs(
     # Normalize F_target
     F_target_normalized = state.F_target / config.task.F_obs_normalizer
 
-    # Concatenate: [F, U, F_target[0], F_target[1], ..., F_target[n_horizon]]
-    return jnp.concatenate([jnp.array([F_normalized, U_obs]), F_target_normalized])
+    return CcasCcarControlObs(
+        F_normalized=F_normalized,
+        U_obs=U_obs,
+        F_target=F_target_normalized,
+    )
 
 
 def get_obs_shape(config: ControlTaskConfig) -> Tuple[int, ...]:

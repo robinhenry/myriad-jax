@@ -22,6 +22,7 @@ from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
 from .base import (
+    CcasCcarSysIDObs,
     TaskConfig,
     check_termination,
     get_ccas_ccar_action_space,
@@ -101,7 +102,7 @@ def _step(
     action: chex.Array,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> Tuple[chex.Array, SysIDTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> Tuple[CcasCcarSysIDObs, SysIDTaskState, chex.Array, chex.Array, Dict[str, Any]]:
     """Step the SysID task forward one timestep.
 
     Args:
@@ -112,7 +113,7 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation [F_normalized, U, 0]
+        obs_next: Next observation (CcasCcarSysIDObs with named fields)
         next_state: Next task state
         reward: Information-seeking reward
         done: Termination flag (1.0 if done, 0.0 otherwise)
@@ -162,7 +163,7 @@ def _reset(
     key: chex.PRNGKey,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> Tuple[chex.Array, SysIDTaskState]:
+) -> Tuple[CcasCcarSysIDObs, SysIDTaskState]:
     """Reset the SysID task to initial state.
 
     Initializes the system at zero protein concentrations with randomized physics parameters.
@@ -173,7 +174,7 @@ def _reset(
         config: Task configuration (static)
 
     Returns:
-        obs: Initial observation
+        obs: Initial observation (CcasCcarSysIDObs with named fields)
         state: Initial task state
 
     Note:
@@ -237,10 +238,10 @@ def get_obs(
     state: SysIDTaskState,
     params: SysIDTaskParams,
     config: SysIDTaskConfig,
-) -> chex.Array:
+) -> CcasCcarSysIDObs:
     """Extract observation from state.
 
-    For SysID task, observation is [F_normalized, U (=0), 0].
+    Returns a structured observation with named fields for semantic access.
     Agent receives F measurements and learns to infer parameters from dynamics.
 
     No target is provided in SysID (agent must explore without task goal).
@@ -251,7 +252,7 @@ def get_obs(
         config: Task configuration
 
     Returns:
-        Observation array of shape (3,) = [F_normalized, U, 0]
+        CcasCcarSysIDObs with named fields (F_normalized, U_obs, padding)
     """
     # Normalize F by observation normalizer
     F_normalized = state.physics.F / config.task.F_obs_normalizer
@@ -260,9 +261,13 @@ def get_obs(
     U_obs = jnp.array(0.0)
 
     # No target in SysID
-    zero = jnp.array(0.0)
+    padding = jnp.array(0.0)
 
-    return jnp.array([F_normalized, U_obs, zero])
+    return CcasCcarSysIDObs(
+        F_normalized=F_normalized,
+        U_obs=U_obs,
+        padding=padding,
+    )
 
 
 def get_obs_shape(config: SysIDTaskConfig) -> Tuple[int, ...]:

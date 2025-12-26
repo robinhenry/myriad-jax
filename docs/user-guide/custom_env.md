@@ -21,9 +21,30 @@ from flax import struct
 
 
 class PhysicsState(NamedTuple):
-    """Physical state: position and velocity."""
+    """Physical state: position and velocity.
+
+    For fully observable systems, this also serves as the observation type.
+    Add conversion methods for neural network compatibility.
+
+    The platform automatically converts NamedTuple observations to arrays for
+    efficient processing. The .to_array() method is used during conversion.
+    """
     x: chex.Array      # Position (m)
     v: chex.Array      # Velocity (m/s)
+
+    def to_array(self) -> chex.Array:
+        """Convert to array for neural networks.
+
+        This method is called automatically by the platform to convert observations
+        to homogeneous arrays for efficient JAX operations. Agents can also use the
+        `myriad.utils.to_array()` utility to handle both NamedTuple and array observations.
+        """
+        return jnp.stack([self.x, self.v])
+
+    @classmethod
+    def from_array(cls, arr: chex.Array) -> "PhysicsState":
+        """Create from array."""
+        return cls(x=arr[0], v=arr[1])  # type: ignore
 
 
 @struct.dataclass
@@ -164,9 +185,13 @@ def _step(
     return obs, next_state, reward, done, {}
 
 
-def get_obs(state: ControlTaskState, config: ControlTaskConfig) -> chex.Array:
-    """Extract observation from state."""
-    return jnp.array([state.physics.x, state.physics.v])
+def get_obs(state: ControlTaskState, config: ControlTaskConfig) -> PhysicsState:
+    """Extract observation from state.
+
+    For this fully observable system, observation = physics state.
+    Returns PhysicsState directly (no conversion needed).
+    """
+    return state.physics  # Direct passthrough!
 
 
 def make_env(**kwargs) -> Environment:
@@ -186,6 +211,54 @@ def make_env(**kwargs) -> Environment:
         config=config,
     )
 ```
+
+## Step 2b: Partially Observable Systems (Optional)
+
+If your system has **limited observability** (agent doesn't observe full state), create a dedicated observation type:
+
+```python
+# In tasks/control.py
+
+class OscillatorObs(NamedTuple):
+    """Partial observation: only position, not velocity."""
+    x: chex.Array            # Observable: position
+    x_target: chex.Array     # Observable: target
+    # Note: velocity is NOT observable!
+
+    def to_array(self) -> chex.Array:
+        """Convert to array for neural networks."""
+        return jnp.stack([self.x, self.x_target])
+
+    @classmethod
+    def from_array(cls, arr: chex.Array) -> "OscillatorObs":
+        """Create from array."""
+        return cls(x=arr[0], x_target=arr[1])  # type: ignore
+
+
+def get_obs(state: ControlTaskState, config: ControlTaskConfig) -> OscillatorObs:
+    """Extract partial observation.
+
+    PhysicsState has (x, v) but agent only sees (x, target).
+    This creates a partially observable problem.
+    """
+    return OscillatorObs(
+        x=state.physics.x,
+        x_target=jnp.array(0.0),  # Target is always origin
+    )
+```
+
+**When to use each pattern:**
+
+| System Type | Observation = State? | Pattern | Example |
+|-------------|---------------------|---------|---------|
+| **Fully Observable** | Yes | Reuse `PhysicsState` | CartPole, Oscillator |
+| **Partially Observable** | No | Create dedicated `*Obs` type | CCAS-CCAR, POMDP tasks |
+
+**Benefits of this approach:**
+
+- **Type safety**: `PhysicsState ≠ OscillatorObs` makes partial observability explicit
+- **No duplication**: Fully observable systems reuse physics types
+- **Semantic clarity**: Field names document what agent perceives
 
 ## Step 3: Register the environment
 

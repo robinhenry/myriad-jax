@@ -48,25 +48,22 @@ def check_termination(physics_state, t: chex.Array, task_config: TaskConfig) -> 
     return done
 
 
-def get_cartpole_obs(physics_state) -> chex.Array:
+def get_cartpole_obs(physics_state: PhysicsState) -> PhysicsState:
     """Extract standard CartPole observation from physics state.
 
-    Standard CartPole observation: [x, x_dot, theta, theta_dot]
+    For CartPole, the system is fully observable, so observation = state.
+    This eliminates duplication and makes observability explicit.
+
+    Classical controllers can access fields by name (obs.theta),
+    while neural network agents can call obs.to_array().
 
     Args:
         physics_state: PhysicsState with x, x_dot, theta, theta_dot fields
 
     Returns:
-        Observation array of shape (4,)
+        PhysicsState (observation = state for fully observable system)
     """
-    return jnp.stack(
-        [
-            physics_state.x,
-            physics_state.x_dot,
-            physics_state.theta,
-            physics_state.theta_dot,
-        ]
-    )
+    return physics_state
 
 
 def get_cartpole_obs_shape() -> Tuple[int, ...]:

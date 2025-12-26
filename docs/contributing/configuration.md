@@ -184,6 +184,11 @@ eval_frequency: 1000        # Steps between evaluations
 eval_rollouts: 10           # Episodes to average
 eval_max_steps: 500         # Max steps per eval episode
 
+# Episode saving (optional)
+eval_episode_save_frequency: 0     # 0 = disabled, >0 = save every N steps
+eval_episode_save_count: null      # Number to save (null = all eval_rollouts)
+eval_episode_save_dir: episodes    # Output directory
+
 # Logging
 log_frequency: 1000         # Steps between log writes
 ```
@@ -195,11 +200,14 @@ log_frequency: 1000         # Steps between log writes
 | `seed` | `int` | Random seed |
 | `total_timesteps` | `int` | Total environment steps (not episodes) |
 | `num_envs` | `int` | Parallel environments (vectorized) |
-| `buffer_size` | `int` | Replay buffer capacity |
+| `buffer_size` | `int` | Replay buffer capacity (off-policy only) |
 | `scan_chunk_size` | `int` | JAX scan chunk size (affects compilation) |
 | `eval_frequency` | `int` | Evaluation interval (steps) |
 | `eval_rollouts` | `int` | Episodes to average for eval metrics |
 | `eval_max_steps` | `int` | Max steps per eval episode |
+| `eval_episode_save_frequency` | `int` | Episode save interval (0 = disabled) |
+| `eval_episode_save_count` | `int\|null` | Episodes to save per checkpoint (null = all) |
+| `eval_episode_save_dir` | `str` | Directory for saved episodes |
 | `log_frequency` | `int` | Logging interval (steps) |
 
 !!! note "Performance tuning"

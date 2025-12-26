@@ -1,5 +1,6 @@
 """Shared utilities for CcaS-CcaR gene circuit task wrappers."""
 
+from typing import NamedTuple
 
 import chex
 import jax.numpy as jnp
@@ -8,6 +9,92 @@ from flax import struct
 from myriad.core.spaces import Discrete
 
 from ..physics import PhysicsState
+
+
+class CcasCcarControlObs(NamedTuple):
+    """CcaS-CcaR control task observation with named fields.
+
+    Provides semantic access to observation components for classical controllers
+    while supporting efficient conversion to arrays for neural networks.
+
+    Note: This is a partially observable system. The agent does not directly
+    observe the light input (U) or the CcaSR concentration (H).
+
+    Attributes:
+        F_normalized: GFP fluorescence normalized by F_obs_normalizer
+        U_obs: Light input observation (always 0.0 - not directly observable)
+        F_target: Target trajectory [current, t+1, ..., t+n_horizon]
+    """
+
+    F_normalized: chex.Array
+    U_obs: chex.Array
+    F_target: chex.Array
+
+    def to_array(self) -> chex.Array:
+        """Convert to flat array for NN-based agents.
+
+        Returns:
+            Array of shape (2 + n_horizon + 1,) with [F, U, F_target...]
+        """
+        return jnp.concatenate([jnp.array([self.F_normalized, self.U_obs]), self.F_target])
+
+    @classmethod
+    def from_array(cls, arr: chex.Array) -> "CcasCcarControlObs":
+        """Create observation from flat array.
+
+        Args:
+            arr: Array of shape (2 + n_horizon + 1,) with [F, U, F_target...]
+
+        Returns:
+            CcasCcarControlObs instance
+        """
+        chex.assert_rank(arr, 1)
+        return cls(
+            F_normalized=arr[0],  # type: ignore
+            U_obs=arr[1],  # type: ignore
+            F_target=arr[2:],  # type: ignore
+        )
+
+
+class CcasCcarSysIDObs(NamedTuple):
+    """CcaS-CcaR SysID task observation with named fields.
+
+    Simpler observation for system identification without target tracking.
+
+    Attributes:
+        F_normalized: GFP fluorescence normalized by F_obs_normalizer
+        U_obs: Light input observation (always 0.0 - not directly observable)
+        padding: Zero padding for consistent observation shape
+    """
+
+    F_normalized: chex.Array
+    U_obs: chex.Array
+    padding: chex.Array
+
+    def to_array(self) -> chex.Array:
+        """Convert to flat array for NN-based agents.
+
+        Returns:
+            Array of shape (3,) with [F, U, 0]
+        """
+        return jnp.array([self.F_normalized, self.U_obs, self.padding])
+
+    @classmethod
+    def from_array(cls, arr: chex.Array) -> "CcasCcarSysIDObs":
+        """Create observation from flat array.
+
+        Args:
+            arr: Array of shape (3,) with [F, U, 0]
+
+        Returns:
+            CcasCcarSysIDObs instance
+        """
+        chex.assert_shape(arr, (3,))
+        return cls(
+            F_normalized=arr[0],  # type: ignore
+            U_obs=arr[1],  # type: ignore
+            padding=arr[2],  # type: ignore
+        )
 
 
 @struct.dataclass

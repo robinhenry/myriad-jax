@@ -139,10 +139,80 @@ The CartPole physics is reused by two task wrappers:
 
 | Task | File | Observation | Reward | Purpose |
 |------|------|-------------|--------|---------|
-| Control | `tasks/control.py` | `[x, ẋ, θ, θ̇]` | +1 per step | Standard balancing |
-| SysID | `tasks/sysid.py` | `[x, θ, belief_μ, belief_σ]` | Fisher information | Parameter learning |
+| Control | `tasks/control.py` | `PhysicsState` (fully observable) | +1 per step | Standard balancing |
+| SysID | `tasks/sysid.py` | `PhysicsState` (fully observable) | State change magnitude | Parameter learning |
 
 Both wrappers call the same `step_physics()` function from Layer A.
+
+### Observations: NamedTuples for Semantic Access
+
+Myriad uses **NamedTuples for observations** instead of raw arrays. This provides semantic access for classical controllers while maintaining JAX compatibility.
+
+**Fully Observable Systems** (observation = state):
+
+For systems where the agent observes the complete state, we directly reuse the physics state type. This eliminates duplication and makes observability explicit.
+
+```python
+# CartPole: Fully observable
+class PhysicsState(NamedTuple):
+    x: chex.Array         # Cart position
+    x_dot: chex.Array     # Cart velocity
+    theta: chex.Array     # Pole angle
+    theta_dot: chex.Array # Pole angular velocity
+
+    def to_array(self) -> chex.Array:
+        """Convert to array for neural networks."""
+        return jnp.stack([self.x, self.x_dot, self.theta, self.theta_dot])
+
+# Observation IS PhysicsState
+def get_obs(state: ControlTaskState) -> PhysicsState:
+    return state.physics  # Direct passthrough!
+```
+
+**Partially Observable Systems** (observation ≠ state):
+
+For systems with limited observability, we create dedicated observation types:
+
+```python
+# CCAS-CCAR: Partially observable gene circuit
+class CcasCcarControlObs(NamedTuple):
+    F_normalized: chex.Array   # Observable: GFP fluorescence
+    U_obs: chex.Array         # Not observable: light input (set to 0)
+    F_target: chex.Array      # External reference
+
+    def to_array(self) -> chex.Array:
+        return jnp.concatenate([
+            jnp.array([self.F_normalized, self.U_obs]),
+            self.F_target
+        ])
+
+# PhysicsState has more information (time, H, F) than observation
+```
+
+**Benefits:**
+
+- **Classical controllers**: Access by name (`obs.theta > threshold`)
+- **Neural networks**: Call `.to_array()` for flat input
+- **Type safety**: IDE autocomplete and static checking
+- **Self-documenting**: Field names explain semantics
+- **JAX native**: Works with `vmap`, `scan`, etc.
+
+**Example usage:**
+
+```python
+# Classical PID controller
+obs, state = env.reset(key, params, config)
+error = obs.theta - target_theta  # Named access!
+action = kp * error + kd * obs.theta_dot
+
+# Neural network agent
+obs_array = obs.to_array()  # Convert once
+action = policy_network(obs_array)
+
+# Batch processing (JAX handles NamedTuples automatically)
+obs_batch, states = jax.vmap(env.reset)(keys, params_batch, config)
+# obs_batch.theta.shape == (batch_size,) ✓
+```
 
 ## Layer C: Learner
 
@@ -187,6 +257,29 @@ def mpc_planner(state, horizon=10):
     )
     return best_actions[0]
 ```
+
+### Compatibility wrappers
+
+For compatibility with frameworks expecting array observations (Gym, Gymnasium), use the wrapper utilities:
+
+```python
+from myriad.envs.wrappers import make_array_obs_env
+
+# Create environment with NamedTuple observations
+env = make_env("cartpole-control")
+
+# Wrap to convert observations to arrays automatically
+array_env = make_array_obs_env(env)
+
+# Now observations are arrays
+obs, state = array_env.reset(key, params, config)
+assert obs.shape == (4,)  # Array instead of PhysicsState
+
+# The wrapper calls .to_array() internally
+# Original env still has NamedTuple observations
+```
+
+This is useful when integrating with libraries that expect the Gym API.
 
 ## File organization
 

@@ -14,6 +14,7 @@ from flax.training.train_state import TrainState
 
 from myriad.core.spaces import Discrete, Space
 from myriad.core.types import Transition
+from myriad.utils.observations import to_array
 
 from .agent import Agent
 
@@ -73,12 +74,15 @@ def _init(
 
     Args:
         key: Random key for initialization
-        sample_obs: Sample observation to infer network architecture
+        sample_obs: Sample observation to infer network architecture (can be array or NamedTuple)
         params: Agent hyperparameters
 
     Returns:
         Initial agent state containing networks and optimizer
     """
+    # Convert observation to array if needed
+    sample_obs_array = to_array(sample_obs)
+
     if not isinstance(params.action_space, Discrete):
         raise ValueError("DQN only supports Discrete action spaces")
 
@@ -86,7 +90,7 @@ def _init(
 
     # Initialize Q-network
     q_network = QNetwork(action_dim=action_dim)
-    q_params = q_network.init(key, sample_obs)
+    q_params = q_network.init(key, sample_obs_array)
 
     # Create training state with optimizer
     import optax
@@ -118,13 +122,16 @@ def _select_action(
 
     Args:
         key: Random key for exploration
-        obs: Current observation
+        obs: Current observation (can be array or NamedTuple with .to_array() method)
         agent_state: Current agent state
         params: Agent hyperparameters
 
     Returns:
         Tuple of (action, unchanged agent_state)
     """
+    # Convert observation to array if needed
+    obs_array = to_array(obs)
+
     # Calculate current epsilon with linear decay
     epsilon = jnp.maximum(
         params.epsilon_end,
@@ -133,7 +140,7 @@ def _select_action(
     )
 
     # Get Q-values
-    q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs)
+    q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs_array)
 
     # Epsilon-greedy action selection
     key_explore, key_action = jax.random.split(key)
@@ -171,14 +178,18 @@ def _update(
 
     def loss_fn(q_params):
         """Compute TD loss for Q-network."""
+        # Convert observations to arrays if needed
+        obs_batch = to_array(batch.obs)
+        next_obs_batch = to_array(batch.next_obs)
+
         # Current Q-values: Q(s, a)
-        q_values = agent_state.train_state.apply_fn(q_params, batch.obs)
+        q_values = agent_state.train_state.apply_fn(q_params, obs_batch)
         # Select Q-values for actions taken
         actions_expanded = jnp.asarray(batch.action)[:, None]
         q_values_selected = jnp.take_along_axis(q_values, actions_expanded, axis=1).squeeze(1)
 
         # Target Q-values: r + gamma * max_a' Q_target(s', a')
-        next_q_values = agent_state.train_state.apply_fn(agent_state.target_params, batch.next_obs)
+        next_q_values = agent_state.train_state.apply_fn(agent_state.target_params, next_obs_batch)
         next_q_max = jnp.max(next_q_values, axis=1)
 
         # TD target (no gradient through target)
