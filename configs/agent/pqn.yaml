@@ -1,24 +1,2 @@
 # @package agent
 name: pqn
-
-# Network architecture
-hidden_size: 256  # Hidden layer size (original PQN uses 256)
-num_layers: 2  # Number of hidden layers
-
-# Optimizer settings
-learning_rate: 0.0001  # Original PQN uses 1e-4
-max_grad_norm: 10.0  # Gradient clipping (original uses 10)
-
-# RL algorithm parameters
-gamma: 0.99  # Discount factor
-lambda_: 0.95  # Lambda for lambda-returns (GAE-style, original uses 0.95)
-reward_scale: 0.1  # Scale rewards
-
-# Exploration schedule (epsilon-greedy)
-epsilon_start: 1.0
-epsilon_end: 0.2  # Original PQN uses 0.2
-epsilon_decay_steps: 49  # 0.2 * total_updates; total_updates = 500k/(32*64) ≈ 244 → 0.2*244 ≈ 49
-
-# Training configuration
-num_epochs: 4  # Number of epochs per rollout
-num_minibatches: 16  # Minibatches per epoch (original uses 16)

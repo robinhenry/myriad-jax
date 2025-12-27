@@ -5,156 +5,251 @@
 
 Myriad uses [Hydra](https://hydra.cc) for composable configuration management. Configs are organized into three categories: `env/`, `agent/`, and `run/`.
 
+## Configuration Philosophy
+
+### Single Source of Truth
+
+**All default values are defined in Python factory functions, not in YAML files.**
+
+This design follows industry best practices:
+
+- **Python factory functions** (`make_agent()`, `make_env()`): Define all parameter defaults
+- **YAML configuration files**: Specify only experiment-specific overrides
+- **Pydantic models**: Validate types and structure, not defaults
+
+### Why This Design?
+
+1. **No Duplication** - Defaults live in one place (the code that uses them)
+2. **Type Safety** - Python type hints catch errors at development time
+3. **IDE Support** - Jump-to-definition, autocomplete, and inline docs work
+4. **Programmatic Access** - Direct factory calls use the same defaults as YAML
+5. **Clear Intent** - YAML files show what makes an experiment unique
+
+### Where Defaults Live
+
+Different config types use different patterns based on their purpose:
+
+- **Agent/Env configs**: Defaults in factory functions (`make_agent()`, `make_env()`)
+  - These construct complex objects with initialization logic
+  - Defaults live where they're used
+- **Run/Wandb configs**: Defaults in Pydantic models (`RunConfig`, `WandbConfig`)
+  - These are pure config schemas for validation
+  - Defaults live in the model definition
+
+### Finding Default Values
+
+To find the default value of a parameter:
+
+1. Identify the component type (agent, env, run, wandb)
+2. Look up defaults in the appropriate location:
+   - **Agents:** `src/myriad/agents/{agent_name}.py` → `make_agent()` signature
+   - **Environments:** `src/myriad/envs/{env_name}/*.py` → `make_env()` signature
+   - **Run settings:** `src/myriad/configs/default.py` → `RunConfig` class
+   - **W&B settings:** `src/myriad/configs/default.py` → `WandbConfig` class
+
+**Example:** DQN learning rate default (factory function)
+
+```python
+# src/myriad/agents/rl/dqn.py
+def make_agent(
+    action_space: Space,
+    learning_rate: float = 1e-3,  # ← Default is 1e-3
+    gamma: float = 0.99,           # ← Default is 0.99
+    ...
+) -> Agent:
+```
+
+**Example:** Run config defaults (Pydantic model)
+
+```python
+# src/myriad/configs/default.py
+class RunConfig(BaseModel):
+    seed: int = 42                      # ← Default is 42
+    num_envs: PositiveInt = 1           # ← Default is 1
+    eval_frequency: PositiveInt = 1000  # ← Default is 1000
+    steps_per_env: PositiveInt          # ← REQUIRED (no default)
+    ...
+```
+
+YAML files only specify values that differ from these defaults.
+
 ## Configuration hierarchy
 
 ```
 configs/
-├── config.yaml              # Main config with defaults
-├── env/                     # Environment configurations
+├── config.yaml              # Main config (references default experiment)
+├── env/                     # Environment base configs (Hydra composition)
 │   ├── cartpole_control.yaml
 │   ├── cartpole_sysid.yaml
-│   └── ccas_ccar_v1.yaml
-├── agent/                   # Agent configurations
+│   └── ccas_ccar_control.yaml
+├── agent/                   # Agent base configs (Hydra composition)
 │   ├── dqn.yaml
 │   ├── pqn.yaml
-│   └── random.yaml
-└── run/                     # Combined run configurations
-    ├── dqn_cartpole_control.yaml
-    └── pqn_cartpole_control.yaml
+│   └── bangbang.yaml
+└── experiments/             # Self-contained experiment configs
+    ├── dqn_cartpole_default.yaml
+    ├── pqn_cartpole_default.yaml
+    ├── dqn_fast_exploration.yaml
+    ├── dqn_slow_exploration.yaml
+    ├── cartpole_heavy_pole.yaml
+    └── ccas_sinewave_tracking.yaml
 ```
 
 ## Main config (`config.yaml`)
 
-```yaml
-defaults:
-  - agent: dqn
-  - env: cartpole_control
-  - run: dqn_cartpole_control
-  - _self_
+The main config simply references a default experiment:
 
-wandb:
-  enabled: true
-  entity: your-team         # W&B team/user
-  project: myriad            # W&B project name
-  group: experiment-1      # Group runs together
-  job_type: train          # train, eval, etc.
-  run_name: null           # Auto-generated if null
-  mode: offline            # online | offline
-  dir: null                # Local logging dir
-  tags: []                 # Search tags
+```yaml
+# @package _global_
+# Main Configuration
+
+# Load default experiment
+defaults:
+  - experiments/dqn_cartpole_default
 ```
 
-### Defaults list
+This makes `python scripts/train.py` run the DQN CartPole baseline by default.
 
-Hydra composes configs from the `defaults` list. Order matters:
+### Experiment configs
 
-1. `agent: dqn` → Load `agent/dqn.yaml`
-2. `env: cartpole_control` → Load `env/cartpole_control.yaml`
-3. `run: dqn_cartpole_control` → Load `run/dqn_cartpole_control.yaml`
-4. `_self_` → Apply current file's values (override previous)
+Experiment configs are self-contained and include all settings. They only specify parameters that differ from defaults:
+
+```yaml
+# @package _global_
+defaults:
+  - /agent: dqn
+  - /env: cartpole_control
+  - _self_
+
+# Only specify overrides and required params
+run:
+  steps_per_env: 150000  # Required (no default)
+  buffer_size: 50000     # Off-policy agents need this
+  scan_chunk_size: 2048  # Override default (256)
+  eval_max_steps: 500    # Required (environment-specific)
+  # seed, num_envs, eval_frequency, etc. use defaults
+
+wandb:
+  entity: lugagne-lab    # Override default (None)
+  group: baseline        # Override default (None)
+  tags: ["dqn", "cartpole"]  # Override default ([])
+  # enabled, project, mode, etc. use defaults
+```
 
 ### W&B integration
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `enabled` | `bool` | Enable W&B logging |
-| `entity` | `str` | Team or username |
-| `project` | `str` | Project name (groups runs) |
-| `group` | `str` | Sub-group within project |
-| `job_type` | `str` | Run type (train, eval, etc.) |
-| `run_name` | `str\|null` | Custom name or auto-generate |
-| `mode` | `str` | `online` or `offline` |
-| `dir` | `str\|null` | Local logging directory |
-| `tags` | `list[str]` | Searchable tags |
+**Defaults:** `src/myriad/configs/default.py:WandbConfig`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `bool` | `True` | Enable W&B logging |
+| `project` | `str` | `"myriad"` | Project name (groups runs) |
+| `job_type` | `str` | `"train"` | Run type (train, eval, etc.) |
+| `mode` | `str` | `"offline"` | `online` or `offline` |
+| `entity` | `str\|null` | `None` | Team or username (user-specific) |
+| `group` | `str\|null` | `None` | Sub-group within project (experiment-specific) |
+| `run_name` | `str\|null` | `None` | Custom name or auto-generate |
+| `dir` | `str\|null` | `None` | Local logging directory |
+| `tags` | `tuple[str]` | `()` | Searchable tags (experiment-specific) |
 
 ## Environment config (`env/`)
 
-### CartPole control (`cartpole_control.yaml`)
+Environment base configs provide Hydra composition targets. They contain minimal metadata. YAML files in experiments/ contain experiment-specific overrides; defaults are in factory functions.
 
+### CartPole Control
+
+**Default values:** `src/myriad/envs/cartpole/tasks/control.py:make_env()`
+
+**Base config** (`configs/env/cartpole_control.yaml`):
 ```yaml
+# @package env
 name: cartpole-control
-
-# Physics configuration
-physics:
-  gravity: 9.8              # m/s^2
-  cart_mass: 1.0            # kg
-  pole_mass: 0.1            # kg
-  pole_length: 0.5          # m (half-length)
-  force_magnitude: 10.0     # N
-  dt: 0.02                  # s (timestep)
-
-# Task configuration
-task:
-  max_steps: 500
-  theta_threshold: 0.2094395102393195  # 12 degrees (rad)
-  x_threshold: 2.4          # m
 ```
 
-#### Physics parameters
+**Experiment override example** (in an experiment config):
+```yaml
+env:
+  physics:
+    pole_mass: 0.15      # Heavier pole (default: 0.1)
+    force_magnitude: 15.0  # Stronger actuator (default: 10.0)
+  task:
+    max_steps: 1000      # Longer episodes (default: 500)
+```
 
-| Parameter | Type | Units | Description |
-|-----------|------|-------|-------------|
-| `gravity` | `float` | m/s² | Gravitational acceleration |
-| `cart_mass` | `float` | kg | Cart mass |
-| `pole_mass` | `float` | kg | Pole mass |
-| `pole_length` | `float` | m | Half-length of pole |
-| `force_magnitude` | `float` | N | Force applied per action |
-| `dt` | `float` | s | Integration timestep |
+#### Available Physics Parameters
 
-#### Task parameters
+All parameters have defaults in the factory function. Specify in YAML only to override.
 
-| Parameter | Type | Units | Description |
-|-----------|------|-------|-------------|
-| `max_steps` | `int` | - | Maximum episode length |
-| `theta_threshold` | `float` | rad | Angle termination threshold |
-| `x_threshold` | `float` | m | Position termination threshold |
+| Parameter | Type | Units | Default | Description |
+|-----------|------|-------|---------|-------------|
+| `gravity` | `float` | m/s² | `9.8` | Gravitational acceleration |
+| `cart_mass` | `float` | kg | `1.0` | Cart mass |
+| `pole_mass` | `float` | kg | `0.1` | Pole mass |
+| `pole_length` | `float` | m | `0.5` | Half-length of pole |
+| `force_magnitude` | `float` | N | `10.0` | Force applied per action |
+| `dt` | `float` | s | `0.02` | Integration timestep |
 
-### CartPole SysID (`cartpole_sysid.yaml`)
+#### Available Task Parameters
 
-Same structure as control task, but observation includes belief state.
+| Parameter | Type | Units | Default | Description |
+|-----------|------|-------|---------|-------------|
+| `max_steps` | `int` | - | `500` | Maximum episode length |
+| `theta_threshold` | `float` | rad | `0.209` | Angle termination threshold (≈12°) |
+| `x_threshold` | `float` | m | `2.4` | Position termination threshold |
 
-### Gene circuit (`ccas_ccar_v1.yaml`)
+!!! tip "Finding Defaults"
+    Check the factory function and dataclass definitions for authoritative default values. The code is always correct.
+
+### CartPole SysID
+
+**Default values:** `src/myriad/envs/cartpole/tasks/sysid.py:make_env()`
+
+Same structure as control task, but observation includes belief state over physics parameters.
+
+### Gene Circuit (CCAS-CCAR)
+
+**Default values:** `src/myriad/envs/ccas_ccar/tasks/control.py:make_env()`
 
 Contains ODE parameters for protein expression and cell growth dynamics.
 
 ## Agent config (`agent/`)
 
-### DQN (`dqn.yaml`)
+Agent base configs provide Hydra composition targets. They contain minimal metadata. YAML files in experiments/ contain experiment-specific overrides; defaults are in factory functions.
 
+### DQN Agent
+
+**Default values:** `src/myriad/agents/rl/dqn.py:make_agent()` (`src/myriad/agents/rl/dqn.py:254`)
+
+**Base config** (`configs/agent/dqn.yaml`):
 ```yaml
+# @package agent
 name: dqn
-
-# Training settings
-batch_size: 64              # Transitions per update
-
-# Optimizer settings
-learning_rate: 1e-3
-
-# RL algorithm parameters
-gamma: 0.99                 # Discount factor
-
-# Exploration schedule (epsilon-greedy)
-epsilon_start: 1.0
-epsilon_end: 0.05
-epsilon_decay_steps: 50000
-
-# Target network updates
-target_network_frequency: 1000  # Steps between target updates
-tau: 1.0                    # Hard update (1.0) vs soft update (<1.0)
 ```
 
-#### Parameters
+**Experiment override example** (in an experiment config):
+```yaml
+agent:
+  epsilon_decay_steps: 50000  # Override default (10000)
+  target_network_frequency: 1000  # Override default (500)
+```
+
+#### Available Parameters
+
+All parameters have defaults in the factory function. Specify in YAML only to override.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `batch_size` | `int` | 64 | Replay buffer sample size |
-| `learning_rate` | `float` | 1e-3 | Adam learning rate |
-| `gamma` | `float` | 0.99 | Discount factor |
-| `epsilon_start` | `float` | 1.0 | Initial exploration rate |
-| `epsilon_end` | `float` | 0.05 | Final exploration rate |
-| `epsilon_decay_steps` | `int` | 50000 | Steps to decay epsilon |
-| `target_network_frequency` | `int` | 1000 | Target network update interval |
-| `tau` | `float` | 1.0 | Target update rate (1.0 = hard) |
+| `batch_size` | `int` | See factory | Replay buffer sample size |
+| `learning_rate` | `float` | `1e-3` | Adam learning rate |
+| `gamma` | `float` | `0.99` | Discount factor |
+| `epsilon_start` | `float` | `1.0` | Initial exploration rate |
+| `epsilon_end` | `float` | `0.05` | Final exploration rate |
+| `epsilon_decay_steps` | `int` | `10000` | Steps to decay epsilon |
+| `target_network_frequency` | `int` | `500` | Target network update interval |
+| `tau` | `float` | `1.0` | Target update rate (1.0 = hard) |
+
+!!! tip "Finding Defaults"
+    Check the factory function signature for the authoritative source of default values. Defaults shown in this table may be outdated; the code is always correct.
 
 ### PQN (`pqn.yaml`)
 
@@ -164,51 +259,50 @@ Parametric Q-Network for continuous actions. Similar structure to DQN.
 
 No configurable parameters. Used as baseline.
 
-## Run config (`run/`)
+## Run config
 
-### DQN + CartPole (`dqn_cartpole_control.yaml`)
+Run configurations control training loop execution. Run parameters are specified directly in experiment configs under the `run:` key.
+
+**Defaults:** `src/myriad/configs/default.py:RunConfig`
+
+### Example Run Config (in an experiment config)
 
 ```yaml
-seed: 42
-steps_per_env: 150000       # Steps per environment (total = steps_per_env * num_envs)
+run:
+  # Required parameters (no defaults)
+  steps_per_env: 150000  # Experiment-specific
+  eval_max_steps: 500    # Environment-specific
 
-# Environment parallelization
-num_envs: 1                 # Parallel environments
-
-# Training settings
-buffer_size: 50000          # Replay buffer capacity
-scan_chunk_size: 2048       # JAX scan chunk size
-
-# Evaluation
-eval_frequency: 1000        # Steps between evaluations
-eval_rollouts: 10           # Episodes to average
-eval_max_steps: 500         # Max steps per eval episode
-
-# Episode saving (optional)
-eval_episode_save_frequency: 0     # 0 = disabled, >0 = save every N steps
-eval_episode_save_count: null      # Number to save (null = all eval_rollouts)
-eval_episode_save_dir: episodes    # Output directory
-
-# Logging
-log_frequency: 1000         # Steps between log writes
+  # Override defaults as needed
+  num_envs: 32           # Default: 1
+  buffer_size: 50000     # Default: None (required for off-policy)
+  scan_chunk_size: 2048  # Default: 256
 ```
 
-#### Parameters
+### Default vs Required Parameters
+
+**Parameters with defaults** (override only if needed):
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `seed` | `int` | `42` | Random seed for reproducibility |
+| `num_envs` | `int` | `1` | Parallel environments (vectorized execution) |
+| `scan_chunk_size` | `int` | `256` | JAX scan chunk size (affects compilation/memory) |
+| `eval_frequency` | `int` | `1000` | Evaluation interval (steps per env) |
+| `eval_rollouts` | `int` | `10` | Episodes to average for eval metrics |
+| `log_frequency` | `int` | `1000` | Logging interval (steps per env) |
+| `buffer_size` | `int\|null` | `None` | Replay buffer capacity (off-policy only) |
+| `rollout_steps` | `int\|null` | `None` | Rollout length (on-policy only) |
+| `eval_episode_save_frequency` | `int` | `0` | Episode save interval (0 = disabled) |
+| `eval_episode_save_count` | `int\|null` | `None` | Episodes to save per checkpoint (null = all) |
+| `eval_episode_save_dir` | `str` | `"episodes"` | Directory for saved episodes |
+
+**Required parameters** (must be specified):
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `seed` | `int` | Random seed |
 | `steps_per_env` | `int` | Steps each environment will take (total = steps_per_env × num_envs) |
-| `num_envs` | `int` | Parallel environments (vectorized) |
-| `buffer_size` | `int` | Replay buffer capacity (off-policy only) |
-| `scan_chunk_size` | `int` | JAX scan chunk size (affects compilation) |
-| `eval_frequency` | `int` | Evaluation interval (steps per env) |
-| `eval_rollouts` | `int` | Episodes to average for eval metrics |
-| `eval_max_steps` | `int` | Max steps per eval episode |
-| `eval_episode_save_frequency` | `int` | Episode save interval (0 = disabled) |
-| `eval_episode_save_count` | `int\|null` | Episodes to save per checkpoint (null = all) |
-| `eval_episode_save_dir` | `str` | Directory for saved episodes |
-| `log_frequency` | `int` | Logging interval (steps per env) |
+| `eval_max_steps` | `int` | Max steps per eval episode (environment-specific) |
 
 !!! info "Terminology Note: steps_per_env vs total_timesteps"
     Myriad uses `steps_per_env` as the primary configuration parameter, which differs from standard RL convention:
@@ -230,6 +324,9 @@ log_frequency: 1000         # Steps between log writes
 Override any config value from the command line:
 
 ```bash
+# Run a specific experiment
+python scripts/train.py --config-name=experiments/dqn_fast_exploration
+
 # Override single values
 python scripts/train.py run.num_envs=10000
 
@@ -238,14 +335,15 @@ python scripts/train.py agent.learning_rate=3e-4
 
 # Override multiple values
 python scripts/train.py \
+  --config-name=experiments/dqn_cartpole_default \
   run.num_envs=10000 \
   run.steps_per_env=100 \
   agent.batch_size=256
 
-# Switch entire config groups
+# Mix and match with experiment configs
 python scripts/train.py \
-  env=cartpole_sysid \
-  agent=pqn
+  --config-name=experiments/dqn_fast_exploration \
+  run.num_envs=10000
 ```
 
 ## Programmatic usage
@@ -269,52 +367,148 @@ from myriad.platform.runner import train_and_evaluate
 train_and_evaluate(config)
 ```
 
-## Creating custom configs
+## Creating Custom Configs
 
-### New environment config
+### New Experiment Config
+
+Experiment configs are self-contained. Copy an existing experiment as a template.
+
+**Example:** Create `configs/experiments/my_experiment.yaml`:
+
+```yaml
+# @package _global_
+# My custom experiment
+
+defaults:
+  - /agent: dqn
+  - /env: cartpole_control
+  - _self_
+
+# Run parameters (required)
+run:
+  seed: 123
+  steps_per_env: 20000
+  num_envs: 50000
+  buffer_size: 100000
+  scan_chunk_size: 4096
+  eval_frequency: 5000
+  eval_rollouts: 20
+  eval_max_steps: 1000
+  log_frequency: 2000
+
+# Override agent parameters
+agent:
+  epsilon_decay_steps: 5000
+  learning_rate: 3e-4
+
+# Override environment parameters
+env:
+  physics:
+    pole_mass: 0.15
+
+# W&B settings
+wandb:
+  enabled: true
+  entity: lugagne-lab
+  project: myriad
+  group: my-experiment
+  tags: ["custom"]
+```
+
+Use it:
+
+```bash
+python scripts/train.py --config-name=experiments/my_experiment
+```
+
+### New Environment Base Config
+
+When adding a new environment, create a minimal base config for Hydra composition.
 
 Create `configs/env/my_env.yaml`:
 
 ```yaml
+# @package env
 name: my-env
-
-# Your physics parameters
-physics:
-  param1: value1
-  param2: value2
-
-# Your task parameters
-task:
-  max_steps: 1000
 ```
 
-Use it:
+**Do NOT repeat all default values in YAML.** Defaults live in the factory function. Override parameters in experiment configs only.
 
-```bash
-python scripts/train.py env=my_env
+## Adding New Parameters
+
+When adding parameters to agents or environments, follow this workflow:
+
+### 1. Add to Factory Function (Single Source of Truth)
+
+```python
+# src/myriad/agents/rl/dqn.py
+def make_agent(
+    action_space: Space,
+    learning_rate: float = 1e-3,
+    new_parameter: float = 0.5,  # ← Add with default value
+    ...
+) -> Agent:
+    """
+    Args:
+        new_parameter: Description of what this parameter does
+    """
+    params = AgentParams(
+        action_space=action_space,
+        learning_rate=learning_rate,
+        new_parameter=new_parameter,  # ← Pass to params
+        ...
+    )
 ```
 
-### New run config
+### 2. Update Pydantic Model (Type Validation)
 
-Create `configs/run/my_experiment.yaml`:
+Pydantic models use `extra: "allow"` so new parameters work automatically. No changes needed unless you want explicit type validation.
+
+**Optional:** Add explicit field for better validation:
+
+```python
+# src/myriad/configs/default.py
+class AgentConfig(BaseModel):
+    model_config = {"extra": "allow"}
+
+    name: str
+    batch_size: PositiveInt | None = None
+    new_parameter: float | None = None  # ← Optional explicit validation
+```
+
+### 3. Document in Config File (Optional)
+
+Add a comment to the YAML showing the parameter exists:
 
 ```yaml
-seed: 123
-steps_per_env: 20        # 20 steps/env * 50k envs = 1M total
-num_envs: 50000
-buffer_size: 100000
-scan_chunk_size: 4096
-eval_frequency: 5000
-eval_rollouts: 20
-eval_max_steps: 1000
-log_frequency: 2000
+# configs/agent/dqn.yaml
+# @package agent
+# Available parameters (see src/myriad/agents/rl/dqn.py for defaults):
+#   learning_rate (float): Adam learning rate [default: 1e-3]
+#   new_parameter (float): Description [default: 0.5]  # ← Document availability
+
+name: dqn
+
+# Uncomment to override:
+# new_parameter: 0.8
 ```
 
-Use it:
+### 4. Use in Experiments
+
+Override the default in experiment configs:
 
 ```bash
-python scripts/train.py run=my_experiment
+# CLI override
+python scripts/train.py agent.new_parameter=0.8
+
+# Or create experiment config
+# configs/agent/dqn_high_param.yaml
+name: dqn
+new_parameter: 0.8
 ```
+
+!!! warning "Do Not Duplicate Defaults"
+    Never put default values in YAML files. Defaults live ONLY in factory functions. YAML files specify experiment-specific overrides only.
 
 ## Next steps
 

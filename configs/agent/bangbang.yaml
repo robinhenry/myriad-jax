@@ -1,6 +1,2 @@
 # @package agent
 name: bangbang
-
-# Bang-bang control parameters
-threshold: 0.0     # Switching threshold (if obs[obs_field] > threshold, use "high" action)
-obs_field: "theta" # Field name from observation NamedTuple (e.g., "theta", "x", "F_normalized")

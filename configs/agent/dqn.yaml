@@ -1,20 +1,2 @@
 # @package agent
 name: dqn
-
-# Training settings
-batch_size: 64  # Number of transitions sampled from replay buffer per update
-
-# Optimizer settings
-learning_rate: 1e-3
-
-# RL algorithm parameters
-gamma: 0.99  # Discount factor
-
-# Exploration schedule (epsilon-greedy)
-epsilon_start: 1.0
-epsilon_end: 0.05
-epsilon_decay_steps: 50000  # Decay over 50k steps for better exploration
-
-# Target network updates
-target_network_frequency: 1000  # Update target network every 1000 training steps
-tau: 1.0  # Hard update (1.0) vs soft update (< 1.0)

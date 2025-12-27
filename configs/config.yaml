@@ -1,21 +1,15 @@
 # @package _global_
+# Main Configuration
+#
+# This is the default configuration loaded by scripts/train.py.
+# For experiment-specific configs, see configs/experiments/
+#
+# Configuration Philosophy:
+#   - Defaults are defined in Python factory functions and dataclasses
+#   - Experiment configs contain all parameters for reproducibility
+#   - YAML files override defaults for specific experiments
+#   - To find defaults, check the factory function in the source code
 
-# --- Defaults ---
-# This section tells Hydra where to find the default
-# configurations for composable components.
+# Load default experiment
 defaults:
-  - agent: dqn
-  - env: cartpole_control
-  - run: dqn_cartpole_control
-  - _self_
-
-wandb:
-  enabled: true
-  entity: lugagne-lab  # team or user name
-  project: myriad  # project name (will group runs)
-  group: scrap  # sub-group within a project (eg, sweep or experiment name)
-  job_type: train  # eg, train, eval, test
-  run_name: null  # if null, a default name will be generated
-  mode: offline  # 'online' or 'offline' (can later be synced)
-  dir: null  # where to log results locally (default: ./wandb/.)
-  tags: []  # list of tags that can be used for searching later
+  - experiments/dqn_cartpole_default

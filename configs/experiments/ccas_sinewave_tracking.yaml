@@ -1,0 +1,37 @@
+# @package _global_
+# Gene circuit with dynamic sinewave target tracking
+#
+# Use with: python scripts/train.py --config-name=experiments/ccas_sinewave_tracking
+
+defaults:
+  - /agent: pqn
+  - /env: ccas_ccar_control
+  - _self_
+
+# Run parameters (based on PQN settings)
+run:
+  steps_per_env: 15625
+  num_envs: 32
+  rollout_steps: 2
+  eval_frequency: 10
+  eval_rollouts: 16
+  eval_max_steps: 500
+  log_frequency: 10
+
+# Environment overrides for sinewave tracking
+env:
+  target_type: "sinewave"
+  sinewave_period_minutes: 480.0  # 8 hour period (faster than default 10h)
+  sinewave_amplitude: 30.0  # Larger amplitude (default: 20.0)
+  n_horizon: 3  # See 3 future timesteps (default: 1)
+
+# Agent overrides for dynamic tracking
+agent:
+  learning_rate: 1e-4  # Lower LR for stability
+  num_epochs: 8  # More training epochs (default: 4)
+
+# W&B settings
+wandb:
+  entity: lugagne-lab
+  group: sinewave-tracking
+  tags: ["pqn", "ccas-ccar", "sinewave"]

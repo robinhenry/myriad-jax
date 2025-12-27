@@ -6,6 +6,8 @@
 python scripts/train.py
 ```
 
+Runs with default configuration from `configs/config.yaml`.
+
 ## Override config values
 
 ```bash
@@ -15,6 +17,17 @@ python scripts/train.py \
   agent.learning_rate=3e-4
 ```
 
+Override any parameter from the command line. Parameters use dot notation for nested values.
+
+!!! tip "Finding Default Values"
+    To find what the default value of a parameter is:
+
+    - **Agent parameters:** Check factory function `src/myriad/agents/{agent_name}.py:make_agent()`
+    - **Environment parameters:** Check factory function `src/myriad/envs/{env_name}/*.py:make_env()`
+    - **Run parameters:** Check Pydantic model `src/myriad/configs/default.py:RunConfig`
+
+    YAML files contain experiment-specific overrides, not the source of truth for defaults.
+
 ## Switch config groups
 
 ```bash
@@ -22,6 +35,8 @@ python scripts/train.py \
   env=cartpole_sysid \
   agent=pqn
 ```
+
+Load different base configurations from `configs/agent/`, `configs/env/`, or `configs/run/`.
 
 ## Parameter sweeps
 
