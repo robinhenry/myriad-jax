@@ -180,4 +180,6 @@ class EvalConfig(BaseModel):
 
     # --- Optional Settings ---
     eval_episode_save_dir: str = "episodes"  # directory for saving episode trajectories
+    eval_episode_save_frequency: int = 0  # frequency to save full episodes (0 = disabled, >0 = save every N steps)
+    eval_episode_save_count: int | None = None  # number of episodes to save (None = save all eval_rollouts)
     wandb: WandbConfig = WandbConfig(enabled=False)  # optional W&B logging

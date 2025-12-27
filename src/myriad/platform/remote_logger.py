@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 
@@ -95,6 +96,85 @@ class RemoteLogger:
         except Exception as e:
             # Don't fail training if episode logging fails
             print(f"Warning: Failed to log episodes to W&B: {e}")
+
+    def log_videos(
+        self,
+        episode_dir: str | Path,
+        render_frame_fn: Callable[[np.ndarray], np.ndarray],
+        global_step: int,
+        fps: int = 50,
+        max_episodes: int | None = None,
+        max_frames: int | None = None,
+    ) -> None:
+        """Render saved episodes to videos and log to W&B.
+
+        This method finds .npz episode files, renders them to MP4 videos,
+        and uploads them to W&B for visualization in the dashboard.
+
+        Args:
+            episode_dir: Path to directory containing .npz episode files
+            render_frame_fn: Function that takes observation array and returns RGB frame
+            global_step: Global environment steps (for W&B logging step)
+            fps: Frames per second for rendered videos
+            max_episodes: Maximum number of episodes to render (None = all)
+            max_frames: Maximum frames per episode (None = full episode)
+
+        Example:
+            >>> from myriad.utils.rendering import render_cartpole_frame
+            >>> logger.log_videos("episodes/step_1000000", render_cartpole_frame, 1000000)
+        """
+        if not self.use_wandb:
+            return
+
+        try:
+            from myriad.utils.rendering import render_episode_to_video
+
+            episode_dir = Path(episode_dir)
+
+            # Find all episode files
+            episode_files = sorted(episode_dir.glob("*.npz"))
+            if not episode_files:
+                print(f"Warning: No .npz files found in {episode_dir}")
+                return
+
+            # Limit number of episodes if requested
+            if max_episodes is not None:
+                episode_files = episode_files[:max_episodes]
+
+            # Render and log each episode
+            for i, episode_file in enumerate(episode_files):
+                try:
+                    # Load episode data
+                    episode_data = np.load(episode_file)
+
+                    # Create temporary video file
+                    video_path = episode_dir / f"{episode_file.stem}_video.mp4"
+
+                    # Render episode to video
+                    render_episode_to_video(
+                        episode_data,
+                        render_frame_fn,
+                        video_path,
+                        fps=fps,
+                        max_frames=max_frames,
+                    )
+
+                    # Log to W&B
+                    wandb.log(
+                        {f"videos/episode_{i}": wandb.Video(str(video_path), fps=fps, format="mp4")},
+                        step=global_step,
+                    )
+
+                    # Clean up temporary video file
+                    video_path.unlink()
+
+                except Exception as e:
+                    print(f"Warning: Failed to render/log {episode_file.name}: {e}")
+                    continue
+
+        except Exception as e:
+            # Don't fail training if video logging fails
+            print(f"Warning: Failed to log videos to W&B: {e}")
 
     def log_final(self, total_env_steps: int) -> None:
         """Send final completion metrics to remote services.
