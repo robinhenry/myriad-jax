@@ -7,6 +7,10 @@ Control Law:
     u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*de(t)/dt
     where e(t) = setpoint - obs[obs_field]
 
+Action Space Behavior:
+    - Box: Continuous control clipped to action_space bounds
+    - Discrete(n): Continuous control discretized into n bins
+
 This is a classical control strategy useful for:
     - Baseline comparisons with learned policies
     - Stabilization and tracking tasks
@@ -22,7 +26,7 @@ import chex
 import jax.numpy as jnp
 from flax import struct
 
-from myriad.core.spaces import Box, Space
+from myriad.core.spaces import Box, Discrete, Space
 from myriad.utils.observations import get_field_index, to_array
 
 from ..agent import Agent
@@ -33,7 +37,7 @@ class AgentParams:
     """Static parameters for the PID controller agent.
 
     Attributes:
-        action_space: Action space (must be Box for continuous control)
+        action_space: Action space (Box or Discrete)
         kp: Proportional gain
         ki: Integral gain
         kd: Derivative gain
@@ -41,6 +45,9 @@ class AgentParams:
         obs_field: Field name from observation NamedTuple to control
         dt: Time step for integral/derivative computation (seconds)
         anti_windup: Maximum absolute value for integral term (prevents windup)
+        control_low: Lower bound for continuous control signal (for discretization)
+        control_high: Upper bound for continuous control signal (for discretization)
+        bin_edges: Bin edges for discretizing continuous control to discrete actions (Discrete only)
     """
 
     action_space: Space = struct.field(pytree_node=False)
@@ -51,6 +58,9 @@ class AgentParams:
     obs_field: str = struct.field(pytree_node=False)
     dt: float = 0.02  # Default 50Hz
     anti_windup: float = 10.0
+    control_low: float = -1.0
+    control_high: float = 1.0
+    bin_edges: chex.Array | None = None
 
 
 @struct.dataclass
@@ -90,6 +100,9 @@ def _select_action(
     Computes: u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*de(t)/dt
     where e(t) = setpoint - obs[obs_field]
 
+    For Box action spaces, clips the continuous control to bounds.
+    For Discrete action spaces, discretizes the continuous control into bins.
+
     Args:
         _key: Random key (unused, policy is deterministic)
         obs: Current observation (NamedTuple or array)
@@ -121,15 +134,28 @@ def _select_action(
     derivative = (error - agent_state.previous_error) / params.dt
     d_term = params.kd * derivative
 
-    # Compute control output
+    # Compute continuous control output
     control = p_term + i_term + d_term
 
-    # Clip to action space bounds (cast to Box for type safety)
-    assert isinstance(params.action_space, Box)
-    action = jnp.clip(control, params.action_space.low, params.action_space.high)
-
-    # Broadcast to action shape if needed
-    action = jnp.broadcast_to(action, params.action_space.shape)
+    # Convert continuous control to action based on action space type
+    if isinstance(params.action_space, Box):
+        # Continuous action: clip to bounds
+        action = jnp.clip(control, params.action_space.low, params.action_space.high)
+        action = jnp.broadcast_to(action, params.action_space.shape)
+    elif isinstance(params.action_space, Discrete):
+        # Discrete action: discretize continuous control into bins
+        # Clip control to valid range first
+        control_clipped = jnp.clip(control, params.control_low, params.control_high)
+        # Use searchsorted to find the bin (digitize behavior)
+        # bin_edges has n+1 edges for n actions, searchsorted returns values in [0, n]
+        # We need to handle edge cases: values at edges map to valid actions
+        assert params.bin_edges is not None, "bin_edges must be set for Discrete action spaces"
+        action_idx = jnp.searchsorted(params.bin_edges, control_clipped, side="right") - 1
+        # Clip to valid action range [0, n-1]
+        action_idx = jnp.clip(action_idx, 0, params.action_space.n - 1)
+        action = jnp.asarray(action_idx, dtype=params.action_space.dtype)
+    else:
+        raise ValueError(f"Unsupported action space type: {type(params.action_space)}")
 
     # Update state
     new_state = AgentState(
@@ -157,6 +183,8 @@ def make_agent(
     obs_field: str = "theta",
     dt: float = 0.02,
     anti_windup: float = 10.0,
+    control_low: float | None = None,
+    control_high: float | None = None,
 ) -> Agent:
     """Factory function to create a PID controller agent.
 
@@ -164,7 +192,7 @@ def make_agent(
     by introspecting the sample observation's NamedTuple structure.
 
     Args:
-        action_space: Action space (must be Box for continuous control)
+        action_space: Action space (Box or Discrete)
         kp: Proportional gain. Higher values increase responsiveness but may cause
             oscillation. Default 1.0.
         ki: Integral gain. Eliminates steady-state error but may cause overshoot.
@@ -178,19 +206,43 @@ def make_agent(
             Should match environment step rate. Default 0.02 (50Hz).
         anti_windup: Maximum absolute value for integral term to prevent windup.
                     Default 10.0.
+        control_low: Lower bound for continuous control signal. For Box action spaces,
+                    defaults to action_space.low. For Discrete, must be specified.
+                    Default None.
+        control_high: Upper bound for continuous control signal. For Box action spaces,
+                     defaults to action_space.high. For Discrete, must be specified.
+                     Default None.
 
     Returns:
         Agent instance with PID control policy
 
     Raises:
-        ValueError: If action_space is not Box or obs_field is invalid
+        ValueError: If action_space is not Box/Discrete, obs_field is invalid,
+                   or control bounds are not specified for Discrete action space
     """
 
     if not obs_field or not isinstance(obs_field, str):
         raise ValueError(f"obs_field must be a non-empty string, got {obs_field!r}")
 
-    if not isinstance(action_space, Box):
-        raise ValueError(f"PID control only supports Box action spaces, got {type(action_space)}")
+    # Determine control bounds and compute bin edges for discrete actions
+    bin_edges = None
+    if isinstance(action_space, Box):
+        # For Box, use action space bounds as control bounds
+        _control_low = control_low if control_low is not None else float(action_space.low)
+        _control_high = control_high if control_high is not None else float(action_space.high)
+    elif isinstance(action_space, Discrete):
+        # For Discrete, control bounds must be explicitly specified
+        if control_low is None or control_high is None:
+            raise ValueError(
+                "For Discrete action spaces, control_low and control_high must be specified. "
+                "These define the continuous control range to discretize into bins."
+            )
+        _control_low = control_low
+        _control_high = control_high
+        # Pre-compute bin edges for discretization (n+1 edges for n actions)
+        bin_edges = jnp.linspace(_control_low, _control_high, action_space.n + 1)
+    else:
+        raise ValueError(f"PID control only supports Box and Discrete action spaces, got {type(action_space)}")
 
     # Create parameters
     params = AgentParams(
@@ -202,6 +254,9 @@ def make_agent(
         obs_field=obs_field,
         dt=dt,
         anti_windup=anti_windup,
+        control_low=_control_low,
+        control_high=_control_high,
+        bin_edges=bin_edges,
     )
 
     return Agent(

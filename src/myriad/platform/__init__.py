@@ -1,7 +1,7 @@
 """Platform module for training and evaluation infrastructure."""
 
 from .runner import evaluate, train_and_evaluate
-from .types import EvaluationMetrics, TrainingMetrics, TrainingResults
+from .types import EvaluationMetrics, EvaluationResults, TrainingMetrics, TrainingResults
 
 __all__ = [
     "train_and_evaluate",
@@ -9,4 +9,5 @@ __all__ = [
     "TrainingResults",
     "TrainingMetrics",
     "EvaluationMetrics",
+    "EvaluationResults",
 ]

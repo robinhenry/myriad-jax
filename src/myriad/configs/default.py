@@ -25,14 +25,26 @@ class WandbConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
-    """Schema for the Agent's configuration."""
+    """Schema for the Agent's configuration.
+
+    This config allows extra fields to support agent-specific parameters.
+    For example: PID controller needs kp/ki/kd, DQN needs epsilon, etc.
+    """
+
+    model_config = {"extra": "allow"}
 
     name: str
     batch_size: PositiveInt | None = None  # for off-policy agents: size of batches sampled from replay buffer
 
 
 class EnvConfig(BaseModel):
-    """Schema for the Environment's configuration."""
+    """Schema for the Environment's configuration.
+
+    This config allows extra fields to support environment-specific parameters.
+    For example: different environments may need custom physics parameters, rendering options, etc.
+    """
+
+    model_config = {"extra": "allow"}
 
     name: str
 
@@ -142,3 +154,30 @@ class Config(BaseModel):
     agent: AgentConfig
     env: EnvConfig
     wandb: WandbConfig
+
+
+class EvalConfig(BaseModel):
+    """Schema for evaluation-only runs.
+
+    This is a simplified configuration focused exclusively on evaluation,
+    without training-specific parameters like num_envs, steps_per_env, etc.
+
+    Use this with the `evaluate()` function for:
+    - Classical controllers (random, bang-bang, PID)
+    - Pre-trained models
+    - Baseline comparisons
+    - Debugging and visualization
+    """
+
+    # --- Core Settings ---
+    env: EnvConfig
+    agent: AgentConfig
+    seed: int
+
+    # --- Evaluation Settings ---
+    eval_rollouts: PositiveInt  # number of episodes to run
+    eval_max_steps: PositiveInt  # maximum steps per episode
+
+    # --- Optional Settings ---
+    eval_episode_save_dir: str = "episodes"  # directory for saving episode trajectories
+    wandb: WandbConfig = WandbConfig(enabled=False)  # optional W&B logging

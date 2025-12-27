@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from myriad.agents import make_agent
 from myriad.agents.agent import Agent, AgentState
-from myriad.configs.default import Config
+from myriad.configs.default import Config, EvalConfig
 from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from myriad.core.spaces import Space
 from myriad.core.types import BaseModel, Transition
@@ -28,7 +28,7 @@ from .scan_utils import (
     where_mask,
 )
 from .shared import TrainingEnvState
-from .types import TrainingResults
+from .types import EvaluationResults, TrainingResults
 
 
 def _make_train_step_fn(
@@ -198,7 +198,22 @@ def _make_collection_step_fn(
     return collection_step
 
 
-def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Callable:
+def _get_eval_settings(config: Config | EvalConfig) -> tuple[int, int, int]:
+    """Extract evaluation settings from either Config or EvalConfig.
+
+    Args:
+        config: Either a training Config or an EvalConfig
+
+    Returns:
+        Tuple of (seed, eval_rollouts, eval_max_steps)
+    """
+    if isinstance(config, EvalConfig):
+        return config.seed, config.eval_rollouts, config.eval_max_steps
+    else:
+        return config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
+
+
+def _make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eval_max_steps: int) -> Callable:
     """Factory to create a jitted evaluation rollout aligned with the training loop style.
 
     Design Note: Dynamic vs Static Control Flow
@@ -227,7 +242,8 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
     Args:
         agent: The agent to evaluate
         env: The environment to evaluate in
-        config: Configuration including eval_rollouts and eval_max_steps
+        eval_rollouts: Number of evaluation episodes to run
+        eval_max_steps: Maximum steps per episode
 
     Returns:
         Callable that performs evaluation rollouts. The returned function accepts:
@@ -239,8 +255,8 @@ def _make_eval_rollout_fn(agent: Agent, env: Environment, config: Config) -> Cal
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
     # Vectorized observation conversion ensures platform always operates on arrays
     to_array_batch = jax.vmap(to_array)
-    num_eval_envs = config.run.eval_rollouts
-    max_eval_steps = config.run.eval_max_steps
+    num_eval_envs = eval_rollouts
+    max_eval_steps = eval_max_steps
 
     @partial(jax.jit, static_argnames=["return_episodes"])
     def eval_rollout(
@@ -467,12 +483,12 @@ def _save_episodes_to_disk(
 
 
 def _initialize_environment_and_agent(
-    config: Config,
+    config: Config | EvalConfig,
 ) -> tuple[Environment, Agent, Space]:
     """Initialize environment and agent (shared by train and evaluate functions).
 
     Args:
-        config: Training configuration specifying environment and agent parameters.
+        config: configuration specifying environment and agent parameters.
 
     Returns:
         Tuple of (environment, agent, action_space)
@@ -546,7 +562,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         rollout_fn = None
 
     # Build jitted execution primitives
-    eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
+    eval_rollout_fn = _make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
 
     # Chunking configuration:
     # - scan_chunk_size controls how many rollout-update cycles (on-policy) or training steps (off-policy)
@@ -788,41 +804,48 @@ def train_and_evaluate(config: Config) -> TrainingResults:
 
 
 def evaluate(
-    config: Config,
+    config: Config | EvalConfig,
     agent_state: AgentState | None = None,
     return_episodes: bool = False,
-) -> dict[str, Any]:
+) -> EvaluationResults:
     """
     Evaluation-only entry point (no training).
 
     Useful for:
-    - Non-learning controllers (PID, MPC, etc.)
+    - Non-learning controllers (random, bang-bang, PID)
     - Pre-trained models
+    - Baseline comparisons
     - Benchmarking and validation
 
     Args:
         config: Configuration specifying environment, agent, and evaluation parameters.
+            Can be either a full Config (for training) or EvalConfig (evaluation-only).
         agent_state: Optional pre-initialized agent state. If None, agent will be initialized
-            with random weights using config.run.seed.
+            with random weights using config.seed (or config.run.seed for Config).
         return_episodes: If True, return full episode trajectories in addition to metrics.
             This includes observations, actions, rewards, and dones for each step.
 
     Returns:
-        Dictionary containing evaluation metrics:
-        - episode_return: Array of episode returns for each eval rollout
-        - episode_length: Array of episode lengths for each eval rollout
-        - dones: Boolean array indicating which episodes completed
-        - episodes: (only if return_episodes=True) Dictionary containing:
-            - observations: Array of shape (num_eval_envs, max_steps, obs_dim)
-            - actions: Array of shape (num_eval_envs, max_steps, action_dim)
-            - rewards: Array of shape (num_eval_envs, max_steps)
-            - dones: Array of shape (num_eval_envs, max_steps)
+        EvaluationResults containing:
+        - Summary statistics (mean_return, std_return, min, max)
+        - Raw episode data (episode_returns, episode_lengths)
+        - Optional trajectory data (if return_episodes=True)
+        - Metadata (num_episodes, seed)
     """
-    wandb_run = maybe_init_wandb(config)
+    # Handle both EvalConfig and Config for wandb
+    wandb_config = config.wandb if isinstance(config, EvalConfig) else config.wandb
+    wandb_run = (
+        maybe_init_wandb(config)
+        if isinstance(config, Config)
+        else (maybe_init_wandb(config) if wandb_config.enabled else None)
+    )
 
     try:
+        # Extract evaluation settings (works for both Config and EvalConfig)
+        seed, eval_rollouts, eval_max_steps = _get_eval_settings(config)
+
         # Initialize RNG
-        key = jax.random.PRNGKey(config.run.seed)
+        key = jax.random.PRNGKey(seed)
         key, env_key, agent_key = jax.random.split(key, 3)
 
         # Create environment and agent using shared initialization
@@ -836,26 +859,60 @@ def evaluate(
             agent_state = agent.init(agent_key, obs, agent.params)
 
         # Create and run evaluation rollout
-        eval_rollout_fn = _make_eval_rollout_fn(agent, env, config)
+        eval_rollout_fn = _make_eval_rollout_fn(agent, env, eval_rollouts, eval_max_steps)
         key, eval_key = jax.random.split(key)
         eval_key, eval_results_jax = eval_rollout_fn(eval_key, agent_state, return_episodes=return_episodes)
 
         # Convert results from device to host
-        eval_results = {}
-        for name, value in eval_results_jax.items():
-            if name == "episodes":
-                # Recursively convert nested episode data
-                eval_results[name] = {k: jax.device_get(v) for k, v in value.items()}
-            else:
-                eval_results[name] = jax.device_get(value)
+        episode_returns = jax.device_get(eval_results_jax["episode_return"])
+        episode_lengths = jax.device_get(eval_results_jax["episode_length"])
+
+        # Convert episodes if present
+        episodes_data = None
+        if return_episodes and "episodes" in eval_results_jax:
+            episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
+
+        # Compute summary statistics
+        mean_return = float(np.mean(episode_returns))
+        std_return = float(np.std(episode_returns))
+        min_return = float(np.min(episode_returns))
+        max_return = float(np.max(episode_returns))
+
+        mean_length = float(np.mean(episode_lengths))
+        std_length = float(np.std(episode_lengths))
+        min_length = int(np.min(episode_lengths))
+        max_length = int(np.max(episode_lengths))
+
+        # Create results object
+        results = EvaluationResults(
+            mean_return=mean_return,
+            std_return=std_return,
+            min_return=min_return,
+            max_return=max_return,
+            mean_length=mean_length,
+            std_length=std_length,
+            min_length=min_length,
+            max_length=max_length,
+            episode_returns=episode_returns,
+            episode_lengths=episode_lengths,
+            num_episodes=eval_rollouts,
+            seed=seed,
+            episodes=episodes_data,
+        )
 
         # Log to wandb if enabled
         if wandb_run is not None:
             metrics_logger = MetricsLogger(wandb_run=wandb_run)
-            metrics_logger.log_evaluation(global_step=0, steps_per_env=0, eval_results=eval_results)
+            # Convert to dict format expected by logger
+            eval_results_dict = {
+                "episode_return": episode_returns,
+                "episode_length": episode_lengths,
+                "dones": jax.device_get(eval_results_jax.get("dones", np.ones(eval_rollouts, dtype=bool))),
+            }
+            metrics_logger.log_evaluation(global_step=0, steps_per_env=0, eval_results=eval_results_dict)
             metrics_logger.log_final(0)
 
-        return eval_results
+        return results
 
     finally:
         if wandb_run is not None and wandb is not None:
