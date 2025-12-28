@@ -47,8 +47,8 @@ class TestBaseConfigs:
         assert config.wandb.enabled is True
 
     def test_pqn_config(self, hydra_context):
-        """Test pqn_cartpole.yaml loads and validates."""
-        cfg = compose(config_name="pqn_cartpole")
+        """Test pqn_cartpole_default.yaml loads and validates."""
+        cfg = compose(config_name="experiments/pqn_cartpole_default")
 
         config_dict = OmegaConf.to_object(cfg)
         config = Config(**config_dict)
@@ -148,7 +148,7 @@ class TestCLIOverrides:
 
     def test_run_parameter_override(self, hydra_context):
         """Test overriding run parameters via CLI."""
-        cfg = compose(config_name="config", overrides=["run.num_envs=10000"])
+        cfg = compose(config_name="config", overrides=["+run.num_envs=10000"])
 
         config_dict = OmegaConf.to_object(cfg)
         config = Config(**config_dict)
@@ -167,7 +167,7 @@ class TestConfigValidation:
         Config(**config_dict)  # Should not raise
 
         # Manually break the config by removing required field
-        config_dict["run"].pop("seed")
+        config_dict["run"].pop("steps_per_env")
 
         # Should raise validation error
         with pytest.raises(Exception):  # Pydantic ValidationError
@@ -175,7 +175,7 @@ class TestConfigValidation:
 
     def test_invalid_type_fails(self, hydra_context):
         """Test that invalid types cause validation errors."""
-        cfg = compose(config_name="config", overrides=["run.num_envs=not_a_number"])
+        cfg = compose(config_name="config", overrides=["+run.num_envs=not_a_number"])
         config_dict = OmegaConf.to_object(cfg)
 
         # Should raise validation error for non-integer num_envs

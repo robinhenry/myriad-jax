@@ -30,14 +30,9 @@ def _make_config(*, enabled: bool) -> Config:
     )
     wandb_cfg = WandbConfig(
         enabled=enabled,
-        project="demo" if enabled else None,
-        entity=None,
-        group=None,
-        job_type=None,
+        project="demo" if enabled else "myriad",
         run_name="unit" if enabled else None,
-        mode="offline" if enabled else None,
-        dir=None,
-        tags=("unit",) if enabled else None,
+        tags=("unit",) if enabled else (),
     )
     return Config(
         run=run_cfg,

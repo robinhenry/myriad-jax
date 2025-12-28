@@ -35,6 +35,9 @@ Different config types use different patterns based on their purpose:
 - **Run/Wandb configs**: Defaults in Pydantic models (`RunConfig`, `WandbConfig`)
   - These are pure config schemas for validation
   - Defaults live in the model definition
+- **Shared eval parameters**: Defaults in `EvalConfigBase`
+  - Inherited by both `RunConfig` (training) and `EvalConfig` (eval-only)
+  - Eliminates duplication via inheritance
 
 ### Finding Default Values
 
@@ -59,16 +62,33 @@ def make_agent(
 ) -> Agent:
 ```
 
-**Example:** Run config defaults (Pydantic model)
+**Example:** Config defaults (Pydantic model with inheritance)
 
 ```python
 # src/myriad/configs/default.py
-class RunConfig(BaseModel):
+class EvalConfigBase(BaseModel):
+    """Shared evaluation parameters."""
     seed: int = 42                      # ← Default is 42
+    eval_rollouts: int = 10             # ← Default is 10
+    eval_max_steps: int                 # ← REQUIRED (no default)
+
+class RunConfig(EvalConfigBase):
+    """Training config (extends eval params)."""
     num_envs: PositiveInt = 1           # ← Default is 1
     eval_frequency: PositiveInt = 1000  # ← Default is 1000
     steps_per_env: PositiveInt          # ← REQUIRED (no default)
-    ...
+    # Inherits: seed, eval_rollouts, eval_max_steps
+
+class EvalRunConfig(EvalConfigBase):
+    """Eval-only run config (extends eval params)."""
+    pass  # Just inherits eval params
+
+class EvalConfig(BaseModel):
+    """Eval-only config (matches Config structure)."""
+    run: EvalRunConfig  # ← Nested like Config.run
+    agent: AgentConfig
+    env: EnvConfig
+    wandb: WandbConfig | None = None
 ```
 
 YAML files only specify values that differ from these defaults.
@@ -263,7 +283,9 @@ No configurable parameters. Used as baseline.
 
 Run configurations control training loop execution. Run parameters are specified directly in experiment configs under the `run:` key.
 
-**Defaults:** `src/myriad/configs/default.py:RunConfig`
+**Defaults:** `src/myriad/configs/default.py:RunConfig` (extends `EvalConfigBase`)
+
+`RunConfig` inherits evaluation parameters from `EvalConfigBase` and adds training-specific settings. This ensures eval parameters are consistent between training and eval-only runs.
 
 ### Example Run Config (in an experiment config)
 
@@ -509,6 +531,77 @@ new_parameter: 0.8
 
 !!! warning "Do Not Duplicate Defaults"
     Never put default values in YAML files. Defaults live ONLY in factory functions. YAML files specify experiment-specific overrides only.
+
+## Evaluation-Only Configs
+
+For testing controllers without training (classical controllers, pre-trained models, baselines), use `EvalConfig` with `scripts/evaluate.py`.
+
+### EvalConfig Schema
+
+**Defaults:** `src/myriad/configs/default.py:EvalConfig`
+
+```python
+# Base class with shared eval parameters
+class EvalConfigBase(BaseModel):
+    seed: int = 42
+    eval_rollouts: int = 10
+    eval_max_steps: int  # Required (environment-specific)
+    eval_episode_save_frequency: int = 0
+    eval_episode_save_count: int | None = None
+    eval_episode_save_dir: str = "episodes"
+
+# Eval-only run config (just inherits base)
+class EvalRunConfig(EvalConfigBase):
+    pass
+
+# Eval-only config (matches Config structure)
+class EvalConfig(BaseModel):
+    run: EvalRunConfig   # ← Nested like Config.run
+    agent: AgentConfig
+    env: EnvConfig
+    wandb: WandbConfig | None = None
+```
+
+**Key benefits:**
+- Eval parameters shared with `RunConfig` via inheritance (no duplication)
+- Structure matches `Config` (both have `run`, `agent`, `env`, `wandb`)
+
+### Example Evaluation Config
+
+```yaml
+# configs/experiments/eval_bangbang_cartpole.yaml
+# @package _global_
+
+defaults:
+  - /agent: bangbang
+  - /env: cartpole_control
+  - _self_
+
+# Run settings (nested like training configs)
+run:
+  eval_max_steps: 500  # Required
+  eval_rollouts: 100   # Override default (10)
+
+# Optional: enable W&B logging
+# wandb:
+#   entity: lugagne-lab
+#   group: classical-controllers
+#   tags: ["bangbang", "cartpole"]
+```
+
+**Note:** Eval configs now use `run:` nesting to match training config structure.
+
+### Usage
+
+```bash
+# Run evaluation
+python scripts/evaluate.py --config-name=experiments/eval_bangbang_cartpole
+
+# Override parameters
+python scripts/evaluate.py \
+  --config-name=experiments/eval_bangbang_cartpole \
+  eval_rollouts=200
+```
 
 ## Next steps
 

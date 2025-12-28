@@ -96,8 +96,8 @@ def test_make_agent_custom_params(box_action_space: Box):
 
 # Test validation
 def test_make_agent_invalid_space():
-    """Test that non-Box action spaces are rejected"""
-    with pytest.raises(ValueError, match="only supports Box action spaces"):
+    """Test that Discrete action spaces require control bounds"""
+    with pytest.raises(ValueError, match="control_low and control_high must be specified"):
         make_agent(action_space=Discrete(n=2))
 
 

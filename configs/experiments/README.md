@@ -34,7 +34,11 @@ python scripts/train.py \
 
 ## Available Experiments
 
-### DQN CartPole Default
+### Training Experiments
+
+Training experiments use `Config` and are run with `scripts/train.py`.
+
+#### DQN CartPole Default
 **File:** `dqn_cartpole_default.yaml`
 
 Standard DQN baseline on CartPole.
@@ -92,14 +96,34 @@ Dynamic target tracking with sinewave reference.
 - `sinewave_period_minutes: 480.0` (8h period)
 - `n_horizon: 3` (see 3 future timesteps)
 
+### Evaluation-Only Experiments
+
+Evaluation experiments use `EvalConfig` and are run with `scripts/evaluate.py`. These are for testing controllers without training (classical controllers, pre-trained models, baselines).
+
+#### Bang-Bang CartPole
+**File:** `eval_bangbang_cartpole.yaml`
+
+Classical bang-bang controller on CartPole (no learning).
+
+**Settings:**
+- 100 evaluation episodes
+- Demonstrates evaluation-only workflow
+
+**Usage:**
+```bash
+python scripts/evaluate.py --config-name=experiments/eval_bangbang_cartpole
+```
+
 ## Creating Custom Experiments
 
-1. Copy an existing experiment config as a template
+### Training Experiments
+
+1. Copy an existing training config as a template
 2. Modify agent, env, run, or wandb parameters
 3. Update wandb tags/group for organization
 4. Document key parameter changes in comments
 
-Example:
+**Example:**
 
 ```yaml
 # @package _global_
@@ -139,3 +163,40 @@ wandb:
   group: my-experiment
   tags: ["custom"]
 ```
+
+### Evaluation-Only Experiments
+
+1. Copy an existing eval config as a template
+2. Change the agent (e.g., `bangbang`, `pid`, `random`)
+3. Set eval parameters (rollouts, max_steps)
+4. Optionally enable W&B logging
+
+**Example:**
+
+```yaml
+# @package _global_
+# Evaluate PID controller on CartPole
+
+defaults:
+  - /agent: pid
+  - /env: cartpole_control
+  - _self_
+
+# Run settings (nested like training configs)
+run:
+  eval_max_steps: 500
+  eval_rollouts: 100
+
+# Optional: enable W&B
+wandb:
+  entity: lugagne-lab
+  group: classical-controllers
+  tags: ["pid", "cartpole"]
+```
+
+Run with:
+```bash
+python scripts/evaluate.py --config-name=experiments/your_eval_config
+```
+
+**Note:** Eval configs use `run:` nesting to match training config structure.

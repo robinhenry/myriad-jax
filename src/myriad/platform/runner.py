@@ -833,11 +833,11 @@ def evaluate(
         - Metadata (num_episodes, seed)
     """
     # Handle both EvalConfig and Config for wandb
-    wandb_config = config.wandb if isinstance(config, EvalConfig) else config.wandb
+    wandb_config = config.wandb
     wandb_run = (
         maybe_init_wandb(config)
         if isinstance(config, Config)
-        else (maybe_init_wandb(config) if wandb_config.enabled else None)
+        else (maybe_init_wandb(config) if wandb_config and wandb_config.enabled else None)
     )
 
     try:

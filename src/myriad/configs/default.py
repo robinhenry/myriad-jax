@@ -59,8 +59,34 @@ class EnvConfig(BaseModel):
     name: str
 
 
-class RunConfig(BaseModel):
-    """Configuration for training runs.
+class EvalConfigBase(BaseModel):
+    """Base configuration for evaluation parameters.
+
+    Shared by both RunConfig (training with eval) and EvalConfig (eval-only).
+    This eliminates duplication while maintaining clear separation of concerns.
+
+    Design:
+    - RunConfig extends this for training runs (adds training-specific params)
+    - EvalConfig extends this for eval-only runs (adds env/agent/wandb)
+    """
+
+    # --- Core Settings ---
+    seed: int = 42  # standard random seed
+
+    # --- Evaluation Parameters ---
+    eval_rollouts: PositiveInt = 10  # number of episodes to average over
+    eval_max_steps: PositiveInt  # REQUIRED: environment-specific, max steps per episode
+
+    # --- Episode Saving (optional) ---
+    eval_episode_save_frequency: int = 0  # 0 = disabled, >0 = save every N steps
+    eval_episode_save_count: int | None = None  # None = save all rollouts
+    eval_episode_save_dir: str = "episodes"  # directory for saved episodes
+
+
+class RunConfig(EvalConfigBase):
+    """Configuration for training runs (extends EvalConfigBase).
+
+    Inherits evaluation parameters from EvalConfigBase and adds training-specific settings.
 
     Note on terminology (diverges from standard RL convention):
     - `steps_per_env`: Number of steps each environment will take (primary parameter).
@@ -70,28 +96,21 @@ class RunConfig(BaseModel):
       This is the standard RL metric for sample efficiency comparisons in papers.
 
     Default values:
-    - Sensible defaults for common parameters (seed, num_envs, frequencies, etc.)
+    - Inherited: seed, eval_rollouts, eval_episode_save_* (from EvalConfigBase)
+    - Sensible defaults for common training params (num_envs, frequencies, etc.)
     - Experiment-specific parameters remain required (steps_per_env, eval_max_steps)
     - Agent-specific parameters remain optional (buffer_size, rollout_steps)
     """
 
-    # --- Run Settings ---
-    seed: int = 42  # standard random seed
+    # --- Training Settings ---
     steps_per_env: PositiveInt  # REQUIRED: experiment-specific, defines run length
     num_envs: PositiveInt = 1  # default to single environment
     scan_chunk_size: PositiveInt = 256  # reasonable default for most cases
-
-    # --- Training Settings (agent-specific) ---
     buffer_size: PositiveInt | None = None  # for off-policy algorithms: replay buffer capacity
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
-    # --- Evaluation ---
+    # --- Evaluation (training-specific) ---
     eval_frequency: PositiveInt = 1000  # evaluate every 1k steps per env
-    eval_rollouts: PositiveInt = 10  # average over 10 episodes
-    eval_max_steps: PositiveInt  # REQUIRED: environment-specific, max steps per episode
-    eval_episode_save_frequency: int = 0  # disabled by default
-    eval_episode_save_count: int | None = None  # save all rollouts if enabled
-    eval_episode_save_dir: str = "episodes"  # default save directory
 
     # --- Logging ---
     log_frequency: PositiveInt = 1000  # log every 1k steps per env
@@ -171,30 +190,39 @@ class Config(BaseModel):
     wandb: WandbConfig
 
 
+class EvalRunConfig(EvalConfigBase):
+    """Evaluation run settings (extends EvalConfigBase).
+
+    This is the eval-only equivalent of RunConfig. It contains only evaluation
+    parameters (inherited from EvalConfigBase), with no training-specific settings.
+
+    Used within EvalConfig to maintain consistent structure with Config.
+    """
+
+    pass  # Inherits all eval params from EvalConfigBase
+
+
 class EvalConfig(BaseModel):
     """Schema for evaluation-only runs.
 
-    This is a simplified configuration focused exclusively on evaluation,
-    without training-specific parameters like num_envs, steps_per_env, etc.
+    Matches the structure of Config (training) for consistency:
+    - Config has: run, agent, env, wandb
+    - EvalConfig has: run, agent, env, wandb (same structure!)
 
-    Use this with the `evaluate()` function for:
+    The key difference: EvalConfig.run is EvalRunConfig (eval params only),
+    while Config.run is RunConfig (training + eval params).
+
+    Use this with the `evaluate()` function or `scripts/evaluate.py` for:
     - Classical controllers (random, bang-bang, PID)
     - Pre-trained models
     - Baseline comparisons
     - Debugging and visualization
     """
 
-    # --- Core Settings ---
-    env: EnvConfig
+    # --- Component Configs ---
+    run: EvalRunConfig  # Nested run config (matches Config structure)
     agent: AgentConfig
-    seed: int
+    env: EnvConfig
 
-    # --- Evaluation Settings ---
-    eval_rollouts: PositiveInt  # number of episodes to run
-    eval_max_steps: PositiveInt  # maximum steps per episode
-
-    # --- Optional Settings ---
-    eval_episode_save_dir: str = "episodes"  # directory for saving episode trajectories
-    eval_episode_save_frequency: int = 0  # frequency to save full episodes (0 = disabled, >0 = save every N steps)
-    eval_episode_save_count: int | None = None  # number of episodes to save (None = save all eval_rollouts)
-    wandb: WandbConfig = WandbConfig(enabled=False)  # optional W&B logging
+    # --- Logging (optional) ---
+    wandb: WandbConfig | None = None  # None = disabled (provide WandbConfig to enable)

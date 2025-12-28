@@ -1,0 +1,24 @@
+# @package _global_
+# Evaluation-only config for Bang-Bang controller on CartPole
+#
+# This demonstrates evaluating a classical (non-learning) controller.
+# The bang-bang controller applies maximum force in the direction needed
+# to stabilize the pole.
+#
+# Use with: python scripts/evaluate.py --config-name=experiments/eval_bangbang_cartpole
+
+defaults:
+  - /agent: bangbang
+  - /env: cartpole_control
+  - _self_
+
+# Run settings (eval parameters only - matches training config structure)
+run:
+  eval_max_steps: 500  # CartPole max episode length
+  eval_rollouts: 100   # Override default (10) for better statistics
+
+# W&B logging (optional - omit to disable)
+# wandb:
+#   entity: lugagne-lab
+#   group: classical-controllers
+#   tags: ["bangbang", "cartpole", "eval"]

@@ -160,14 +160,9 @@ def _create_config(*, wandb_enabled: bool = False, run_overrides: dict | None = 
 
     wandb_defaults = {
         "enabled": wandb_enabled,
-        "project": "unit-tests" if wandb_enabled else None,
-        "entity": None,
-        "group": None,
-        "job_type": None,
+        "project": "unit-tests" if wandb_enabled else "myriad",
         "run_name": "test-run" if wandb_enabled else None,
-        "mode": "offline" if wandb_enabled else None,
-        "dir": None,
-        "tags": ("unit",) if wandb_enabled else None,
+        "tags": ("unit",) if wandb_enabled else (),
     }
     wandb_cfg = WandbConfig(**wandb_defaults)
 
@@ -291,7 +286,9 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
     """Evaluation rollout should produce return, length, and done flags."""
     state = training_setup_factory(num_envs=2)
     config = _create_config()
-    eval_rollout = runner._make_eval_rollout_fn(state.agent, state.env, config)
+    eval_rollout = runner._make_eval_rollout_fn(
+        state.agent, state.env, config.run.eval_rollouts, config.run.eval_max_steps
+    )
     key_out, metrics = eval_rollout(state.key, state.agent_state)
 
     assert set(metrics.keys()) == {"episode_return", "episode_length", "dones"}
