@@ -4,6 +4,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from myriad.configs.default import EvalConfig
+from myriad.platform.hydra_setup import setup_hydra
 from myriad.platform.runner import evaluate
 
 # Suppress excessive JAX logging when running on CPU
@@ -57,9 +58,10 @@ def main(cfg: DictConfig) -> None:
     logger.info(f"Mean return: {results.mean_return:.2f} ± {results.std_return:.2f}")
     logger.info(f"Min return: {results.min_return:.2f}")
     logger.info(f"Max return: {results.max_return:.2f}")
-    logger.info(f"Mean episode length: {results.mean_episode_length:.2f}")
+    logger.info(f"Mean episode length: {results.mean_length:.2f}")
     logger.info("=" * 60)
 
 
 if __name__ == "__main__":
+    setup_hydra()
     main()

@@ -211,7 +211,7 @@ def _get_eval_settings(config: Config | EvalConfig) -> tuple[int, int, int]:
         Tuple of (seed, eval_rollouts, eval_max_steps)
     """
     if isinstance(config, EvalConfig):
-        return config.seed, config.eval_rollouts, config.eval_max_steps
+        return config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
     else:
         return config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
 
@@ -888,6 +888,30 @@ def evaluate(
         std_length = float(np.std(episode_lengths))
         min_length = int(np.min(episode_lengths))
         max_length = int(np.max(episode_lengths))
+
+        # Save episodes to disk if configured (for eval-only runs)
+        if isinstance(config, EvalConfig) and config.run.eval_episode_save_frequency > 0:
+            # Need to get episodes if not already retrieved
+            if episodes_data is None:
+                # Re-run with return_episodes=True
+                eval_key, eval_results_jax = eval_rollout_fn(eval_key, agent_state, return_episodes=True)
+                episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
+
+            # Prepare episode data for saving
+            eval_results_with_episodes = {
+                "episodes": episodes_data,
+                "episode_length": episode_lengths,
+                "episode_return": episode_returns,
+            }
+            save_count = config.run.eval_episode_save_count or eval_rollouts
+            episode_dir = _save_episodes_to_disk(
+                eval_results_with_episodes, global_step=0, save_count=save_count, config=config
+            )
+
+            # Log episodes to wandb if enabled
+            if episode_dir is not None and wandb_run is not None:
+                metrics_logger = MetricsLogger(wandb_run=wandb_run)
+                metrics_logger.log_episodes(episode_dir, global_step=0)
 
         # Create results object
         results = EvaluationResults(

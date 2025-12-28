@@ -11,6 +11,7 @@ from omegaconf import DictConfig, OmegaConf
 
 import wandb
 from myriad.configs.default import Config
+from myriad.platform.hydra_setup import setup_hydra
 from myriad.platform.runner import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
@@ -66,4 +67,5 @@ def main(cfg: DictConfig) -> None:
 
 
 if __name__ == "__main__":
+    setup_hydra()
     main()
