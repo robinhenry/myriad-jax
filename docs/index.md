@@ -121,3 +121,46 @@ The gene circuit environment (`ccas_ccar_v1`) serves as the stress test. If the 
 
 - [Contributing Setup](contributing/setup.md): Development environment
 - [JAX Architecture](contributing/architecture.md): Pure functional design constraints
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: Getting Started
+
+getting-started/installation
+getting-started/quickstart
+```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: User Guide
+
+user-guide/concepts
+user-guide/custom_env
+user-guide/custom_agent
+user-guide/running_experiments
+```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: API Reference
+
+api/index
+api/env
+api/agent
+api/spaces
+api/platform
+api/types
+```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: Contributing
+
+contributing/setup
+contributing/configuration
+contributing/architecture
+```

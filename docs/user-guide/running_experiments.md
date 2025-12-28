@@ -19,8 +19,11 @@ python scripts/train.py \
 
 Override any parameter from the command line. Parameters use dot notation for nested values.
 
-!!! tip "Finding Default Values"
-    To find what the default value of a parameter is:
+```{tip}
+**Finding Default Values**
+
+To find what the default value of a parameter is:
+```
 
     - **Agent parameters:** Check factory function `src/myriad/agents/{agent_name}.py:make_agent()`
     - **Environment parameters:** Check factory function `src/myriad/envs/{env_name}/*.py:make_env()`
@@ -93,8 +96,9 @@ for i in range(len(results['episode_length'])):
     valid_obs = obs[i, :ep_len]  # No padding
 ```
 
-!!! note
-    Episode collection compiles a separate code path on first use. Subsequent calls reuse cached compilation.
+```{note}
+Episode collection compiles a separate code path on first use. Subsequent calls reuse cached compilation.
+```
 
 ## Periodic episode saving
 
@@ -134,8 +138,9 @@ global_step = int(data['global_step'])
 
 Episodes automatically logged to W&B as artifacts when enabled.
 
-!!! warning
-    Set `eval_episode_save_frequency` >> `eval_frequency` to avoid storage bloat. Recommended: 5-10x eval frequency.
+```{warning}
+Set `eval_episode_save_frequency` >> `eval_frequency` to avoid storage bloat. Recommended: 5-10x eval frequency.
+```
 
 ## Next steps
 

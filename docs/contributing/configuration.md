@@ -1,7 +1,10 @@
 # Configuration System
 
-!!! info "Advanced Topic"
-    This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
+```{info}
+**Advanced Topic**
+
+This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
+```
 
 Myriad uses [Hydra](https://hydra.cc) for composable configuration management. Configs are organized into three categories: `env/`, `agent/`, and `run/`.
 
@@ -217,8 +220,11 @@ All parameters have defaults in the factory function. Specify in YAML only to ov
 | `theta_threshold` | `float` | rad | `0.209` | Angle termination threshold (≈12°) |
 | `x_threshold` | `float` | m | `2.4` | Position termination threshold |
 
-!!! tip "Finding Defaults"
-    Check the factory function and dataclass definitions for authoritative default values. The code is always correct.
+```{tip}
+**Finding Defaults**
+
+Check the factory function and dataclass definitions for authoritative default values. The code is always correct.
+```
 
 ### CartPole SysID
 
@@ -268,8 +274,11 @@ All parameters have defaults in the factory function. Specify in YAML only to ov
 | `target_network_frequency` | `int` | `500` | Target network update interval |
 | `tau` | `float` | `1.0` | Target update rate (1.0 = hard) |
 
-!!! tip "Finding Defaults"
-    Check the factory function signature for the authoritative source of default values. Defaults shown in this table may be outdated; the code is always correct.
+```{tip}
+**Finding Defaults**
+
+Check the factory function signature for the authoritative source of default values. Defaults shown in this table may be outdated; the code is always correct.
+```
 
 ### PQN (`pqn.yaml`)
 
@@ -325,8 +334,11 @@ run:
 | `steps_per_env` | `int` | Steps each environment will take (total = steps_per_env × num_envs) |
 | `eval_max_steps` | `int` | Max steps per eval episode (environment-specific) |
 
-!!! info "Terminology Note: steps_per_env vs total_timesteps"
-    Myriad uses `steps_per_env` as the primary configuration parameter, which differs from standard RL convention:
+```{info}
+**Terminology Note: steps_per_env vs total_timesteps**
+
+Myriad uses `steps_per_env` as the primary configuration parameter, which differs from standard RL convention:
+```
 
     - **`steps_per_env`** (primary): Number of steps each environment will take during training
     - **`total_timesteps`** (computed): Total environment interactions = `steps_per_env × num_envs`
@@ -335,10 +347,13 @@ run:
 
     For RL sample efficiency comparisons in papers, use `total_timesteps = config.run.total_timesteps` (computed property).
 
-!!! note "Performance tuning"
-    - Larger `num_envs` → Better GPU utilization
-    - Larger `scan_chunk_size` → Fewer Python overheads, longer compile time
-    - Rule of thumb: `scan_chunk_size` ≈ `num_envs` / 10
+```{note}
+**Performance tuning**
+
+- Larger `num_envs` → Better GPU utilization
+- Larger `scan_chunk_size` → Fewer Python overheads, longer compile time
+- Rule of thumb: `scan_chunk_size` ≈ `num_envs` / 10
+```
 
 ## Command-line overrides
 
@@ -528,8 +543,11 @@ name: dqn
 new_parameter: 0.8
 ```
 
-!!! warning "Do Not Duplicate Defaults"
-    Never put default values in YAML files. Defaults live ONLY in factory functions. YAML files specify experiment-specific overrides only.
+```{warning}
+**Do Not Duplicate Defaults**
+
+Never put default values in YAML files. Defaults live ONLY in factory functions. YAML files specify experiment-specific overrides only.
+```
 
 ## Evaluation-Only Configs
 

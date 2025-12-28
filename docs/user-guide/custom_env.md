@@ -93,10 +93,13 @@ def step_physics(
     return PhysicsState(x_next, v_next)
 ```
 
-!!! warning "JAX constraints"
-    - `step_physics()` must be a pure function (no side effects)
-    - All arrays must be JAX arrays (`jnp.ndarray`, not `np.ndarray`)
-    - Avoid Python `if/else` statements (use `jnp.where` or `jax.lax.cond`)
+```{warning}
+**JAX constraints**
+
+- `step_physics()` must be a pure function (no side effects)
+- All arrays must be JAX arrays (`jnp.ndarray`, not `np.ndarray`)
+- Avoid Python `if/else` statements (use `jnp.where` or `jax.lax.cond`)
+```
 
 ## Step 2: Create a task wrapper
 
@@ -553,9 +556,12 @@ def step_physics(
     return final_state
 ```
 
-!!! note "Shared Gillespie engine"
-    The `run_gillespie_loop()` function handles the stochastic simulation loop.
-    You only implement system-specific parts:
+```{note}
+**Shared Gillespie engine**
+
+The `run_gillespie_loop()` function handles the stochastic simulation loop.
+You only implement system-specific parts:
+```
 
     - `compute_propensities()`: Reaction rates based on current state
     - `apply_reaction()`: How each reaction changes the state
