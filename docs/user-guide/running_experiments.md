@@ -1,23 +1,56 @@
 # Running experiments
 
-## Basic training
+Myriad provides both a unified CLI and direct script access for different workflows.
+
+## Command-line interface
+
+The `myriad` CLI is the recommended way to run experiments after installation:
+
+```bash
+# Basic training
+myriad train
+
+# Override config values
+myriad train \
+  run.num_envs=10000 \
+  run.steps_per_env=100 \
+  agent.learning_rate=3e-4
+
+# Evaluation only
+myriad evaluate --config-name=experiments/eval_bangbang_cartpole
+
+# Hyperparameter sweeps
+myriad sweep
+
+# Render saved episodes to video
+myriad render episodes/ --fps 60
+```
+
+All Hydra arguments work with the CLI. Use `myriad --help` to see available commands.
+
+## Development workflow
+
+For rapid iteration during development, you can run scripts directly:
 
 ```bash
 python scripts/train.py
 ```
 
-Runs with default configuration from `configs/config.yaml`.
+This approach is useful when:
+- Modifying the core platform code
+- Debugging with IDE breakpoints
+- Quickly testing configuration changes
 
 ## Override config values
 
+Override any parameter from the command line using dot notation:
+
 ```bash
-python scripts/train.py \
+myriad train \
   run.num_envs=10000 \
   run.steps_per_env=100 \
   agent.learning_rate=3e-4
 ```
-
-Override any parameter from the command line. Parameters use dot notation for nested values.
 
 ```{tip}
 **Finding Default Values**
@@ -34,7 +67,7 @@ To find what the default value of a parameter is:
 ## Switch config groups
 
 ```bash
-python scripts/train.py \
+myriad train \
   env=cartpole_sysid \
   agent=pqn
 ```
@@ -43,7 +76,19 @@ Load different base configurations from `configs/agent/`, `configs/env/`, or `co
 
 ## Parameter sweeps
 
-Coming soon: W&B sweep integration.
+Use W&B sweeps for hyperparameter optimization:
+
+```bash
+# 1. Create a sweep configuration (sweep_config.yaml)
+# 2. Initialize the sweep
+wandb sweep sweep_config.yaml
+
+# 3. Start sweep agents
+wandb agent <sweep-id>
+# This automatically calls 'myriad sweep' with W&B-provided parameters
+```
+
+The `sweep` command integrates with W&B to override Hydra parameters during hyperparameter search.
 
 ## Programmatic usage
 
@@ -141,6 +186,34 @@ Episodes automatically logged to W&B as artifacts when enabled.
 ```{warning}
 Set `eval_episode_save_frequency` >> `eval_frequency` to avoid storage bloat. Recommended: 5-10x eval frequency.
 ```
+
+## Rendering episodes
+
+Convert saved episode trajectories to MP4 videos:
+
+```bash
+# Render a directory of episodes
+myriad render episodes/ --fps 60
+
+# Render with custom output directory
+myriad render episodes/step_1000000/ --output-dir videos/
+
+# Render and upload to W&B
+myriad render episodes/ --wandb-project my-project --wandb-run-id abc123
+```
+
+See `myriad render --help` for all options.
+
+## CLI reference
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `myriad train` | Train an agent | `myriad train run.total_timesteps=1e6` |
+| `myriad evaluate` | Evaluation-only mode | `myriad evaluate --config-name=eval_config` |
+| `myriad sweep` | W&B hyperparameter sweep | `wandb agent <sweep-id>` |
+| `myriad render` | Render episodes to video | `myriad render episodes/ --fps 60` |
+
+All commands support `--help` for detailed usage information.
 
 ## Next steps
 

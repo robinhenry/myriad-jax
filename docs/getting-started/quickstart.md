@@ -5,7 +5,7 @@ Train your first agent on CartPole in under 2 minutes.
 ## Run with default config
 
 ```bash
-python scripts/train.py
+myriad train
 ```
 
 This trains DQN on CartPole with the default configuration.
@@ -24,7 +24,7 @@ wandb:
 Run again:
 
 ```bash
-python scripts/train.py
+myriad train
 ```
 
 View results at [wandb.ai](https://wandb.ai).
@@ -32,25 +32,25 @@ View results at [wandb.ai](https://wandb.ai).
 ## Scale up to 10,000 environments
 
 ```bash
-python scripts/train.py run.num_envs=10000
+myriad train run.num_envs=10000
 ```
 
 ## Try a different environment
 
 ```bash
-python scripts/train.py env=cartpole_sysid
+myriad train env=cartpole_sysid
 ```
 
 ## Try a different agent
 
 ```bash
-python scripts/train.py agent=pqn
+myriad train agent=pqn
 ```
 
 ## Combine options
 
 ```bash
-python scripts/train.py \
+myriad train \
   env=cartpole_sysid \
   agent=pqn \
   run.num_envs=50000 \

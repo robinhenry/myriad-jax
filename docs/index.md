@@ -32,7 +32,7 @@ train_and_evaluate(config)
 Or use the CLI:
 
 ```bash
-python scripts/train.py \
+myriad train \
   env=cartpole_control \
   agent=dqn \
   run.num_envs=10000 \

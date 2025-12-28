@@ -1,43 +1,17 @@
-import logging
+"""Development entry point for training.
 
-import hydra
-from omegaconf import DictConfig, OmegaConf
+This script is a thin wrapper around the core training runner in the myriad package.
+For production use, prefer the `myriad train` CLI command.
 
-# Import your schema and the runner
-from myriad.configs.default import Config
+This script is useful during development for:
+- Debugging with IDE breakpoints
+- Quick iteration without reinstalling the package
+- Running from the project root directory
+"""
+
+from myriad.platform.hydra_runners import train_main
 from myriad.platform.hydra_setup import setup_hydra
-from myriad.platform.runner import train_and_evaluate
-
-# Suppress excessive JAX logging when running on CPU
-logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
-
-
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    """
-    Main entry point for training, decorated by Hydra.
-
-    Hydra will automatically:
-    1. Find the `configs/config.yaml` file.
-    2. Compose the configuration based on the `defaults` list.
-    3. Allow overrides from the command line.
-    4. Pass the final configuration as the `cfg` argument.
-    """
-    # Convert the Hydra configuration into a Pydantic configuration
-    config_dict = OmegaConf.to_object(cfg)
-    config: Config = Config(**config_dict)  # type: ignore
-
-    logger.info("=" * 60)
-    logger.info("Running with the following configuration:")
-    logger.info(str(config))
-    logger.info("=" * 60)
-
-    # Call your existing runner with the fully-typed and populated config object
-    train_and_evaluate(config)
-
 
 if __name__ == "__main__":
     setup_hydra()
-    main()
+    train_main()
