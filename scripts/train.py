@@ -10,6 +10,8 @@ from myriad.platform.runner import train_and_evaluate
 # Suppress excessive JAX logging when running on CPU
 logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 
+logger = logging.getLogger(__name__)
+
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -26,9 +28,10 @@ def main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_object(cfg)
     config: Config = Config(**config_dict)  # type: ignore
 
-    print("--- Running with the following configuration ---")
-    print(config)
-    print("------------------------------------------------")
+    logger.info("=" * 60)
+    logger.info("Running with the following configuration:")
+    logger.info(str(config))
+    logger.info("=" * 60)
 
     # Call your existing runner with the fully-typed and populated config object
     train_and_evaluate(config)

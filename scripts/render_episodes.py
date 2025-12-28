@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Render saved episode trajectories to video files.
 
-This script converts saved .npz episode files (from eval_episode_save_dir) into MP4 videos.
+This script converts saved .npz episode files (from episodes/) into MP4 videos.
 Useful for visualizing agent behavior, debugging, and creating demonstrations.
 
 Usage:
@@ -49,7 +49,7 @@ ENV_RENDERERS = {
     "--output-dir",
     type=click.Path(path_type=Path),
     default=None,
-    help="Output directory for videos (default: same as input)",
+    help="Output directory for videos (default: videos/)",
 )
 @click.option(
     "--fps",
@@ -105,9 +105,9 @@ def main(
 
     logger.info(f"Found {len(episode_files)} episode(s) to render")
 
-    # Set output directory
+    # Set output directory (default to videos/ in current working directory)
     if output_dir is None:
-        output_dir = input_path.parent if input_path.is_file() else input_path
+        output_dir = Path("videos")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Render each episode

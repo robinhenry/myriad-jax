@@ -9,6 +9,8 @@ from myriad.platform.runner import evaluate
 # Suppress excessive JAX logging when running on CPU
 logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 
+logger = logging.getLogger(__name__)
+
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -38,21 +40,25 @@ def main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_object(cfg)
     config: EvalConfig = EvalConfig(**config_dict)  # type: ignore
 
-    print("--- Running evaluation with the following configuration ---")
-    print(config)
-    print("-----------------------------------------------------------")
+    logger.info("=" * 60)
+    logger.info("Running evaluation with the following configuration:")
+    logger.info(str(config))
+    logger.info("=" * 60)
 
     # Run evaluation and get results
     results = evaluate(config=config, return_episodes=False)
 
-    # Print summary statistics
-    print("\n=== Evaluation Results ===")
-    print(f"Episodes: {results.num_episodes}")
-    print(f"Mean return: {results.mean_return:.2f} ± {results.std_return:.2f}")
-    print(f"Min return: {results.min_return:.2f}")
-    print(f"Max return: {results.max_return:.2f}")
-    print(f"Mean episode length: {results.mean_episode_length:.2f}")
-    print("==========================")
+    # Log summary statistics
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("EVALUATION RESULTS")
+    logger.info("=" * 60)
+    logger.info(f"Episodes: {results.num_episodes}")
+    logger.info(f"Mean return: {results.mean_return:.2f} ± {results.std_return:.2f}")
+    logger.info(f"Min return: {results.min_return:.2f}")
+    logger.info(f"Max return: {results.max_return:.2f}")
+    logger.info(f"Mean episode length: {results.mean_episode_length:.2f}")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

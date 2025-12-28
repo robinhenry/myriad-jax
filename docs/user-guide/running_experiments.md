@@ -106,8 +106,7 @@ config = Config(
         eval_frequency=10000,                  # Eval every 10k steps
         eval_rollouts=5,                       # Run 5 episodes
         eval_episode_save_frequency=50000,     # Save every 50k steps (5x less)
-        eval_episode_save_count=2,             # Save first 2 episodes
-        eval_episode_save_dir="episodes",      # Output directory
+        eval_episode_save_count=2,             # Save first 2 episodes (to episodes/)
     )
 )
 

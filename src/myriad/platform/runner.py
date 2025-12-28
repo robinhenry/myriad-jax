@@ -1,3 +1,4 @@
+import logging
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
@@ -29,6 +30,8 @@ from .scan_utils import (
 )
 from .shared import TrainingEnvState
 from .types import EvaluationResults, TrainingResults
+
+logger = logging.getLogger(__name__)
 
 
 def _make_train_step_fn(
@@ -419,13 +422,16 @@ def _save_episodes_to_disk(
     """Save episode trajectories to disk for later analysis.
 
     Episodes are saved as compressed numpy archives (.npz) with the following structure:
-    - {eval_episode_save_dir}/step_{global_step}/episode_{i}.npz for each episode
+    - episodes/step_{global_step}/episode_{i}.npz (relative to Hydra output dir)
+
+    After saving, episodes can be rendered to videos using scripts/render_episodes.py,
+    which will create MP4 files in a videos/ directory.
 
     Args:
         episode_data: Dictionary containing episode data from evaluation
         global_step: Current training step (for naming/organization)
         save_count: Number of episodes to save (saves first N from eval_rollouts)
-        config: Training configuration (for metadata and save directory)
+        config: Training configuration (for metadata)
 
     Returns:
         Path to the episode directory if successful, None otherwise
@@ -438,14 +444,14 @@ def _save_episodes_to_disk(
     episode_lengths = episode_data["episode_length"]
     episode_returns = episode_data["episode_return"]
 
-    # Create output directory using configured path
-    base_dir = Path(config.run.eval_episode_save_dir)
+    # Create output directory (hard-coded to "episodes" relative to Hydra run dir)
+    base_dir = Path("episodes")
     episodes_dir = base_dir / f"step_{global_step:08d}"
 
     try:
         episodes_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        print(f"Warning: Failed to create episode directory {episodes_dir}: {e}")
+        logger.warning(f"Failed to create episode directory {episodes_dir}: {e}")
         return None
 
     # Save only the first save_count episodes
@@ -472,11 +478,11 @@ def _save_episodes_to_disk(
             )
             saved_count += 1
         except (OSError, IOError) as e:
-            print(f"Warning: Failed to save episode {i} to {ep_file}: {e}")
+            logger.warning(f"Failed to save episode {i} to {ep_file}: {e}")
             continue
 
     if saved_count > 0:
-        print(f"Saved {saved_count}/{num_to_save} episodes to {episodes_dir}")
+        logger.info(f"Saved {saved_count}/{num_to_save} episodes to {episodes_dir}")
         return str(episodes_dir)
     else:
         return None

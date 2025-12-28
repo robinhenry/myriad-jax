@@ -78,9 +78,9 @@ class EvalConfigBase(BaseModel):
     eval_max_steps: PositiveInt  # REQUIRED: environment-specific, max steps per episode
 
     # --- Episode Saving (optional) ---
+    # Episodes saved to: outputs/DATE/TIME/episodes/ (hard-coded, relative to Hydra run dir)
     eval_episode_save_frequency: int = 0  # 0 = disabled, >0 = save every N steps
     eval_episode_save_count: int | None = None  # None = save all rollouts
-    eval_episode_save_dir: str = "episodes"  # directory for saved episodes
 
 
 class RunConfig(EvalConfigBase):

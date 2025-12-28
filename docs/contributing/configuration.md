@@ -317,7 +317,6 @@ run:
 | `rollout_steps` | `int\|null` | `None` | Rollout length (on-policy only) |
 | `eval_episode_save_frequency` | `int` | `0` | Episode save interval (0 = disabled) |
 | `eval_episode_save_count` | `int\|null` | `None` | Episodes to save per checkpoint (null = all) |
-| `eval_episode_save_dir` | `str` | `"episodes"` | Directory for saved episodes |
 
 **Required parameters** (must be specified):
 
@@ -548,7 +547,7 @@ class EvalConfigBase(BaseModel):
     eval_max_steps: int  # Required (environment-specific)
     eval_episode_save_frequency: int = 0
     eval_episode_save_count: int | None = None
-    eval_episode_save_dir: str = "episodes"
+    # Episodes saved to episodes/ (hard-coded, relative to Hydra run dir)
 
 # Eval-only run config (just inherits base)
 class EvalRunConfig(EvalConfigBase):
