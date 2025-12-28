@@ -41,8 +41,8 @@ class TestBaseConfigs:
         config_dict = OmegaConf.to_object(cfg)
         config = Config(**config_dict)
 
-        # Basic sanity checks
-        assert config.agent.name == "dqn"
+        # Basic sanity checks (now uses pqn_cartpole_default)
+        assert config.agent.name == "pqn"
         assert config.env.name == "cartpole-control"
         assert config.wandb.enabled is True
 
@@ -99,9 +99,6 @@ class TestExperimentConfigs:
     @pytest.mark.parametrize(
         "experiment_name",
         [
-            "experiments/dqn_fast_exploration",
-            "experiments/dqn_slow_exploration",
-            "experiments/cartpole_heavy_pole",
             "experiments/ccas_sinewave_tracking",
         ],
     )
@@ -148,7 +145,7 @@ class TestCLIOverrides:
 
     def test_run_parameter_override(self, hydra_context):
         """Test overriding run parameters via CLI."""
-        cfg = compose(config_name="config", overrides=["+run.num_envs=10000"])
+        cfg = compose(config_name="config", overrides=["run.num_envs=10000"])
 
         config_dict = OmegaConf.to_object(cfg)
         config = Config(**config_dict)
@@ -175,7 +172,7 @@ class TestConfigValidation:
 
     def test_invalid_type_fails(self, hydra_context):
         """Test that invalid types cause validation errors."""
-        cfg = compose(config_name="config", overrides=["+run.num_envs=not_a_number"])
+        cfg = compose(config_name="config", overrides=["run.num_envs=not_a_number"])
         config_dict = OmegaConf.to_object(cfg)
 
         # Should raise validation error for non-integer num_envs

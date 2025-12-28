@@ -1,6 +1,7 @@
 """Platform module for training and evaluation infrastructure."""
 
-from .runner import evaluate, train_and_evaluate
+from .evaluation import evaluate
+from .training import train_and_evaluate
 from .types import EvaluationMetrics, EvaluationResults, TrainingMetrics, TrainingResults
 
 __all__ = [

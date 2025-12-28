@@ -15,8 +15,9 @@ from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from myriad.core.spaces import Box, Space
 from myriad.core.types import BaseModel
 from myriad.envs.environment import Environment
-from myriad.platform import logging_utils, runner
-from myriad.platform.runner import TrainingEnvState
+from myriad.platform import logging_utils, step_functions, training
+from myriad.platform.initialization import get_factory_kwargs
+from myriad.platform.training import TrainingEnvState
 
 
 @struct.dataclass
@@ -207,9 +208,9 @@ def _create_training_setup(num_envs: int = 2) -> _TrainingSetup:
     obs_host = np.asarray(jax.device_get(obs))
     obs_sample = jnp.asarray(obs_host[0], dtype=jnp.float32)
     agent_state = agent.init(key_agent, obs_sample, agent.params)
-    sample_transition = runner._make_sample_transition(key_buffer, obs_sample, env.get_action_space(env.config))
+    sample_transition = step_functions.make_sample_transition(key_buffer, obs_sample, env.get_action_space(env.config))
     buffer_state = replay_buffer.init(sample_transition)
-    train_step_fn = runner._make_train_step_fn(agent, env, replay_buffer, num_envs)
+    train_step_fn = step_functions.make_train_step_fn(agent, env, replay_buffer, num_envs)
 
     return _TrainingSetup(
         key=key_run,
@@ -243,7 +244,7 @@ def wandb_stub(monkeypatch):
     stub = _WandbStub()
     monkeypatch.setattr(logging_utils, "wandb", stub)
     monkeypatch.setattr(logging_utils, "_wandb_import_error", None, raising=False)
-    monkeypatch.setattr(runner, "wandb", stub)
+    monkeypatch.setattr(training, "wandb", stub)
     monkeypatch.setattr(remote_logger, "wandb", stub)
     return stub
 
@@ -286,7 +287,7 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
     """Evaluation rollout should produce return, length, and done flags."""
     state = training_setup_factory(num_envs=2)
     config = _create_config()
-    eval_rollout = runner._make_eval_rollout_fn(
+    eval_rollout = step_functions.make_eval_rollout_fn(
         state.agent, state.env, config.run.eval_rollouts, config.run.eval_max_steps
     )
     key_out, metrics = eval_rollout(state.key, state.agent_state)
@@ -323,8 +324,8 @@ def test_run_training_loop_without_wandb(monkeypatch):
 
         return wrapped
 
-    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
+    training._run_training_loop(config, wandb_run=None)
 
     assert "carry" in captured
     steps_per_env = config.run.steps_per_env
@@ -343,8 +344,8 @@ def test_run_training_loop_without_wandb(monkeypatch):
 def test_run_training_loop_with_wandb_logs(wandb_stub):
     """When W&B is enabled the loop should emit train and eval payloads."""
     config = _create_config(wandb_enabled=True)
-    wandb_run = runner.maybe_init_wandb(config)
-    runner._run_training_loop(config, wandb_run)
+    wandb_run = logging_utils.maybe_init_wandb(config)
+    training._run_training_loop(config, wandb_run)
 
     assert wandb_stub.init_kwargs is not None
     assert wandb_stub.init_kwargs["config"]["run"]["seed"] == 0
@@ -359,14 +360,14 @@ def test_run_training_loop_with_wandb_logs(wandb_stub):
 def test_train_and_evaluate_calls_finish(wandb_stub):
     """`train_and_evaluate` must finish the W&B run on exit."""
     config = _create_config(wandb_enabled=True)
-    runner.train_and_evaluate(config)
+    training.train_and_evaluate(config)
     assert wandb_stub.finish_called is True
 
 
 def test_maybe_init_wandb_disabled_returns_none():
     """Disabled W&B config should skip initialization."""
     config = _create_config(wandb_enabled=False)
-    assert runner.maybe_init_wandb(config) is None
+    assert logging_utils.maybe_init_wandb(config) is None
 
 
 def test_maybe_init_wandb_raises_without_package(monkeypatch):
@@ -375,7 +376,7 @@ def test_maybe_init_wandb_raises_without_package(monkeypatch):
     monkeypatch.setattr(logging_utils, "wandb", None)
     monkeypatch.setattr(logging_utils, "_wandb_import_error", ImportError("missing"), raising=False)
     with pytest.raises(RuntimeError):
-        runner.maybe_init_wandb(config)
+        logging_utils.maybe_init_wandb(config)
 
 
 def test_get_factory_kwargs_excludes_name():
@@ -386,7 +387,7 @@ def test_get_factory_kwargs_excludes_name():
         size: int
 
     cfg = Dummy(name="foo", size=3)
-    assert runner._get_factory_kwargs(cfg) == {"size": 3}
+    assert get_factory_kwargs(cfg) == {"size": 3}
 
 
 def test_make_sample_transition_matches_shapes():
@@ -394,7 +395,7 @@ def test_make_sample_transition_matches_shapes():
     env = _make_test_env()
     key = jax.random.PRNGKey(0)
     obs, _ = env.reset(key, env.params, env.config)
-    transition = runner._make_sample_transition(key, obs, env.get_action_space(env.config))
+    transition = step_functions.make_sample_transition(key, obs, env.get_action_space(env.config))
 
     np.testing.assert_allclose(np.array(transition.obs), np.array(obs))
     np.testing.assert_allclose(np.array(transition.next_obs), np.array(obs))
@@ -425,8 +426,8 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
 
         return wrapped
 
-    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
+    training._run_training_loop(config, wandb_run=None)
 
     # Chunk size should be clamped to at least 1
     assert captured.get("mask_length", 0) == 100
@@ -453,8 +454,8 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
 
         return wrapped
 
-    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
+    training._run_training_loop(config, wandb_run=None)
 
     # Total active steps across all chunks should equal steps_per_env
     assert sum(active_counts) == config.run.steps_per_env
@@ -484,8 +485,8 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
 
         return wrapped
 
-    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
+    training._run_training_loop(config, wandb_run=None)
 
     # Remove the JIT trace call (first call with 0 or minimal steps)
     actual_chunks = [size for size in chunk_sizes_observed if size > 0]
@@ -557,8 +558,8 @@ def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], 
 
         return wrapped
 
-    monkeypatch.setattr(runner, "make_chunk_runner", instrumented_make_chunk_runner)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
+    training._run_training_loop(config, wandb_run=None)
 
     # Extract individual components from final carry
     key, agent_state, training_env_state, buffer_state = final_states["carry"]
@@ -908,7 +909,7 @@ def test_training_reaches_exact_total_timesteps():
             "eval_frequency": 15,
         }
     )
-    results1 = runner.train_and_evaluate(config1)
+    results1 = training.train_and_evaluate(config1)
     expected_total1 = 25 * 4  # = 100
     assert (
         results1.training_metrics.global_steps[-1] == expected_total1
@@ -924,7 +925,7 @@ def test_training_reaches_exact_total_timesteps():
             "eval_frequency": 5000,
         }
     )
-    results2 = runner.train_and_evaluate(config2)
+    results2 = training.train_and_evaluate(config2)
     expected_total2 = 3125 * 16  # = 50000
     assert (
         results2.training_metrics.global_steps[-1] == expected_total2
@@ -940,7 +941,7 @@ def test_training_reaches_exact_total_timesteps():
             "eval_frequency": 20,
         }
     )
-    results3 = runner.train_and_evaluate(config3)
+    results3 = training.train_and_evaluate(config3)
     expected_total3 = 25 * 4  # = 100
     assert (
         results3.training_metrics.global_steps[-1] == expected_total3
@@ -972,7 +973,7 @@ def test_on_policy_training_steps_increment_correctly():
         }
     )
 
-    results = runner.train_and_evaluate(config)
+    results = training.train_and_evaluate(config)
 
     # With the bug, training would complete after 20/4=5 steps per env
     # With the fix, training should complete after full 20 steps per env
@@ -1009,14 +1010,14 @@ def test_on_policy_training_logging_frequency(monkeypatch):
     log_checkpoints: list[int] = []
 
     # Capture when logging happens
-    original_log_training_step = runner.MetricsLogger.log_training_step
+    original_log_training_step = training.MetricsLogger.log_training_step
 
     def instrumented_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk):
         log_checkpoints.append(steps_per_env)
         return original_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk)
 
-    monkeypatch.setattr(runner.MetricsLogger, "log_training_step", instrumented_log_training_step)
-    runner._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(training.MetricsLogger, "log_training_step", instrumented_log_training_step)
+    training._run_training_loop(config, wandb_run=None)
 
     # Should log at: 8, 16, 24 (every log_frequency=8 steps per env)
     expected_checkpoints = [8, 16, 24]
@@ -1038,7 +1039,7 @@ def test_on_policy_training_completes_full_duration():
         }
     )
 
-    results = runner.train_and_evaluate(config)
+    results = training.train_and_evaluate(config)
 
     # Check that training ran for full duration
     expected_total_steps = 16 * 4  # steps_per_env * num_envs = 64
@@ -1065,7 +1066,7 @@ def test_on_policy_training_produces_correct_number_of_logs():
         }
     )
 
-    results = runner.train_and_evaluate(config)
+    results = training.train_and_evaluate(config)
 
     # Training logs: every 4 steps → 5 logs
     assert (
@@ -1111,8 +1112,8 @@ def test_on_policy_vs_off_policy_same_total_steps():
         }
     )
 
-    results_on = runner.train_and_evaluate(config_on_policy)
-    results_off = runner.train_and_evaluate(config_off_policy)
+    results_on = training.train_and_evaluate(config_on_policy)
+    results_off = training.train_and_evaluate(config_off_policy)
 
     # Both should complete with same total steps
     expected_total = 12 * 3  # = 36

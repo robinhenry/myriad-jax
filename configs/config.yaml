@@ -12,4 +12,4 @@
 
 # Load default experiment
 defaults:
-  - experiments/dqn_cartpole_default
+  - experiments/pqn_cartpole_default
