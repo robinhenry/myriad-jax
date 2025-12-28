@@ -16,6 +16,9 @@ run:
   # Episode saving for video rendering
   # Episodes → outputs/YYYY-MM-DD/HH-MM-SS/episodes/
   # Videos   → outputs/YYYY-MM-DD/HH-MM-SS/videos/
-  # Render with: python scripts/render_episodes.py episodes/
   eval_episode_save_frequency: 1  # Save episodes every evaluation (1 = always for eval-only)
-  eval_episode_save_count: 10     # Save 10 episodes (sufficient for video analysis)
+  eval_episode_save_count: 5      # Save 5 episodes (sufficient for video analysis)
+
+  # Video rendering (optional)
+  # Set to true to automatically render videos after evaluation
+  eval_render_videos: true  # Automatically create MP4 videos from saved episodes

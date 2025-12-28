@@ -82,6 +82,11 @@ class EvalConfigBase(BaseModel):
     eval_episode_save_frequency: int = 0  # 0 = disabled, >0 = save every N steps
     eval_episode_save_count: int | None = None  # None = save all rollouts
 
+    # --- Video Rendering (optional) ---
+    # Videos rendered from saved episodes to: outputs/DATE/TIME/videos/ (relative to Hydra run dir)
+    eval_render_videos: bool = False  # Enable automatic video rendering after evaluation
+    eval_video_fps: int = 50  # Frames per second for rendered videos
+
 
 class RunConfig(EvalConfigBase):
     """Configuration for training runs (extends EvalConfigBase).

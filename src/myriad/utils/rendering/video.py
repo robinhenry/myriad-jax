@@ -4,6 +4,7 @@ This module provides functions to convert sequences of frames into videos
 and to render complete episodes from saved trajectory data.
 """
 
+import warnings
 from pathlib import Path
 from typing import Callable
 
@@ -41,19 +42,24 @@ def frames_to_video(
     if isinstance(frames, list):
         frames = np.stack(frames, axis=0)
 
-    # Write video using imageio
-    writer = imageio.get_writer(
-        output_path,
-        fps=fps,
-        codec=codec,
-        quality=quality,
-        pixelformat="yuv420p",  # Ensures compatibility with most video players
-    )
+    # Suppress the os.fork() warning from subprocess (used by ffmpeg via imageio)
+    # This is safe here because JAX computation is complete before video rendering
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*os.fork.*", category=RuntimeWarning)
 
-    for frame in frames:
-        writer.append_data(frame)
+        # Write video using imageio
+        writer = imageio.get_writer(
+            output_path,
+            fps=fps,
+            codec=codec,
+            quality=quality,
+            pixelformat="yuv420p",  # Ensures compatibility with most video players
+        )
 
-    writer.close()
+        for frame in frames:
+            writer.append_data(frame)
+
+        writer.close()
 
     return output_path
 
