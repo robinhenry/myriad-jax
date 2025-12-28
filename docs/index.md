@@ -14,22 +14,14 @@ Myriad gives you **100,000 uncertain physical systems** in parallel and asks you
 
 ## Quickstart
 
-```python
-from myriad.configs.default import Config
-from myriad.platform.runner import train_and_evaluate
+**Python API:**
 
-# Create config
-config = Config(
-    env={"_target_": "cartpole-control"},
-    agent={"_target_": "dqn"},
-    run={"num_envs": 10000, "steps_per_env": 100}
-)
-
-# Train
-train_and_evaluate(config)
+```{literalinclude} ../examples/07_quickstart_simple.py
+:language: python
+:lines: 8-18
 ```
 
-Or use the CLI:
+**Or use the CLI:**
 
 ```bash
 myriad train \

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -117,6 +119,55 @@ class TrainingResults:
             f"  num_evals={summary['num_eval_checkpoints']}\n"
             f")"
         )
+
+    def save_agent(self, path: str | Path) -> None:
+        """Save trained agent state to file.
+
+        Note: Due to JAX/Flax limitations with pickling closures, this uses
+        a restricted pickle protocol. For more robust serialization, consider
+        using Flax's serialization utilities directly on the agent parameters.
+
+        Args:
+            path: Path to save the agent state (typically with .pkl extension)
+
+        Example:
+            >>> results = train_and_evaluate(config)
+            >>> try:
+            ...     results.save_agent("trained_agent.pkl")
+            ... except (AttributeError, pickle.PicklingError) as e:
+            ...     print(f"Serialization warning: {e}")
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(path, "wb") as f:
+                # Use highest protocol for better support
+                pickle.dump(self.agent_state, f, protocol=pickle.HIGHEST_PROTOCOL)
+        except (AttributeError, pickle.PicklingError) as e:
+            # Provide helpful error message for common JAX/Flax serialization issues
+            raise RuntimeError(
+                f"Failed to pickle agent state due to JAX/Flax closure limitations. "
+                f"Original error: {e}. "
+                f"Consider using Flax's serialization utilities or extracting only the "
+                f"parameter arrays from the agent state."
+            ) from e
+
+    @staticmethod
+    def load_agent(path: str | Path) -> Any:
+        """Load agent state from file.
+
+        Args:
+            path: Path to the saved agent state file
+
+        Returns:
+            The loaded agent state (can be passed to evaluate())
+
+        Example:
+            >>> agent_state = TrainingResults.load_agent("trained_agent.pkl")
+            >>> results = evaluate(config, agent_state=agent_state)
+        """
+        with open(path, "rb") as f:
+            return pickle.load(f)
 
 
 @dataclass

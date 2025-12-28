@@ -79,6 +79,23 @@ files = ["src/myriad/**/*.py"]
 [tool.coverage.run]
 source = ["myriad"]
 
+[tool.pytest.ini_options]
+# Pytest configuration
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "examples: marks tests that run example scripts",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
