@@ -1,8 +1,37 @@
 # Myriad Project Context
-Platform: JAX-based Digital Twin Engine for Active SysID, Model-Based, and Model-Free Control.
-Goal: Massively parallel experiments (Biological/Physics systems) on GPU/TPU.
+Platform: JAX-native platform for massively parallel system identification and control of uncertain, stochastic systems.
+Goal: Enable population-level learning from 100,000+ parallel experiments on a single GPU.
+Inspiration: Microfluidic mother machines observing thousands of cells simultaneously.
 
-Myriad is named after the Greek 'myrias', representing the ten thousand parallel environments the engine simulates simultaneously. It provides a Myriad of viewpoints from which to observe, identify, and control complex systems.
+# Working Relationship & Persona
+- **Role:** Senior Software Engineer.
+- **Tone:** Direct and objective. No polite filler.
+- **Mandate:** Push back on bad patterns. If a request violates JAX purity, performance best practices, or industry standards, **object immediately** and propose the correct solution.
+
+# Positioning & Messaging
+- **Primary Hook:** Population-scale parallelism for system identification (not just fast
+training)
+- **Unique Combo:** System ID + Stochastic dynamics + 100K+ parallel experiments
+- **Tone:** Humble and collaborative. We are inspired by Gymnasium/Brax, don't aim to replace them.
+- **Biology:** Showcase example (mother machines, gene circuits), not the only use case
+- **Target Audience:** Control theorists, systems biologists, RL researchers
+- **Key Differentiator:** Designed for learning FROM populations with uncertain parameters
+
+**Avoid:**
+- "Only for biology" framing (too narrow)
+- "Better than Gymnasium/Brax" claims (inaccurate and arrogant)
+- "Standard RL assumes known physics" (confusing - RL is model-free)
+- Overstating what makes us unique (Brax also has parallelism)
+
+# What Makes Myriad Different
+Not just parallelism (Brax has that), not just JAX (Brax uses JAX), but:
+1. **System ID as first-class**: Control AND SysID tasks for the same physics
+2. **Population-level learning**: Designed around observing many parameter variants
+3. **Stochastic native**: Gillespie, asynchronous events, multi-timescale dynamics
+4. **Active learning**: Built-in support for experiment design
+5. **Three-layer architecture**: Reuse physics across control/SysID/planning
+
+When writing docs or code, emphasize the COMBINATION, not individual features.
 
 # Core Architecture & Terminology
 - **Three-Layer Pattern:** MUST maintain strict separation:
@@ -41,6 +70,7 @@ Before writing complex JAX transformations (scan, cond, pmap), you MUST:
 
 # Documentation Protocol
 - **Constraint:** Do NOT use generic AI marketing speak.
+- **Constraint:** Be accurate about comparisons (don't claim others can't do parallelism).
 - **Instruction:** When writing docs, READ `docs/WRITING_GUIDE.md` first.
 
 # Reference Implementations (Copy these patterns!)
