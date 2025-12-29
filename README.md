@@ -12,19 +12,44 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![JAX](https://img.shields.io/badge/JAX-0.7.2-orange.svg)](https://github.com/google/jax)
 
-**A JAX-native platform for massively parallel system identification and control.**
+**JAX-native platform for massively parallel system identification and control of uncertain, stochastic systems.**
 
-Myriad is named after the Greek 'myrias', representing the ten thousand parallel environments the engine simulates simultaneously. It provides a myriad of viewpoints from which to observe, identify, and control complex systems.
+Myriad is named after the Greek 'myrias' (ten thousand), inspired by microfluidic mother machines that observe 100,000+ cells simultaneously. It provides a myriad of viewpoints from which to learn about and control complex systems.
 
-## The Problem
+## The Challenge
 
-Standard RL environments (Gym, Gymnax) give you one robot and ask you to control it.
+Many research domains require learning from populations of systems with uncertain parameters:
 
-Myriad gives you **100,000 uncertain physical systems** in parallel and asks you to:
+- **System identification**: Estimate unknown parameters by observing many variants in parallel
+- **Stochastic systems**: Randomness is fundamental (molecular noise, asynchronous events)
+- **Active learning**: Design experiments to maximize information gain across parameter variants
+- **Robust control**: Learn policies that work across diverse conditions
 
-1. **Identify** their hidden parameters (System ID)
-2. **Control** them to a target (RL/MPC)
-3. **Plan** experiments to reduce uncertainty (Active Learning)
+Myriad is designed for this paradigm: 100,000+ environments with different parameters or initial conditions on a single GPU, enabling population-level system identification and control.
+
+## What Myriad Provides
+
+Inspired by state-of-the-art libraries like Gymnasium and Brax, Myriad adds:
+
+1. **Population-scale parallelism**: 100,000+ environments on a single GPU—not for speed, but for a different research paradigm
+2. **System ID as a first-class task**: Learn unknown parameters by observing the population, not just single trajectories
+3. **Native stochastic simulation**: Gillespie algorithm, asynchronous events, multi-timescale dynamics
+4. **Active learning**: Design experiments to maximize information gain across parameter variants
+5. **Three-layer architecture**: Reuse physics across control, system ID, and planning tasks
+
+## From Mother Machines to Parameter Sweeps
+
+Myriad's population-scale parallelism enables new experimental paradigms:
+
+| Domain | Example | Population-Level Insight |
+|--------|---------|-------------------------|
+| **Synthetic Biology** | Mother machine tracking 100k cells | Identify gene circuit parameters from cell-to-cell variability |
+| **Chemical Engineering** | Parallel bioreactor conditions | Optimize kinetics across temperature/pH/substrate gradients |
+| **Control Theory** | CartPole with randomized physics | Learn robust policies from 100k parameter combinations |
+| **Systems Biology** | Metabolic network variants | Infer reaction rates from population heterogeneity |
+| **RL Research** | Stochastic environment suite | Benchmark algorithms across diverse initial conditions |
+
+**Example:** The built-in gene circuit environment simulates stochastic gene expression with asynchronous cell division—just like a microfluidic mother machine. Observe 100,000 cells with different initial conditions or parameters simultaneously, then use the population data for system identification or robust control design.
 
 ## Key Features
 
@@ -122,14 +147,45 @@ See [Quickstart Guide](docs/getting-started/quickstart.md) for more examples.
 - `pqn`: Parametric Q-Network (continuous actions)
 - `random`: Baseline
 
-## Use Cases
+## Example Workflows
 
-| Domain | Example | What Myriad Provides |
-|--------|---------|---------------------|
-| **RL Research** | Train PPO on CartPole | 100k environments with randomized masses/lengths in 4 seconds |
-| **Control Theory** | MPC over stiff ODEs | Direct access to differentiable physics for gradient-based planning |
-| **Scientific ML** | Parameter estimation | 100k short trajectories for system identification |
-| **Synthetic Biology** | Gene circuit control | In-silico optimization before lab work |
+**System Identification:**
+```python
+# Learn unknown parameters from 10,000 parallel experiments
+config = create_config(
+    env="cartpole-sysid",  # or your custom environment
+    agent="dqn",
+    num_envs=10000
+)
+results = train_and_evaluate(config)
+```
+
+**Parameter Sweep:**
+```python
+# Test 100,000 parameter combinations in parallel
+# Useful for: robustness analysis, sensitivity studies, design optimization
+config = create_config(
+    env="your_env",
+    num_envs=100000,
+    randomize_params=True
+)
+```
+
+**Active Learning:**
+```python
+# Design experiments to reduce parameter uncertainty
+# Built-in support for information-theoretic experiment design
+```
+
+### Complementary to Existing Tools
+
+Myriad complements rather than replaces existing libraries:
+
+- **Use Gymnasium** for: Standard RL benchmarks, established baselines, broad ecosystem support
+- **Use Brax** for: Rigid-body robotics, differentiable physics engines, fast locomotion
+- **Use Myriad** when you need: System identification, stochastic dynamics, or parallel parameter exploration
+
+These libraries work together—prototype your algorithm on Gymnasium, then scale system ID experiments with Myriad.
 
 ## Documentation
 
@@ -147,6 +203,7 @@ See [Quickstart Guide](docs/getting-started/quickstart.md) for more examples.
 - [Development Setup](docs/contributing/setup.md): Configure your environment
 - [Architecture Guide](docs/contributing/architecture.md): Pure functional design constraints
 - [Configuration System](docs/contributing/configuration.md): Hydra and Pydantic patterns
+- [Roadmap](ROADMAP.md): Strategic development plan and upcoming features
 
 See `CLAUDE.md` for AI assistant development guidelines.
 

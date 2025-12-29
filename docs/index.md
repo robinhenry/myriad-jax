@@ -1,16 +1,28 @@
 # Myriad
 
-**A JAX-native platform for massively parallel system identification and control.**
+**JAX-native platform for biological systems, stochastic dynamics, and active learning at scale.**
 
-## The problem
+## What makes Myriad different?
 
-Standard RL environments (Gym, Gymnax) give you one robot and ask you to control it.
+Myriad builds on the foundations of excellent libraries like Gymnasium and Brax, with a specific focus:
 
-Myriad gives you **100,000 uncertain physical systems** in parallel and asks you to:
+- **Biological & chemical systems**: Gene circuits, metabolic networks, reaction-diffusion systems
+- **Stochastic dynamics**: Low-copy molecular noise, asynchronous events, multi-timescale processes
+- **Active system identification**: Learning unknown parameters through intelligent experiment design
+- **JAX-native parallelism**: 100,000+ environments on a single GPU for biological simulations
 
-1. **Identify** their hidden parameters (System ID)
-2. **Control** them to a target (RL/MPC)
-3. **Plan** experiments to reduce uncertainty (Active Learning)
+While Gymnasium excels at standardized benchmarks and Brax at robotics simulation, Myriad focuses on the unique challenges of biological and chemical systems where uncertainty and stochasticity are fundamental.
+
+## The challenge
+
+Many scientific domains require:
+
+1. **Identifying** hidden parameters from noisy observations (System ID)
+2. **Controlling** complex, uncertain dynamics (RL/Optimal Control)
+3. **Planning** informative experiments (Active Learning)
+4. **Scaling** to thousands of parameter variants in parallel
+
+Myriad provides these capabilities with a focus on biological and chemical systems.
 
 ## Quickstart
 
@@ -57,12 +69,34 @@ Domain randomization, parameter sweeps, and active experimental design are first
 
 ## Use cases
 
-| Domain | Hook | What you get |
-|--------|------|--------------|
-| **RL research** | Train PPO in 4 seconds on a single GPU | CartPole with 100k randomized masses/lengths |
-| **Control theory** | Gradient-based MPC over stiff ODEs | Chemical reactor with drifting parameters |
-| **Scientific ML** | Recover physics from 100k short trajectories | Damped oscillator parameter estimation |
-| **Synthetic biology** | In-silico optimization before lab work | Gene circuit control (the "flagship" demo) |
+Myriad excels where **standard RL environments fall short**:
+
+| Domain | Challenge | What Myriad Provides |
+|--------|-----------|---------------------|
+| **Synthetic Biology** | Design genetic circuits before lab experiments | Stochastic gene expression with 100k parameter variants |
+| **Systems Biology** | Identify kinetic parameters from noisy data | Active learning for optimal perturbation experiments |
+| **Biochemical Engineering** | Control bioreactors with uncertain kinetics | Simultaneous parameter learning and control |
+| **Chemical Engineering** | Optimize reactors with catalyst degradation | Multi-timescale stochastic dynamics |
+| **RL Research** | Benchmark on stochastic environments | 100k parallel environments with randomized physics |
+
+### Complementary to existing tools
+
+Myriad complements rather than replaces existing libraries:
+
+| Strength | Gymnasium | Brax | Myriad |
+|----------|-----------|------|--------|
+| **Best for** | Standard RL benchmarks | Robotics simulation | Biological systems |
+| **Parallelism** | VectorEnv (moderate) | vmap (high) | vmap (high) |
+| **Backend** | NumPy + Optional wrappers | JAX | JAX |
+| **Unique features** | Established baselines, broad ecosystem | Rigid-body physics, robotics focus | Stochastic bio systems, active SysID |
+| **When to use** | Reproducing papers, standard benchmarks | Robotics, differentiable physics | Gene circuits, biochemical systems |
+
+These tools work well together:
+- **Prototype** algorithm on Gymnasium's simple environments
+- **Scale** robotics simulations with Brax
+- **Experiment** with biological systems using Myriad
+
+Each library excels in its domain. Myriad fills a gap for stochastic biological and chemical systems where active parameter learning is central to the research question.
 
 ## What's implemented
 
