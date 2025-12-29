@@ -35,4 +35,4 @@ def make_env(env_id: str, **kwargs) -> Environment:
 
     # Look up the factory function and call it with the provided arguments
     make_fn = ENV_REGISTRY[env_id]
-    return make_fn(**kwargs)
+    return make_fn(**kwargs)  # type: ignore[operator]

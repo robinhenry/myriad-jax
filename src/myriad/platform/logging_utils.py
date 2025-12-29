@@ -5,13 +5,13 @@ from typing import Any
 import jax
 import numpy as np
 
-from myriad.configs.default import Config
+from myriad.configs.default import Config, EvalConfig
 
 try:
     import wandb  # type: ignore[import]
 except ImportError as import_error:  # pragma: no cover - handled at runtime
     wandb = None  # type: ignore[assignment]
-    _wandb_import_error = import_error
+    _wandb_import_error: ImportError | None = import_error
 else:
     _wandb_import_error = None
 
@@ -82,11 +82,11 @@ def build_train_payload(metrics_host: dict[str, Any]) -> dict[str, float]:
     return payload
 
 
-def maybe_init_wandb(config: Config):
+def maybe_init_wandb(config: Config | EvalConfig):
     """Initializes a Weights & Biases run when enabled in the config."""
 
     wandb_config = config.wandb
-    if not wandb_config.enabled:
+    if wandb_config is None or not wandb_config.enabled:
         return None
 
     if wandb is None:

@@ -92,7 +92,7 @@ class RemoteLogger:
                 description=f"Episode trajectories from evaluation at step {global_step}",
             )
             artifact.add_dir(episode_dir)
-            self.wandb_run.log_artifact(artifact)
+            self.wandb_run.log_artifact(artifact)  # type: ignore[union-attr]
         except Exception as e:
             # Don't fail training if episode logging fails
             print(f"Warning: Failed to log episodes to W&B: {e}")

@@ -84,6 +84,8 @@ class MetricsLogger:
         # Store agent-specific metrics
         for metric_name, metric_values in metrics_host.items():
             if metric_name not in ["loss", "reward"]:  # Already handled
+                if self.training_metrics.agent_metrics is None:
+                    self.training_metrics.agent_metrics = {}
                 if metric_name not in self.training_metrics.agent_metrics:
                     self.training_metrics.agent_metrics[metric_name] = []
                 self.training_metrics.agent_metrics[metric_name].append(float(metric_values[-1]))

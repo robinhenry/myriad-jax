@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from myriad.configs.default import Config
+from myriad.configs.default import Config, EvalConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def save_episodes_to_disk(
     episode_data: dict[str, Any],
     global_step: int,
     save_count: int,
-    config: Config,
+    config: Config | EvalConfig,
 ) -> str | None:
     """Save episode trajectories to disk for later analysis.
 

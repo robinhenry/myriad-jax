@@ -75,6 +75,21 @@ line-length = 120
 
 [tool.mypy]
 files = ["src/myriad/**/*.py"]
+# Ignore missing type stubs for third-party libraries
+ignore_missing_imports = false  # Explicit about what we ignore
+
+[[tool.mypy.overrides]]
+module = [
+    "chex",
+    "chex.*",
+    "optax",
+    "optax.*",
+    "plotly",
+    "plotly.*",
+    "yaml",
+    "tqdm",
+]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["myriad"]

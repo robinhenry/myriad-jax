@@ -101,6 +101,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         # On-policy: create chunk runner that batches multiple rollout-update cycles
         # This avoids returning to Python after each rollout, addressing the regression
         # from the previous platform where everything was in a single jitted scan
+        assert rollout_fn is not None  # Guaranteed by use_rollout_training logic
+        assert config.run.rollout_steps is not None  # Guaranteed by use_rollout_training logic
         run_chunk_fn = make_on_policy_chunk_runner(
             rollout_fn=rollout_fn,
             agent=agent,
@@ -263,7 +265,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
 
             # Update progress bar with evaluation results
             if "episode_return" in eval_results_host:
-                mean_return = float(np.mean(eval_results_host["episode_return"]))
+                mean_return = float(np.mean(eval_results_host["episode_return"]))  # type: ignore[call-overload]
                 pbar_metrics["eval_return"] = f"{mean_return:.2f}"
                 pbar.set_postfix(pbar_metrics, refresh=False)
 

@@ -274,7 +274,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
             episode_dones = jnp.zeros((num_eval_envs, max_eval_steps), dtype=bool)
         else:
             # Use None as placeholders when not collecting episodes
-            episode_obs = episode_actions = episode_rewards = episode_dones = None
+            episode_obs = episode_actions = episode_rewards = episode_dones = None  # type: ignore[assignment]
 
         def cond_fun(carry: tuple) -> chex.Array:
             if return_episodes:
@@ -350,7 +350,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 episode_dones,
             )
         else:
-            initial_carry = (key, eval_env_state, episode_returns, episode_lengths, dones, initial_step)
+            initial_carry = (key, eval_env_state, episode_returns, episode_lengths, dones, initial_step)  # type: ignore[assignment]
 
         final_carry = jax.lax.while_loop(cond_fun, body_fun, initial_carry)
 
@@ -368,7 +368,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 final_dones_ep,
             ) = final_carry
         else:
-            key, _, final_returns, final_lengths, final_dones, _ = final_carry
+            key, _, final_returns, final_lengths, final_dones, _ = final_carry  # type: ignore[misc]
 
         # Package metrics for the caller
         metrics = {
@@ -379,7 +379,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
 
         # Add episode data if requested
         if return_episodes:
-            metrics["episodes"] = {
+            metrics["episodes"] = {  # type: ignore[assignment]
                 "observations": final_obs,
                 "actions": final_actions,
                 "rewards": final_rewards,
