@@ -1,4 +1,4 @@
-# Myriad [1^]
+# Myriad
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/myriad-jax)](https://pypi.org/project/myriad-jax/)
@@ -143,4 +143,4 @@ If you use Myriad in your work, please cite our paper:
 
 ---
 
-[^1] Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems—whether they are biological circuits, chemical reactors, or robotic swarms.
+*Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems—whether they are biological circuits, chemical reactors, or robotic swarms.*
