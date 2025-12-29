@@ -14,20 +14,18 @@
 
 **JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems.** 💡 → 🤖 → 🔬
 
-> [!TIP]
-> **New to Myriad?**
->
-> Myriad is in early active development. We aim to build a standard toolkit for the scientific community and warmly welcome contributions!
+<!-- > [!TIP] -->
+> **_New to Myriad?_** The library is still in early active development. We aim to build a standard toolkit for the scientific community and warmly welcome contributions!
 >
 > Have an idea or just want to chat about stochastic control? [Open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk). 🤝
 
-*Jump straight to [Installation](#installation) or [Quickstart](#quickstart) to see `myriad` in action, or check out the [full documentation](todo: add link).* 🤸🏾
+*Jump straight to [Installation](#installation) or [Quickstart](#quickstart) to see Myriad in action, or check out the [full documentation](todo: add link).* 🤸🏾
 
 > *TODO*: add 2 videos here: (a) learned agent on ccas-ccar, (b) real-time system ID via active learning.
 
 ## At a Glance
 
-Myriad provides the computational backend to control biological and chemical systems where noise is not a bug but a feature. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
+Myriad provides the computational backend to control biological and chemical systems where stochasticity is an important plays a big role. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
 
 ### Key Features
 
@@ -143,4 +141,4 @@ If you use Myriad in your work, please cite our paper:
 
 ---
 
-*Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems—whether they are biological circuits, chemical reactors, or robotic swarms.*
+*Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems — whether they are biological circuits, chemical reactors, or robotic swarms.*
