@@ -38,9 +38,8 @@ Used by:
 
 ```{eval-rst}
 .. autoclass:: myriad.core.replay_buffer.ReplayBuffer
-   :members:
-   :undoc-members:
    :show-inheritance:
+   :noindex:
 ```
 
 **Example:**
@@ -76,9 +75,8 @@ key=sample_key
 
 ```{eval-rst}
 .. autoclass:: myriad.core.replay_buffer.ReplayBufferState
-   :members:
-   :undoc-members:
    :show-inheritance:
+   :noindex:
 ```
 
 Contains the replay buffer's internal state:

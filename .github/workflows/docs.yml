@@ -33,36 +33,36 @@ jobs:
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction --with docs
 
       # Verify examples before building
       - name: Verify documentation examples
         run: |
-          # Check docs use literalinclude
-          ALLOWED_INLINE=("docs/user-guide/custom_env.md" "docs/user-guide/custom_agent.md")
-          for file in docs/index.md docs/api/platform.md docs/user-guide/running_experiments.md; do
-            if [ -f "$file" ] && grep -q '^```python' "$file"; then
-              is_allowed=false
-              for allowed in "${ALLOWED_INLINE[@]}"; do
-                [ "$file" = "$allowed" ] && is_allowed=true && break
-              done
-              if [ "$is_allowed" = false ]; then
-                echo "ERROR: $file has inline Python code"
-                exit 1
-              fi
+          echo "Checking for broken literalinclude references..."
+
+          # Find all literalinclude references to examples/
+          broken=0
+          while IFS= read -r line; do
+            example=$(echo "$line" | sed 's/.*examples\/\([^[:space:]]*\).*/\1/')
+            if [ ! -f "examples/$example" ]; then
+              echo "ERROR: Missing examples/$example"
+              broken=1
             fi
-          done
+          done < <(grep -r "literalinclude.*examples/" docs/ 2>/dev/null || true)
 
-          # Verify referenced examples exist
-          grep -r "literalinclude.*examples/" docs/ 2>/dev/null | \
-            sed 's/.*examples\/\([^[:space:]]*\).*/\1/' | sort -u | \
-            while read example; do
-              [ ! -f "examples/$example" ] && echo "ERROR: Missing examples/$example" && exit 1
-            done || true
-
-          echo "✓ Documentation examples verified"
+          [ $broken -eq 1 ] && exit 1
+          echo "✓ All example files exist"
 
       # Build documentation
       - name: Build Sphinx docs

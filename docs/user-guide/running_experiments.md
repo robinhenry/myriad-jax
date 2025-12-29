@@ -98,7 +98,7 @@ The `sweep` command integrates with W&B to override Hydra parameters during hype
 :lines: 8-18
 ```
 
-See [examples/](../../examples/) for more programmatic usage patterns.
+See the `examples/` directory in the repository for more programmatic usage patterns.
 
 ## Evaluation-only mode
 
