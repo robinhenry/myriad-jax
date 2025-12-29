@@ -1,0 +1,22 @@
+# Codecov Configuration
+# Prevents coverage regression on PRs
+
+coverage:
+  status:
+    # Overall project coverage compared to base branch
+    project:
+      default:
+        target: auto
+        threshold: 3%
+
+    # Coverage of new code in the PR
+    patch:
+      default:
+        target: auto
+        threshold: 3%
+
+# Exclude non-source files from coverage calculation
+ignore:
+  - "tests/"
+  - "examples/"
+  - "**/__init__.py"
