@@ -1,0 +1,85 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/myriad/**'
+      - 'examples/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/myriad/**'
+      - 'examples/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Build & Deploy Docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      # Verify examples before building
+      - name: Verify documentation examples
+        run: |
+          # Check docs use literalinclude
+          ALLOWED_INLINE=("docs/user-guide/custom_env.md" "docs/user-guide/custom_agent.md")
+          for file in docs/index.md docs/api/platform.md docs/user-guide/running_experiments.md; do
+            if [ -f "$file" ] && grep -q '^```python' "$file"; then
+              is_allowed=false
+              for allowed in "${ALLOWED_INLINE[@]}"; do
+                [ "$file" = "$allowed" ] && is_allowed=true && break
+              done
+              if [ "$is_allowed" = false ]; then
+                echo "ERROR: $file has inline Python code"
+                exit 1
+              fi
+            fi
+          done
+
+          # Verify referenced examples exist
+          grep -r "literalinclude.*examples/" docs/ 2>/dev/null | \
+            sed 's/.*examples\/\([^[:space:]]*\).*/\1/' | sort -u | \
+            while read example; do
+              [ ! -f "examples/$example" ] && echo "ERROR: Missing examples/$example" && exit 1
+            done || true
+
+          echo "✓ Documentation examples verified"
+
+      # Build documentation
+      - name: Build Sphinx docs
+        run: |
+          cd docs
+          poetry run sphinx-build -W --keep-going -b html . _build/html
+
+      # Deploy to GitHub Pages (main branch only)
+      # - name: Deploy to GitHub Pages
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      #   uses: peaceiris/actions-gh-pages@v4
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ./docs/_build/html
+      #     force_orphan: true
+      #     user_name: 'github-actions[bot]'
+      #     user_email: 'github-actions[bot]@users.noreply.github.com'
