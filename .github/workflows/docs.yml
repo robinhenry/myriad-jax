@@ -3,16 +3,13 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths:
-      - 'docs/**'
-      - 'src/myriad/**'
-      - 'examples/**'
+    # No path filter - always rebuild docs on main
   pull_request:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'src/myriad/**'
       - 'examples/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 concurrency:
