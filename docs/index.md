@@ -153,6 +153,7 @@ The gene circuit environment (`ccas_ccar_v1`) serves as the stress test. If the 
 :hidden:
 :caption: Getting Started
 
+getting-started/introduction
 getting-started/installation
 getting-started/quickstart
 ```

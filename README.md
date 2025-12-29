@@ -1,4 +1,4 @@
-# Myriad
+# Myriad [1^]
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/myriad-jax)](https://pypi.org/project/myriad-jax/)
@@ -12,219 +12,135 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![JAX](https://img.shields.io/badge/JAX-0.7.2-orange.svg)](https://github.com/google/jax)
 
-**JAX-native platform for massively parallel system identification and control of uncertain, stochastic systems.**
+**JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems.** 💡 → 🤖 → 🔬
 
-Myriad is named after the Greek 'myrias' (ten thousand), inspired by microfluidic mother machines that observe 100,000+ cells simultaneously. It provides a myriad of viewpoints from which to learn about and control complex systems.
+> [!TIP]
+> **New to Myriad?**
+>
+> Myriad is in early active development. We aim to build a standard toolkit for the scientific community and warmly welcome contributions!
+>
+> Have an idea or just want to chat about stochastic control? [Open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk). 🤝
 
-## The Challenge
+*Jump straight to [Installation](#installation) or [Quickstart](#quickstart) to see `myriad` in action, or check out the [full documentation](todo: add link).* 🤸🏾
 
-Many research domains require learning from populations of systems with uncertain parameters:
+> *TODO*: add 2 videos here: (a) learned agent on ccas-ccar, (b) real-time system ID via active learning.
 
-- **System identification**: Estimate unknown parameters by observing many variants in parallel
-- **Stochastic systems**: Randomness is fundamental (molecular noise, asynchronous events)
-- **Active learning**: Design experiments to maximize information gain across parameter variants
-- **Robust control**: Learn policies that work across diverse conditions
+## At a Glance
 
-Myriad is designed for this paradigm: 100,000+ environments with different parameters or initial conditions on a single GPU, enabling population-level system identification and control.
+Myriad provides the computational backend to control biological and chemical systems where noise is not a bug but a feature. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
 
-## What Myriad Provides
+### Key Features
 
-Inspired by state-of-the-art libraries like Gymnasium and Brax, Myriad adds:
+* **⚡ Massive GPU Parallelism:** run 100k+ environments simultaneously.
 
-1. **Population-scale parallelism**: 100,000+ environments on a single GPU—not for speed, but for a different research paradigm
-2. **System ID as a first-class task**: Learn unknown parameters by observing the population, not just single trajectories
-3. **Native stochastic simulation**: Gillespie algorithm, asynchronous events, multi-timescale dynamics
-4. **Active learning**: Design experiments to maximize information gain across parameter variants
-5. **Three-layer architecture**: Reuse physics across control, system ID, and planning tasks
+* **🎲 Exact Stochastic Simulations:** native JAX implementation of the Gillespie Algorithm (SSA) for discrete, asynchronous molecular events.
 
-## From Mother Machines to Parameter Sweeps
+* **∇ Differentiable "White-Box" Physics:** exposes underlying ODEs and jump processes for gradient-based system ID and active learning.
 
-Myriad's population-scale parallelism enables new experimental paradigms:
+* **🛠 Research-Ready:** pre-configured with [Hydra](https://hydra.cc/), [Pydantic](https://docs.pydantic.dev/), and [W&B](https://wandb.ai/site) support.
 
-| Domain | Example | Population-Level Insight |
-|--------|---------|-------------------------|
-| **Synthetic Biology** | Mother machine tracking 100k cells | Identify gene circuit parameters from cell-to-cell variability |
-| **Chemical Engineering** | Parallel bioreactor conditions | Optimize kinetics across temperature/pH/substrate gradients |
-| **Control Theory** | CartPole with randomized physics | Learn robust policies from 100k parameter combinations |
-| **Systems Biology** | Metabolic network variants | Infer reaction rates from population heterogeneity |
-| **RL Research** | Stochastic environment suite | Benchmark algorithms across diverse initial conditions |
+*Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](TODO: LINK_TO_DOCS_HERE).*
 
-**Example:** The built-in gene circuit environment simulates stochastic gene expression with asynchronous cell division—just like a microfluidic mother machine. Observe 100,000 cells with different initial conditions or parameters simultaneously, then use the population data for system identification or robust control design.
+### Ecosystem & Fit
 
-## Key Features
+Myriad is designed to complement existing RL x JAX tools, not replace them.
 
-- **Massively Parallel**: Run 100,000+ environments simultaneously on a single GPU. JAX's `vmap` and XLA compilation deliver millions of steps per second.
-- **Three-Layer Architecture**: Separate physics from task logic from learning algorithms—reuse the same physics for control, system ID, and model-based planning.
-- **Direct Differentiable Access**: Unlike Gym-style environments, Myriad exposes pure physics functions for MPC, gradient-based optimization, and hybrid models.
-- **Built for Science**: Domain randomization, parameter sweeps, and active experimental design are first-class features.
-- **Pure JAX**: Fully jitted training loops with immutable PyTree state
-- **Hydra + Pydantic**: Composable configs with runtime validation
-- **W&B Integration**: Built-in experiment tracking
+| Feature | **Gymnasium** | **Brax** | **Myriad** |
+| :--- | :--- | :--- | :--- |
+| **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
+| **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
+| **Differentiable?** | No | Yes | **Yes** |
+| **System ID** | Low support | Low support | **Native** |
+| **Primary Goal** | Agent Performance | Fast Physical Control | **Active Learning & Stochastic Control** |
+
+* **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
+
+* **Use [Brax](https://github.com/google/brax) if:** you need massive-scale robotics or contact dynamics.
+
+* **Use [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAI/JaxMARL) if:** you need standard baselines or multi-agent RL.
+
 
 ## Installation
 
-**Requirements:** Python 3.11+, JAX 0.7.2+
+**Requirements:** Python 3.10+, JAX 0.7+
+
+> [!IMPORTANT]
+> **GPU Support:** JAX installation can be hardware-specific. We strongly recommend [installing JAX](https://github.com/google/jax#installation) according to your CUDA/cuDNN version *before* installing Myriad if you encounter issues.
+
+### With `pip`
+
+```bash
+# Standard installation
+pip install myriad-jax
+
+# With generic GPU dependencies (checks for nvidia-related packages)
+pip install "myriad-jax[gpu]"
+```
+
+### From source (for development)
 
 ```bash
 git clone https://github.com/robinhenry/myriad-jax.git
 cd myriad-jax
-poetry install
+poetry install --with dev,gpu
 ```
 
-**GPU support (CUDA 12):**
-```bash
-poetry install --with gpu
-```
+## Quickstart
 
-See [Installation Guide](docs/getting-started/installation.md) for details.
+Myriad is designed to be used programmatically (for research loops) or via CLI (for massive sweeps).
 
-## Quick Start
-
-### Python API (Recommended)
-
-Use Myriad programmatically in your scripts:
+### Python API
 
 ```python
 from myriad import create_config, train_and_evaluate
 
-# Create config and train
+# Configure a system ID experiment on a stochastic gene network
 config = create_config(
-    env="cartpole-control",
-    agent="dqn",
-    num_envs=1000,
-    steps_per_env=100
+    env="gene-circuit-v1",      # A stochastic gene circuit (Gillespie)
+    agent="dqn",                # The algorithm to use
+    num_envs=10_000,            # 10k parallel simulations (cells)
+    sysid_mode=True             # Goal: Infer parameters, not just control
 )
+
+# Run the experiment (JIT-compiled & distributed on GPU)
 results = train_and_evaluate(config)
 
-# View results
-print(results.summary())
-results.save_agent("trained_agent.pkl")
+# Analyze population statistics
+print(f"Parameter Estimate Mean: {results.params.mean():.4f}")
+print(f"Population Variance: {results.params.var():.4f}")
 ```
 
-See [`examples/`](examples/) for more programmatic usage patterns.
+### CLI Usage
 
-### CLI (Alternative)
-
-Train DQN on CartPole using the command line:
+Leverage [Hydra](https://hydra.cc/) to run massive parameter sweeps or system ID experiments directly from the terminal without writing boilerplate.
 
 ```bash
-myriad train
+# Train a DQN agent on 50,000 parallel cartpole environments
+myriad train env=cartpole-control run.num_envs=50000 agent=dqn
+
+# Switch to System Identification mode (inferring hidden physics parameters)
+myriad train env=gene-circuit-v1 agent=pqn sysid=true
 ```
 
-Scale up to 10,000 parallel environments:
+See the [Documentation](add link) for a full list of examples and configuration overrides.
 
-```bash
-myriad train run.num_envs=10000
+## Flagship Environments
+
+| Environment | Type | Description |
+| --- | --- | --- |
+| `gene-circuit-v1` | **Bio / Stochastic** | **(Flagship)** Stochastic gene expression with asynchronous division. Ideal for testing noise-robust control policies (SSA). |
+| `cartpole-sysid` | **Classic / SysID** | An inverted pendulum where the agent must excite the system to infer the pole's mass and length while balancing. |
+| `chem-reactor-v0` | **Chem / ODE** | Continuous Stirred Tank Reactor (CSTR) with uncertain reaction rates. |
+
+
+## Citation
+
+If you use Myriad in your work, please cite our paper:
+
+```bibtex
+@article{...}
 ```
 
-Try system identification instead of control:
+---
 
-```bash
-myriad train env=cartpole_sysid agent=pqn
-```
-
-Override any configuration parameter:
-
-```bash
-myriad train \
-  env=cartpole_control \
-  agent=dqn \
-  run.num_envs=50000 \
-  run.steps_per_env=15625
-```
-
-See [Quickstart Guide](docs/getting-started/quickstart.md) for more examples.
-
-## What's Implemented
-
-**Environments:**
-- `cartpole-control`: Standard stabilization task
-- `cartpole-sysid`: Active parameter learning variant
-- `ccas_ccar_v1`: Gene circuit with growth/division dynamics (the "stress test")
-
-**Agents:**
-- `dqn`: Deep Q-Network (discrete actions)
-- `pqn`: Parametric Q-Network (continuous actions)
-- `random`: Baseline
-
-## Example Workflows
-
-**System Identification:**
-```python
-# Learn unknown parameters from 10,000 parallel experiments
-config = create_config(
-    env="cartpole-sysid",  # or your custom environment
-    agent="dqn",
-    num_envs=10000
-)
-results = train_and_evaluate(config)
-```
-
-**Parameter Sweep:**
-```python
-# Test 100,000 parameter combinations in parallel
-# Useful for: robustness analysis, sensitivity studies, design optimization
-config = create_config(
-    env="your_env",
-    num_envs=100000,
-    randomize_params=True
-)
-```
-
-**Active Learning:**
-```python
-# Design experiments to reduce parameter uncertainty
-# Built-in support for information-theoretic experiment design
-```
-
-### Complementary to Existing Tools
-
-Myriad complements rather than replaces existing libraries:
-
-- **Use Gymnasium** for: Standard RL benchmarks, established baselines, broad ecosystem support
-- **Use Brax** for: Rigid-body robotics, differentiable physics engines, fast locomotion
-- **Use Myriad** when you need: System identification, stochastic dynamics, or parallel parameter exploration
-
-These libraries work together—prototype your algorithm on Gymnasium, then scale system ID experiments with Myriad.
-
-## Documentation
-
-**New to Myriad?**
-- [Installation](docs/getting-started/installation.md): Set up in 5 minutes
-- [Quickstart](docs/getting-started/quickstart.md): Your first training run
-
-**Building Experiments?**
-- [Core Concepts](docs/user-guide/concepts.md): Understand the three-layer architecture
-- [Custom Environment](docs/user-guide/custom_env.md): Implement your own physics
-- [Custom Agent](docs/user-guide/custom_agent.md): Add new learning algorithms
-- [Running Experiments](docs/user-guide/running_experiments.md): Train agents at scale
-
-**Contributing?**
-- [Development Setup](docs/contributing/setup.md): Configure your environment
-- [Architecture Guide](docs/contributing/architecture.md): Pure functional design constraints
-- [Configuration System](docs/contributing/configuration.md): Hydra and Pydantic patterns
-- [Roadmap](ROADMAP.md): Strategic development plan and upcoming features
-
-See `CLAUDE.md` for AI assistant development guidelines.
-
-## Development
-
-```bash
-# Run tests
-python -m pytest
-
-# Format and lint
-black src/ tests/
-ruff check --fix src/ tests/
-
-# Type checking
-mypy src/myriad/
-```
-
-## Author
-
-Robin Henry (robin.henry012@gmail.com)
-
-## Contributing
-
-Contributions welcome!
+[^1] Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems—whether they are biological circuits, chemical reactors, or robotic swarms.
