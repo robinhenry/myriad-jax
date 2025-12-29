@@ -43,32 +43,57 @@ See [Installation Guide](docs/getting-started/installation.md) for details.
 
 ## Quick Start
 
-Train DQN on CartPole with default settings:
+### Python API (Recommended)
+
+Use Myriad programmatically in your scripts:
+
+```python
+from myriad import create_config, train_and_evaluate
+
+# Create config and train
+config = create_config(
+    env="cartpole-control",
+    agent="dqn",
+    num_envs=1000,
+    steps_per_env=100
+)
+results = train_and_evaluate(config)
+
+# View results
+print(results.summary())
+results.save_agent("trained_agent.pkl")
+```
+
+See [`examples/`](examples/) for more programmatic usage patterns.
+
+### CLI (Alternative)
+
+Train DQN on CartPole using the command line:
 
 ```bash
-python scripts/train.py
+myriad train
 ```
 
 Scale up to 10,000 parallel environments:
 
 ```bash
-python scripts/train.py run.num_envs=10000
+myriad train run.num_envs=10000
 ```
 
 Try system identification instead of control:
 
 ```bash
-python scripts/train.py env=cartpole_sysid agent=pqn
+myriad train env=cartpole_sysid agent=pqn
 ```
 
 Override any configuration parameter:
 
 ```bash
-python scripts/train.py \
+myriad train \
   env=cartpole_control \
   agent=dqn \
   run.num_envs=50000 \
-  run.total_timesteps=1e6
+  run.steps_per_env=15625
 ```
 
 See [Quickstart Guide](docs/getting-started/quickstart.md) for more examples.

@@ -1,6 +1,6 @@
 # Configuration System
 
-```{info}
+```{note}
 **Advanced Topic**
 
 This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
@@ -334,18 +334,18 @@ run:
 | `steps_per_env` | `int` | Steps each environment will take (total = steps_per_env × num_envs) |
 | `eval_max_steps` | `int` | Max steps per eval episode (environment-specific) |
 
-```{info}
+```{note}
 **Terminology Note: steps_per_env vs total_timesteps**
 
 Myriad uses `steps_per_env` as the primary configuration parameter, which differs from standard RL convention:
+
+- **`steps_per_env`** (primary): Number of steps each environment will take during training
+- **`total_timesteps`** (computed): Total environment interactions = `steps_per_env × num_envs`
+
+This design aligns with the "digital twin" / parallel experiments mental model: you specify how long to run each experiment, and the total computational budget scales naturally with parallelism.
+
+For RL sample efficiency comparisons in papers, use `total_timesteps = config.run.total_timesteps` (computed property).
 ```
-
-    - **`steps_per_env`** (primary): Number of steps each environment will take during training
-    - **`total_timesteps`** (computed): Total environment interactions = `steps_per_env × num_envs`
-
-    This design aligns with the "digital twin" / parallel experiments mental model: you specify how long to run each experiment, and the total computational budget scales naturally with parallelism.
-
-    For RL sample efficiency comparisons in papers, use `total_timesteps = config.run.total_timesteps` (computed property).
 
 ```{note}
 **Performance tuning**

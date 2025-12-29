@@ -10,9 +10,9 @@ import os
 from pathlib import Path
 
 import hydra
+import wandb
 from omegaconf import DictConfig, OmegaConf
 
-import wandb
 from myriad.configs.default import Config, EvalConfig
 from myriad.platform.episode_manager import render_episodes_to_videos
 from myriad.platform.evaluation import evaluate

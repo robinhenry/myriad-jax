@@ -34,4 +34,4 @@ def make_agent(agent_id: str, **kwargs) -> Agent:
 
     # Look up the factory function and call it with the provided arguments
     make_fn = AGENT_REGISTRY[agent_id]
-    return make_fn(**kwargs)
+    return make_fn(**kwargs)  # type: ignore[operator]

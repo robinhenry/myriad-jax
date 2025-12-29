@@ -1,3 +1,5 @@
+:orphan:
+
 # Configuration System Refactoring Plan
 
 ## Executive Summary

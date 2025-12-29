@@ -192,7 +192,7 @@ class Config(BaseModel):
     run: RunConfig
     agent: AgentConfig
     env: EnvConfig
-    wandb: WandbConfig
+    wandb: WandbConfig | None = None  # None = disabled (provide WandbConfig to enable)
 
 
 class EvalRunConfig(EvalConfigBase):

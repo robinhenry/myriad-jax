@@ -35,7 +35,7 @@ black = "^25.9.0"
 mypy = "^1.0"
 pytest = "^8.3.4"
 pytest-cov = "^7.0.0"
-ruff = "^0.13.3"
+ruff = "^0.14.10"
 pre-commit = "^4.1.0"
 sphinx = "^7.0.0"
 furo = "^2024.0.0"
@@ -75,9 +75,41 @@ line-length = 120
 
 [tool.mypy]
 files = ["src/myriad/**/*.py"]
+# Ignore missing type stubs for third-party libraries
+ignore_missing_imports = false  # Explicit about what we ignore
+
+[[tool.mypy.overrides]]
+module = [
+    "chex",
+    "chex.*",
+    "optax",
+    "optax.*",
+    "plotly",
+    "plotly.*",
+    "yaml",
+    "tqdm",
+]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["myriad"]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "examples: marks tests that run example scripts",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -126,6 +158,7 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.isort]
-known-first-party = ["myriad"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+known-first-party = ["myriad"]
+known-third-party = ["wandb", "hydra", "omegaconf"]

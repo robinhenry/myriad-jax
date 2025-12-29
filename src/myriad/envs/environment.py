@@ -52,8 +52,7 @@ class EnvironmentConfig(Protocol):
     """
 
     @property
-    def max_steps(self) -> int:
-        ...
+    def max_steps(self) -> int: ...
 
 
 class EnvironmentParams(Protocol):

@@ -10,35 +10,18 @@ High-level training and evaluation infrastructure.
 .. autofunction:: myriad.platform.train_and_evaluate
 ```
 
-**Example:**
+**Basic Example:**
 
-```python
-from myriad.configs.default import Config
-from myriad.platform import train_and_evaluate
+```{literalinclude} ../../examples/02_basic_training.py
+:language: python
+:caption: examples/02_basic_training.py
+```
 
-config = Config(
-env={"_target_": "cartpole-control"},
-agent={"_target_": "dqn"},
-run={
-    "num_envs": 10000,
-    "total_timesteps": 1_000_000,
-    "eval_frequency": 10000,
-}
-)
+**Advanced Example with Custom Hyperparameters:**
 
-results = train_and_evaluate(config)
-
-# Access trained agent
-agent_state = results.agent_state
-
-# View training metrics
-print(results.training_metrics.loss)
-print(results.eval_metrics.mean_return)
-
-# Save for later
-import pickle
-with open("trained_agent.pkl", "wb") as f:
-pickle.dump(results.agent_state, f)
+```{literalinclude} ../../examples/03_advanced_training.py
+:language: python
+:caption: examples/03_advanced_training.py
 ```
 
 ## Evaluation
@@ -49,36 +32,18 @@ pickle.dump(results.agent_state, f)
 .. autofunction:: myriad.platform.evaluate
 ```
 
-**Example:**
+**Random Baseline Example:**
 
-```python
-from myriad.configs.default import EvalConfig
-from myriad.platform import evaluate
+```{literalinclude} ../../examples/05_random_baseline.py
+:language: python
+:caption: examples/05_random_baseline.py
+```
 
-# Evaluate a random agent
-config = EvalConfig(
-env_id="cartpole-control",
-agent_id="random",
-num_eval_rollouts=100,
-seed=42
-)
+**Pre-trained Agent Example:**
 
-results = evaluate(config)
-print(f"Mean return: {results.summary.mean_return:.2f}")
-print(f"Std return: {results.summary.std_return:.2f}")
-
-# Evaluate a pre-trained agent
-import pickle
-with open("trained_agent.pkl", "rb") as f:
-agent_state = pickle.load(f)
-
-results = evaluate(config, agent_state=agent_state)
-
-# Get full episode trajectories
-results = evaluate(config, agent_state=agent_state, return_episodes=True)
-print(results.episodes.observations.shape)  # (num_rollouts, max_steps, obs_dim)
-print(results.episodes.actions.shape)       # (num_rollouts, max_steps, act_dim)
-print(results.episodes.rewards.shape)       # (num_rollouts, max_steps)
+```{literalinclude} ../../examples/04_evaluate_pretrained.py
+:language: python
+:caption: examples/04_evaluate_pretrained.py
 ```
 
 ## Result Types
@@ -135,23 +100,19 @@ Contains:
 
 ## Configuration
 
-Training and evaluation are configured via Hydra and Pydantic:
+### create_config
 
-```python
-from myriad.configs.default import Config, RunConfig
-
-config = Config(
-env={"_target_": "cartpole-control"},
-agent={"_target_": "dqn", "learning_rate": 1e-3},
-run=RunConfig(
-    num_envs=10000,
-    total_timesteps=1_000_000,
-    eval_frequency=10000,
-    seed=42
-)
-)
+```{eval-rst}
+.. autofunction:: myriad.configs.builder.create_config
 ```
 
+### create_eval_config
+
+```{eval-rst}
+.. autofunction:: myriad.configs.builder.create_eval_config
+```
+
+**Note:** For advanced use cases, you can still use the lower-level Pydantic models directly.
 See [Configuration Guide](../contributing/configuration.md) for details.
 
 ## Next Steps

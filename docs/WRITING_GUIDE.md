@@ -1,3 +1,5 @@
+:orphan:
+
 # Documentation Style Guide
 
 ## Role & Persona

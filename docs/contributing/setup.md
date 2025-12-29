@@ -1,6 +1,6 @@
 # Development Setup
 
-This guide is for contributors who want to modify Myriad's internals. If you just want to use Myriad to build experiments, see the [Installation guide](../get-started/installation.md) instead.
+This guide is for contributors who want to modify Myriad's internals. If you just want to use Myriad to build experiments, see the [Installation guide](../getting-started/installation.md) instead.
 
 ## Requirements
 

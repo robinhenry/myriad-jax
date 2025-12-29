@@ -1,3 +1,5 @@
+:orphan:
+
 # Myriad Documentation
 
 This directory contains the Sphinx documentation for Myriad.

@@ -1,0 +1,82 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    # No path filter - always rebuild docs on main
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'examples/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Build & Deploy Docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      # Verify examples before building
+      - name: Verify documentation examples
+        run: |
+          echo "Checking for broken literalinclude references..."
+
+          # Find all literalinclude references to examples/
+          broken=0
+          while IFS= read -r line; do
+            example=$(echo "$line" | sed 's/.*examples\/\([^[:space:]]*\).*/\1/')
+            if [ ! -f "examples/$example" ]; then
+              echo "ERROR: Missing examples/$example"
+              broken=1
+            fi
+          done < <(grep -r "literalinclude.*examples/" docs/ 2>/dev/null || true)
+
+          [ $broken -eq 1 ] && exit 1
+          echo "✓ All example files exist"
+
+      # Build documentation
+      - name: Build Sphinx docs
+        run: |
+          cd docs
+          poetry run sphinx-build -W --keep-going -b html . _build/html
+
+      # Deploy to GitHub Pages (main branch only)
+      # - name: Deploy to GitHub Pages
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      #   uses: peaceiris/actions-gh-pages@v4
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ./docs/_build/html
+      #     force_orphan: true
+      #     user_name: 'github-actions[bot]'
+      #     user_email: 'github-actions[bot]@users.noreply.github.com'
