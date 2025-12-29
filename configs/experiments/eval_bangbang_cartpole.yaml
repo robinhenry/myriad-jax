@@ -8,6 +8,9 @@ defaults:
   - /env: cartpole_control
   - _self_
 
+# Disable W&B logging for evaluation-only runs
+wandb: null
+
 # Run settings (eval parameters only)
 run:
   eval_max_steps: 500  # CartPole max episode length
