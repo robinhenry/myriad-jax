@@ -1,5 +1,12 @@
 # Myriad
 
+[![CI](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml/badge.svg)](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/robinhenry/myriad-jax/branch/main/graph/badge.svg)](https://codecov.io/gh/robinhenry/myriad-jax)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![JAX](https://img.shields.io/badge/JAX-0.7.2-orange.svg)](https://github.com/google/jax)
+
 **A JAX-native platform for massively parallel system identification and control.**
 
 Myriad is named after the Greek 'myrias', representing the ten thousand parallel environments the engine simulates simultaneously. It provides a myriad of viewpoints from which to observe, identify, and control complex systems.
@@ -29,8 +36,8 @@ Myriad gives you **100,000 uncertain physical systems** in parallel and asks you
 **Requirements:** Python 3.11+, JAX 0.7.2+
 
 ```bash
-git clone https://github.com/robinhenry/myriad.git
-cd myriad
+git clone https://github.com/robinhenry/myriad-jax.git
+cd myriad-jax
 poetry install
 ```
 
