@@ -158,6 +158,7 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.isort]
-known-first-party = ["myriad"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 combine-as-imports = true
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+known-first-party = ["myriad"]
+known-third-party = ["wandb", "hydra", "omegaconf"]
