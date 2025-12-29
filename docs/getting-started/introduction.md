@@ -15,10 +15,13 @@ Modern experimental hardware has evolved to meet these challenges. For example, 
 
 **Myriad is built to leverage this experimental paradigm.**
 
-We need algorithms that can act on this massive, parallel data stream in real-time. Myriad provides the computational backend to develop these algorithms, enabling you to explore:
+We need algorithms that can act on this massive, parallel data stream in real-time. Myriad provides the computational backend to develop and test these algorithms before deploying them to real hardware, enabling you to:
 
-1.  **Accelerated discovery:** use active learning to steer parallel experiments into informative states, reducing the wall-clock time required to identify system parameters.
-2.  **Controlling populations:** train policies (e.g., via RL) that are robust to heterogeneity, learning to control the distribution of a population rather than just a single realization.
+1.  **Test experimental designs in silico:** Iterate on active learning strategies, experimental protocols, and control algorithms in simulation—avoiding wasted lab time on approaches that don't work.
+2.  **Validate algorithmic ideas:** Verify that your method works in principle on realistic stochastic systems before committing expensive hardware time.
+3.  **Accelerate discovery:** When sim-to-real transfer is viable, train policies on 100k+ simulated variants and deploy them directly to hardware.
+
+The goal is not to replace physical experiments, but to make them more efficient by filtering out bad ideas and validating good ones computationally first.
 
 ## Philosophy
 
