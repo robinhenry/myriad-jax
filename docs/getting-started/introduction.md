@@ -1,4 +1,4 @@
-# Introduction to Myriad
+# Motivation & Philosophy
 
 ## The Scientific Challenge
 Scientific systems — from gene circuits to chemical reactors — present a unique set of obstacles that make standard analysis difficult:
