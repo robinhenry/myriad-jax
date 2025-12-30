@@ -1,0 +1,2 @@
+device,env_name,error,num_envs,num_steps,scan_chunk_size,success
+cpu,cartpole,_init() missing 1 required positional argument: '_params',100,10,256,False

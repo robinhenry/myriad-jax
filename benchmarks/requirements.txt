@@ -1,0 +1,11 @@
+# Core dependencies (should already be installed with Myriad)
+jax>=0.4.0
+numpy>=1.24.0
+psutil>=5.9.0  # For memory profiling
+
+# Visualization (required for plot_results.py)
+matplotlib>=3.7.0
+
+# Library comparisons (optional)
+gymnax>=0.0.6  # For Gymnax comparison
+gymnasium>=0.29.0  # For Gymnasium comparison

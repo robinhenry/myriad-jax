@@ -1,0 +1,2 @@
+agent_memory_mb,device,env_name,num_envs,num_steps,per_env_throughput_steps_per_s,scan_chunk_size,state_memory_mb,success,time_max_s,time_mean_s,time_min_s,time_std_s,total_memory_mb,total_throughput_steps_per_s
+0.0,cpu,cartpole,100,10,34586.11138423208,256,0.0034332275390625,True,0.0003621659707278013,0.0002891334006562829,0.00023745803628116846,5.647840639852999e-05,0.0034332275390625,3458611.1384232077
