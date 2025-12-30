@@ -88,6 +88,22 @@ Save episodes to disk during training.
 python examples/09_periodic_episode_saving.py
 ```
 
+## Visualization Examples
+
+### 11_render_ccas_ccar.py
+Run and render a CcaS-CcaR gene circuit episode to video.
+- Shows how to collect episode trajectories
+- Demonstrates rendering frames from observations
+- Creates MP4 video visualization of fluorescence dynamics
+- Example of visualizing biological system control
+
+**Run:**
+```bash
+python examples/11_render_ccas_ccar.py
+```
+
+Output: `videos/ccas_ccar_episode.mp4` (~30 seconds, 10 fps)
+
 ## Legacy Examples
 
 ### 01_classical_control.py

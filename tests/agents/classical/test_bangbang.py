@@ -323,3 +323,71 @@ def test_vmap_compatibility_box(key, box_agent: Agent):
     chex.assert_trees_all_close(actions[0], expected_low)
     chex.assert_trees_all_close(actions[1], expected_low)
     chex.assert_trees_all_close(actions[2], expected_high)
+
+
+# Test invert parameter
+def test_make_agent_invert_default(discrete_action_space: Discrete):
+    """Test that invert defaults to False"""
+    agent = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta")
+    assert agent.params.invert is False
+
+
+def test_make_agent_invert_true(discrete_action_space: Discrete):
+    """Test creating agent with invert=True"""
+    agent = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta", invert=True)
+    assert agent.params.invert is True
+
+
+def test_select_action_inverted_discrete_below_threshold(
+    key, discrete_action_space: Discrete, obs_below_threshold: PhysicsState
+):
+    """When inverted and obs[field] <= threshold, should select HIGH action (inverted)"""
+    agent = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta", invert=True)
+    agent_state = agent.init(key, obs_below_threshold, agent.params)
+    action, _ = agent.select_action(key, obs_below_threshold, agent_state, agent.params)
+    assert action == 1  # High action when inverted and below threshold
+
+
+def test_select_action_inverted_discrete_above_threshold(
+    key, discrete_action_space: Discrete, obs_above_threshold: PhysicsState
+):
+    """When inverted and obs[field] > threshold, should select LOW action (inverted)"""
+    agent = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta", invert=True)
+    agent_state = agent.init(key, obs_above_threshold, agent.params)
+    action, _ = agent.select_action(key, obs_above_threshold, agent_state, agent.params)
+    assert action == 0  # Low action when inverted and above threshold
+
+
+def test_select_action_inverted_box_below_threshold(key, box_action_space: Box, obs_below_threshold: PhysicsState):
+    """When inverted and obs[field] <= threshold, should select HIGH action (inverted)"""
+    agent = make_agent(action_space=box_action_space, threshold=0.0, obs_field="theta", invert=True)
+    agent_state = agent.init(key, obs_below_threshold, agent.params)
+    action, _ = agent.select_action(key, obs_below_threshold, agent_state, agent.params)
+    expected = jnp.broadcast_to(box_action_space.high, box_action_space.shape)
+    chex.assert_trees_all_close(action, expected)
+
+
+def test_select_action_inverted_box_above_threshold(key, box_action_space: Box, obs_above_threshold: PhysicsState):
+    """When inverted and obs[field] > threshold, should select LOW action (inverted)"""
+    agent = make_agent(action_space=box_action_space, threshold=0.0, obs_field="theta", invert=True)
+    agent_state = agent.init(key, obs_above_threshold, agent.params)
+    action, _ = agent.select_action(key, obs_above_threshold, agent_state, agent.params)
+    expected = jnp.broadcast_to(box_action_space.low, box_action_space.shape)
+    chex.assert_trees_all_close(action, expected)
+
+
+def test_select_action_normal_vs_inverted(key, discrete_action_space: Discrete, obs_above_threshold: PhysicsState):
+    """Normal and inverted agents should select opposite actions"""
+    # Normal agent
+    agent_normal = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta", invert=False)
+    state_normal = agent_normal.init(key, obs_above_threshold, agent_normal.params)
+    action_normal, _ = agent_normal.select_action(key, obs_above_threshold, state_normal, agent_normal.params)
+
+    # Inverted agent
+    agent_inverted = make_agent(action_space=discrete_action_space, threshold=0.0, obs_field="theta", invert=True)
+    state_inverted = agent_inverted.init(key, obs_above_threshold, agent_inverted.params)
+    action_inverted, _ = agent_inverted.select_action(key, obs_above_threshold, state_inverted, agent_inverted.params)
+
+    # Actions should be opposite
+    assert action_normal == 1  # High when above threshold (normal)
+    assert action_inverted == 0  # Low when above threshold (inverted)

@@ -42,6 +42,7 @@ class AgentParams:
         obs_field: Field name from observation NamedTuple to use for threshold comparison
         low_action: Pre-computed low action value (for JIT efficiency)
         high_action: Pre-computed high action value (for JIT efficiency)
+        invert: If True, swap action selection (high when below threshold, low when above)
     """
 
     action_space: Space = struct.field(pytree_node=False)
@@ -49,6 +50,7 @@ class AgentParams:
     obs_field: str = struct.field(pytree_node=False)
     low_action: chex.Array
     high_action: chex.Array
+    invert: bool = False
 
 
 @struct.dataclass
@@ -77,14 +79,19 @@ def _select_action(
 ) -> Tuple[chex.Array, AgentState]:
     """Select bang-bang action based on observation threshold.
 
-    For Box action spaces: Returns low bound if obs[field] <= threshold, else high bound
-    For Discrete action spaces: Returns 0 if obs[field] <= threshold, else n-1
+    Normal mode (invert=False):
+        - obs[field] <= threshold: low action
+        - obs[field] > threshold: high action
+
+    Inverted mode (invert=True):
+        - obs[field] <= threshold: high action
+        - obs[field] > threshold: low action
 
     Args:
         _key: Random key (unused, policy is deterministic)
         obs: Current observation (NamedTuple or array)
         agent_state: Current agent state (contains obs_index)
-        params: Agent hyperparameters (contains threshold, pre-computed actions)
+        params: Agent hyperparameters (contains threshold, pre-computed actions, invert flag)
         deterministic: Ignored (bang-bang is always deterministic)
 
     Returns:
@@ -96,8 +103,14 @@ def _select_action(
     # Extract the observation value at the specified field index
     obs_value = obs_array[agent_state.obs_index]
 
-    # Use pre-computed action values for JIT efficiency (no Python control flow)
-    action = jnp.where(obs_value > params.threshold, params.high_action, params.low_action)
+    # Select action based on threshold comparison
+    # Compute both normal and inverted actions, then select based on invert flag
+    # This avoids Python control flow for JIT compatibility
+    normal_action = jnp.where(obs_value > params.threshold, params.high_action, params.low_action)
+    inverted_action = jnp.where(obs_value > params.threshold, params.low_action, params.high_action)
+
+    # Select between normal and inverted based on params.invert (JAX-compatible)
+    action = jnp.where(params.invert, inverted_action, normal_action)
 
     return action, agent_state
 
@@ -113,6 +126,7 @@ def make_agent(
     action_space: Space,
     threshold: float = 0.0,
     obs_field: str = "theta",
+    invert: bool = False,
 ) -> Agent:
     """Factory function to create a bang-bang controller agent.
 
@@ -121,13 +135,21 @@ def make_agent(
 
     Args:
         action_space: Action space (Box or Discrete)
-        threshold: Switching threshold. If obs[obs_field] > threshold, use "high" action.
-                  Default 0.0.
+        threshold: Switching threshold. Default 0.0.
         obs_field: Field name from observation NamedTuple to use for threshold comparison.
                   Default "theta" (pole angle for CartPole).
+        invert: If False (default): high action when obs > threshold
+                If True: low action when obs > threshold (swapped polarity)
 
     Returns:
         Agent instance with bang-bang control policy
+
+    Example:
+        >>> # Normal: push right when pole tilts right
+        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta")
+        >>>
+        >>> # Inverted: push left when pole tilts right (opposite polarity)
+        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta", invert=True)
     """
 
     if not obs_field or not isinstance(obs_field, str):
@@ -150,6 +172,7 @@ def make_agent(
         obs_field=obs_field,
         low_action=low_action,
         high_action=high_action,
+        invert=invert,
     )
 
     return Agent(

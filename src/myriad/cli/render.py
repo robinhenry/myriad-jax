@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 import numpy as np
 
-from myriad.utils.rendering import render_cartpole_frame, render_episode_to_video
+from myriad.utils.rendering import render_cartpole_frame, render_ccas_ccar_frame, render_episode_to_video
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 ENV_RENDERERS = {
     "cartpole": render_cartpole_frame,
-    # Add more environment renderers here as they're implemented
-    # "ccas_ccar": render_ccas_ccar_frame,
+    "ccas_ccar": render_ccas_ccar_frame,
 }
 
 
