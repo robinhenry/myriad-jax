@@ -35,6 +35,7 @@ def create_config(
     log_frequency: int = 100,
     seed: int = 42,
     wandb_enabled: bool = False,
+    auto_tune: bool = False,
     **kwargs: Any,
 ) -> Config:
     """Create a training config with sensible defaults.
@@ -45,7 +46,7 @@ def create_config(
     Args:
         env: Environment name (e.g., "cartpole-control", "ccas-ccar-control")
         agent: Agent name (e.g., "dqn", "pqn", "random")
-        num_envs: Number of parallel environments to run
+        num_envs: Number of parallel environments to run (ignored if auto_tune=True)
         steps_per_env: Number of steps to run per environment
         eval_max_steps: Maximum steps per evaluation episode.
             If None, uses environment-specific default.
@@ -54,6 +55,9 @@ def create_config(
         log_frequency: Log training metrics every N steps
         seed: Random seed for reproducibility
         wandb_enabled: Enable Weights & Biases logging
+        auto_tune: If True, automatically find optimal scan_chunk_size for the given
+            num_envs on your hardware. First run profiles your system (~30-60s),
+            subsequent runs use cached values (<1s). Overrides scan_chunk_size parameter.
         **kwargs: Additional config overrides. Can specify nested parameters using
             dot notation (e.g., agent.learning_rate=1e-3) or pass dicts for
             nested configs (e.g., wandb={"project": "my-project"}).
@@ -61,16 +65,43 @@ def create_config(
     Returns:
         Fully configured Config object ready for train_and_evaluate()
 
-    Example:
-        >>> from myriad import create_config, train_and_evaluate
-        >>> config = create_config(
-        ...     env="cartpole-control",
-        ...     agent="dqn",
-        ...     num_envs=1000,
-        ...     steps_per_env=100,
-        ... )
-        >>> results = train_and_evaluate(config)
+    Examples:
+        Basic usage:
+            >>> config = create_config(
+            ...     env="cartpole-control",
+            ...     agent="dqn",
+            ...     num_envs=1000,
+            ...     steps_per_env=100,
+            ... )
+
+        Auto-tuning (recommended for optimal scan_chunk_size):
+            >>> config = create_config(
+            ...     env="cartpole-control",
+            ...     agent="dqn",
+            ...     num_envs=100_000,
+            ...     auto_tune=True,  # Automatically finds optimal scan_chunk_size
+            ... )
     """
+    # Auto-tune if requested
+    if auto_tune:
+        from myriad.platform.autotune import suggest_scan_chunk_size
+
+        # Determine buffer_size for off-policy agents
+        buffer_size = kwargs.get("buffer_size") if agent in _OFF_POLICY_AGENTS else None
+
+        # Run auto-tuning to find optimal scan_chunk_size for the given num_envs
+        optimal_chunk_size = suggest_scan_chunk_size(
+            num_envs=num_envs,
+            env=env,
+            agent=agent,
+            buffer_size=buffer_size,
+            force_revalidate=False,
+            verbose=True,
+        )
+
+        # Override scan_chunk_size with auto-tuned value
+        kwargs["scan_chunk_size"] = optimal_chunk_size
+
     # Auto-detect eval_max_steps if not provided
     if eval_max_steps is None:
         env_defaults = _ENV_DEFAULTS.get(env)

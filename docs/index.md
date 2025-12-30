@@ -22,6 +22,8 @@ user-guide/concepts
 user-guide/custom_env
 user-guide/custom_agent
 user-guide/running_experiments
+user-guide/auto_tuning
+user-guide/benchmarking
 ```
 
 ```{toctree}

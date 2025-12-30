@@ -13,12 +13,16 @@ Critical JAX Benchmarking Rules
 4. **Device synchronization**: Ensure GPU work completes before timing.
 """
 
+import sys
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 import jax
-import jax.numpy as jnp
 import numpy as np
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 def get_device_info() -> dict[str, Any]:
@@ -74,20 +78,23 @@ def time_jitted_fn(
     *args,
     num_runs: int = 100,
     warmup_steps: int = 10,
+    measure_compile_time: bool = True,
     **kwargs,
 ) -> dict[str, float]:
     """Time a jitted function with proper warmup and blocking.
 
     This is the gold standard for benchmarking JAX functions. It:
-    1. Warms up the function to trigger compilation
-    2. Runs multiple iterations with proper blocking
-    3. Reports statistical summary
+    1. Measures compilation time (first call)
+    2. Warms up the function (additional calls for optimization)
+    3. Runs multiple iterations with proper blocking
+    4. Reports statistical summary
 
     Args:
         fn: The jitted function to time
         *args: Arguments to pass to fn
         num_runs: Number of timing runs (default: 100)
         warmup_steps: Number of warmup iterations (default: 10)
+        measure_compile_time: Whether to measure compilation time separately (default: True)
         **kwargs: Keyword arguments to pass to fn
 
     Returns:
@@ -98,9 +105,22 @@ def time_jitted_fn(
         - max: Maximum time (seconds)
         - median: Median time (seconds)
         - all_times: Array of all timing measurements
+        - compile_time: Time for first call including compilation (seconds, if measure_compile_time=True)
     """
-    # Warmup phase: trigger compilation and optimization
-    warmup_jitted_fn(fn, *args, warmup_steps=warmup_steps, **kwargs)
+    # Measure compilation time (first call)
+    compile_time = None
+    if measure_compile_time:
+        start = time.perf_counter()
+        result = fn(*args, **kwargs)
+        jax.tree_util.tree_map(lambda x: x.block_until_ready() if hasattr(x, "block_until_ready") else x, result)
+        compile_time = time.perf_counter() - start
+
+    # Warmup phase: additional calls for optimization (if warmup requested)
+    if warmup_steps > 0:
+        # If we measured compile time, we've already done 1 warmup
+        actual_warmup = warmup_steps - 1 if measure_compile_time else warmup_steps
+        if actual_warmup > 0:
+            warmup_jitted_fn(fn, *args, warmup_steps=actual_warmup, **kwargs)
 
     # Timing phase: measure steady-state performance
     times = []
@@ -114,7 +134,7 @@ def time_jitted_fn(
 
     times_array = np.array(times)
 
-    return {
+    stats = {
         "mean": float(np.mean(times_array)),
         "std": float(np.std(times_array)),
         "min": float(np.min(times_array)),
@@ -122,6 +142,11 @@ def time_jitted_fn(
         "median": float(np.median(times_array)),
         "all_times": times_array,
     }
+
+    if measure_compile_time:
+        stats["compile_time"] = compile_time
+
+    return stats
 
 
 def measure_compilation_time(fn: Callable, *args, **kwargs) -> float:
@@ -141,32 +166,6 @@ def measure_compilation_time(fn: Callable, *args, **kwargs) -> float:
     result = fn(*args, **kwargs)
     jax.tree_util.tree_map(lambda x: x.block_until_ready() if hasattr(x, "block_until_ready") else x, result)
     return time.perf_counter() - start
-
-
-def get_array_memory_mb(arr: jnp.ndarray) -> float:
-    """Calculate memory usage of a JAX array in megabytes.
-
-    Args:
-        arr: JAX array
-
-    Returns:
-        Memory usage in MB
-    """
-    return arr.nbytes / (1024 * 1024)
-
-
-def estimate_pytree_memory_mb(pytree: Any) -> float:
-    """Estimate total memory usage of a PyTree in megabytes.
-
-    Args:
-        pytree: A JAX PyTree (nested structure of arrays)
-
-    Returns:
-        Estimated memory usage in MB
-    """
-    leaves = jax.tree_util.tree_leaves(pytree)
-    total_bytes = sum(leaf.nbytes for leaf in leaves if isinstance(leaf, (jnp.ndarray, np.ndarray)))
-    return total_bytes / (1024 * 1024)
 
 
 def format_number(num: float, precision: int = 2) -> str:

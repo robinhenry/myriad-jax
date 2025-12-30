@@ -25,7 +25,7 @@
 
 ## At a Glance
 
-Myriad provides the computational backend to control biological and chemical systems where stochasticity is an important plays a big role. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
+Myriad provides the computational backend to control biological and chemical systems where stochasticity plays a big role. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
 
 ### Key Features
 

@@ -1,6 +1,9 @@
 # Myriad Performance Benchmarks
 
-This directory contains benchmarks for validating Myriad's performance claims and tracking regressions over time.
+This directory contains **validation benchmarks** for proving Myriad's performance claims and tracking regressions over time.
+
+> **For users**: To optimize your own experiments, see [Auto-Tuning Guide](../docs/user-guide/auto_tuning.md).
+> **For users**: To benchmark your own code, see [Benchmarking Guide](../docs/user-guide/benchmarking.md).
 
 ## Overview
 
