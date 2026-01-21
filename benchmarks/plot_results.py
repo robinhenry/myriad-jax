@@ -1,26 +1,13 @@
 """Generate plots from benchmark results.
 
-This script reads CSV results from benchmarks and generates publication-quality
-plots for documentation and README.
-
-Plots Generated
----------------
-1. Throughput vs num_envs (log-log scale)
-2. Scaling efficiency vs num_envs
-3. Memory usage vs num_envs
-4. scan_chunk_size sensitivity
-5. Library comparison bar charts
+Generates three plots (with CPU/GPU side-by-side if both available):
+1. throughput_scaling.png - Throughput vs num_envs
+2. memory_scaling.png - Memory usage vs num_envs
+3. library_comparison.png - Myriad vs Gymnax vs Gymnasium
 
 Usage
 -----
-Plot all results in results directory:
     python benchmarks/plot_results.py
-
-Plot specific result file:
-    python benchmarks/plot_results.py --input benchmarks/results/throughput_gpu_20240101.csv
-
-Generate specific plot type:
-    python benchmarks/plot_results.py --plot-type throughput
 """
 
 import argparse
@@ -30,394 +17,351 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 
-# Use a clean style
-plt.style.use("seaborn-v0_8-darkgrid" if "seaborn-v0_8-darkgrid" in plt.style.available else "default")
+plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
+
+COLORS = {
+    "cartpole": "#2E86AB",
+    "gene-circuit": "#A23B72",
+    "myriad": "#2E86AB",
+    "gymnax": "#06A77D",
+    "gymnasium": "#E63946",
+}
+MARKERS = {"cartpole": "o", "gene-circuit": "s"}
 
 
 def read_csv(file_path: Path) -> list[dict[str, Any]]:
-    """Read benchmark results from CSV file.
-
-    Args:
-        file_path: Path to CSV file
-
-    Returns:
-        List of result dictionaries
-    """
+    """Read benchmark results from CSV file."""
     results = []
     with open(file_path, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Convert numeric fields
-            converted_row = {}
+            converted = {}
             for key, value in row.items():
-                # Try to convert to number
-                try:
-                    if "." in value:
-                        converted_row[key] = float(value)
-                    else:
-                        converted_row[key] = int(value)
-                except (ValueError, AttributeError):
-                    converted_row[key] = value
-            results.append(converted_row)
+                if value == "":
+                    converted[key] = None
+                elif value in ("True", "true"):
+                    converted[key] = True
+                elif value in ("False", "false"):
+                    converted[key] = False
+                else:
+                    try:
+                        converted[key] = float(value) if "." in value else int(value)
+                    except (ValueError, TypeError):
+                        converted[key] = value
+            results.append(converted)
     return results
 
 
+def is_successful(r: dict) -> bool:
+    """Check if result is successful (treats None/missing as success)."""
+    return r.get("success") is not False
+
+
+def fmt(n: float) -> str:
+    """Format number with K/M suffix."""
+    if n >= 1e6:
+        return f"{n/1e6:.1f}M"
+    elif n >= 1e3:
+        return f"{n/1e3:.0f}K"
+    return f"{n:.0f}"
+
+
+def split_by_device(results: list[dict]) -> dict[str, list[dict]]:
+    """Split results by device (cpu/gpu)."""
+    by_device: dict[str, list] = {}
+    for r in results:
+        device = r.get("device", "unknown").lower()
+        by_device.setdefault(device, []).append(r)
+    return by_device
+
+
 def plot_throughput_scaling(results: list[dict], output_dir: Path):
-    """Plot throughput vs num_envs on log-log scale.
+    """Plot throughput vs num_envs, always showing CPU and GPU side-by-side."""
+    data = [r for r in results if is_successful(r) and r.get("total_throughput_steps_per_s")]
+    by_device = split_by_device(data)
 
-    Args:
-        results: Benchmark results
-        output_dir: Directory to save plot
-    """
-    # Filter successful results
-    successful = [r for r in results if r.get("success", True)]
-    if not successful:
-        print("No successful results to plot")
-        return
+    # Always show both CPU and GPU panels
+    devices = ["cpu", "gpu"]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), squeeze=False)
+    axes = axes[0]
 
-    # Group by environment
-    by_env = {}
-    for r in successful:
-        env_name = r.get("env_name", "unknown")
-        if env_name not in by_env:
-            by_env[env_name] = []
-        by_env[env_name].append(r)
+    for idx, device in enumerate(devices):
+        ax = axes[idx]
+        device_data = by_device.get(device, [])
 
-    # Create plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    colors = {"cartpole": "#2E86AB", "gene-circuit": "#A23B72"}
-    markers = {"cartpole": "o", "gene-circuit": "s"}
-
-    for env_name, env_results in by_env.items():
-        # Sort by num_envs
-        env_results = sorted(env_results, key=lambda x: x.get("num_envs", 0))
-
-        num_envs = [r["num_envs"] for r in env_results]
-        throughput = [r.get("total_throughput_steps_per_s", 0) for r in env_results]
-
-        # Plot
-        color = colors.get(env_name, "blue")
-        marker = markers.get(env_name, "o")
-        label = env_name.replace("-", " ").title()
-
-        ax.loglog(num_envs, throughput, marker=marker, linewidth=2, markersize=8, label=label, color=color)
-
-    ax.set_xlabel("Number of Parallel Environments", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Throughput (steps/second)", fontsize=12, fontweight="bold")
-    ax.set_title("Myriad Throughput Scaling", fontsize=14, fontweight="bold")
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-
-    # Add reference line for perfect scaling
-    if by_env:
-        first_env_results = list(by_env.values())[0]
-        if first_env_results:
-            first_result = sorted(first_env_results, key=lambda x: x.get("num_envs", 0))[0]
-            baseline_envs = first_result["num_envs"]
-            baseline_throughput = first_result.get("total_throughput_steps_per_s", 0)
-
-            max_envs = max(r["num_envs"] for results in by_env.values() for r in results)
-            perfect_scaling_x = [baseline_envs, max_envs]
-            perfect_scaling_y = [baseline_throughput, baseline_throughput * (max_envs / baseline_envs)]
-            ax.plot(
-                perfect_scaling_x,
-                perfect_scaling_y,
-                "--",
-                color="gray",
-                alpha=0.5,
-                label="Perfect Scaling",
-                linewidth=1.5,
-            )
-            ax.legend(fontsize=11)
-
-    plt.tight_layout()
-    output_path = output_dir / "throughput_scaling.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
-def plot_scaling_efficiency(results: list[dict], output_dir: Path):
-    """Plot scaling efficiency vs num_envs.
-
-    Args:
-        results: Benchmark results
-        output_dir: Directory to save plot
-    """
-    successful = [r for r in results if r.get("success", True)]
-    if not successful:
-        return
-
-    # Group by environment
-    by_env = {}
-    for r in successful:
-        env_name = r.get("env_name", "unknown")
-        if env_name not in by_env:
-            by_env[env_name] = []
-        by_env[env_name].append(r)
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    colors = {"cartpole": "#2E86AB", "gene-circuit": "#A23B72"}
-    markers = {"cartpole": "o", "gene-circuit": "s"}
-
-    for env_name, env_results in by_env.items():
-        env_results = sorted(env_results, key=lambda x: x.get("num_envs", 0))
-        if len(env_results) < 2:
+        if not device_data:
+            # Empty panel - show "No data" message
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=14, color="gray", transform=ax.transAxes)
+            ax.set_xlabel("Number of Parallel Environments", fontsize=11)
+            ax.set_ylabel("Throughput (steps/second)", fontsize=11)
+            ax.set_title(device.upper(), fontsize=13, fontweight="bold")
+            ax.grid(True, alpha=0.3)
             continue
 
-        # Calculate efficiency relative to smallest configuration
-        baseline = env_results[0]
-        _baseline_envs = baseline["num_envs"]
-        baseline_per_env_throughput = baseline.get("per_env_throughput_steps_per_s", 1)
+        # Group by environment
+        by_env: dict[str, list] = {}
+        for r in device_data:
+            by_env.setdefault(r.get("env_name", "unknown"), []).append(r)
 
-        num_envs = []
-        efficiencies = []
+        for env_name, env_data in by_env.items():
+            # Deduplicate by num_envs (take best)
+            seen = {}
+            for r in env_data:
+                key = r["num_envs"]
+                if key not in seen or r["total_throughput_steps_per_s"] > seen[key]["total_throughput_steps_per_s"]:
+                    seen[key] = r
+            env_data = sorted(seen.values(), key=lambda x: x["num_envs"])
 
-        for r in env_results:
-            current_per_env = r.get("per_env_throughput_steps_per_s", 0)
-            efficiency = current_per_env / baseline_per_env_throughput if baseline_per_env_throughput > 0 else 0
-            num_envs.append(r["num_envs"])
-            efficiencies.append(efficiency)
+            num_envs = [r["num_envs"] for r in env_data]
+            throughput = [r["total_throughput_steps_per_s"] for r in env_data]
 
-        color = colors.get(env_name, "blue")
-        marker = markers.get(env_name, "o")
-        label = env_name.replace("-", " ").title()
+            color = COLORS.get(env_name, "#666666")
+            marker = MARKERS.get(env_name, "o")
+            label = env_name.replace("-", " ").title()
 
-        ax.semilogx(num_envs, efficiencies, marker=marker, linewidth=2, markersize=8, label=label, color=color)
+            ax.loglog(num_envs, throughput, marker=marker, linewidth=2.5, markersize=9, label=label, color=color)
 
-    # Perfect efficiency reference line
-    ax.axhline(y=1.0, color="gray", linestyle="--", alpha=0.5, label="Perfect Efficiency")
+            # Annotate points
+            for x, y in zip(num_envs, throughput):
+                ax.annotate(fmt(y), (x, y), textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8)
 
-    ax.set_xlabel("Number of Parallel Environments", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Scaling Efficiency", fontsize=12, fontweight="bold")
-    ax.set_title("Parallel Scaling Efficiency", fontsize=14, fontweight="bold")
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-    ax.set_ylim(0, 1.2)
+        # Perfect scaling reference
+        if by_env:
+            first = sorted(list(by_env.values())[0], key=lambda x: x["num_envs"])
+            if len(first) >= 2:
+                base_envs, base_tp = first[0]["num_envs"], first[0]["total_throughput_steps_per_s"]
+                max_envs = max(r["num_envs"] for env_data in by_env.values() for r in env_data)
+                ax.plot(
+                    [base_envs, max_envs],
+                    [base_tp, base_tp * max_envs / base_envs],
+                    "--",
+                    color="gray",
+                    alpha=0.5,
+                    linewidth=1.5,
+                    label="Perfect Scaling",
+                )
 
+        ax.set_xlabel("Number of Parallel Environments", fontsize=11)
+        ax.set_ylabel("Throughput (steps/second)", fontsize=11)
+        ax.set_title(device.upper(), fontsize=13, fontweight="bold")
+        ax.legend(fontsize=9, loc="lower right")
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Myriad Throughput Scaling", fontsize=14, fontweight="bold", y=1.02)
     plt.tight_layout()
-    output_path = output_dir / "scaling_efficiency.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
-def plot_memory_usage(results: list[dict], output_dir: Path):
-    """Plot memory usage vs num_envs.
-
-    Args:
-        results: Memory profiling results
-        output_dir: Directory to save plot
-    """
-    successful = [r for r in results if r.get("success", True)]
-    if not successful:
-        return
-
-    # Sort by num_envs
-    successful = sorted(successful, key=lambda x: x.get("num_envs", 0))
-
-    num_envs = [r["num_envs"] for r in successful]
-
-    # Determine which memory metric to plot (GPU or CPU)
-    has_gpu = "gpu_delta_mb" in successful[0]
-    if has_gpu:
-        memory = [r.get("gpu_delta_mb", 0) for r in successful]
-        memory_label = "GPU Memory (MB)"
-    else:
-        memory = [r.get("cpu_delta_mb", 0) for r in successful]
-        memory_label = "CPU Memory (MB)"
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    ax.loglog(num_envs, memory, marker="o", linewidth=2, markersize=8, color="#E63946", label="Measured Memory")
-
-    ax.set_xlabel("Number of Parallel Environments", fontsize=12, fontweight="bold")
-    ax.set_ylabel(memory_label, fontsize=12, fontweight="bold")
-    ax.set_title("Memory Usage Scaling", fontsize=14, fontweight="bold")
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    output_path = output_dir / "memory_scaling.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
-def plot_scan_chunk_sensitivity(results: list[dict], output_dir: Path):
-    """Plot throughput vs scan_chunk_size.
-
-    Args:
-        results: Benchmark results with varying scan_chunk_size
-        output_dir: Directory to save plot
-    """
-    successful = [r for r in results if r.get("success", True)]
-    if not successful:
-        return
-
-    # Filter to single num_envs (should be same for all in sensitivity test)
-    target_num_envs = successful[0].get("num_envs")
-    filtered = [r for r in successful if r.get("num_envs") == target_num_envs]
-
-    if not filtered:
-        return
-
-    # Sort by scan_chunk_size
-    filtered = sorted(filtered, key=lambda x: x.get("scan_chunk_size", 0))
-
-    scan_sizes = [r["scan_chunk_size"] for r in filtered]
-    throughput = [r.get("total_throughput_steps_per_s", 0) for r in filtered]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    ax.semilogx(
-        scan_sizes,
-        throughput,
-        marker="o",
-        linewidth=2,
-        markersize=8,
-        color="#06A77D",
-        label=f"{target_num_envs:,} environments",
-    )
-
-    ax.set_xlabel("Scan Chunk Size", fontsize=12, fontweight="bold")
-    ax.set_ylabel("Throughput (steps/second)", fontsize=12, fontweight="bold")
-    ax.set_title("scan_chunk_size Sensitivity Analysis", fontsize=14, fontweight="bold")
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    output_path = output_dir / "scan_chunk_sensitivity.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Saved: {output_path}")
+    path = output_dir / "throughput_scaling.png"
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    print(f"  Saved: {path}")
     plt.close()
 
 
 def plot_library_comparison(results: list[dict], output_dir: Path):
-    """Plot library comparison bar chart.
+    """Plot vertical bar chart comparing libraries, always showing CPU and GPU side-by-side."""
+    data = [r for r in results if is_successful(r) and r.get("throughput_steps_per_s")]
+    by_device = split_by_device(data)
 
-    Args:
-        results: Library comparison results
-        output_dir: Directory to save plot
-    """
-    successful = [r for r in results if r.get("success", True)]
-    if not successful:
-        return
+    # Always show both CPU and GPU panels
+    devices = ["cpu", "gpu"]
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
+    axes = axes[0]
 
-    # Sort by throughput
-    successful = sorted(successful, key=lambda x: x.get("throughput_steps_per_s", 0))
+    for idx, device in enumerate(devices):
+        ax = axes[idx]
+        device_data = by_device.get(device, [])
 
-    libraries = [r["library"].capitalize() for r in successful]
-    throughput = [r.get("throughput_steps_per_s", 0) for r in successful]
+        if not device_data:
+            # Empty panel
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=14, color="gray", transform=ax.transAxes)
+            ax.set_ylabel("Throughput (steps/second)", fontsize=11)
+            ax.set_title(device.upper(), fontsize=13, fontweight="bold")
+            ax.grid(True, axis="y", alpha=0.3)
+            continue
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+        num_envs = device_data[0].get("num_envs", "?")
 
-    colors = {"Myriad": "#2E86AB", "Gymnax": "#06A77D", "Gymnasium": "#E63946"}
-    bar_colors = [colors.get(lib, "gray") for lib in libraries]
+        # Deduplicate by library (take best)
+        by_lib = {}
+        for r in device_data:
+            lib = r["library"]
+            if lib not in by_lib or r["throughput_steps_per_s"] > by_lib[lib]["throughput_steps_per_s"]:
+                by_lib[lib] = r
 
-    bars = ax.bar(libraries, throughput, color=bar_colors, alpha=0.8, edgecolor="black")
+        # Sort by throughput ascending (lowest first, highest last)
+        sorted_data = sorted(by_lib.values(), key=lambda x: x["throughput_steps_per_s"])
 
-    # Add value labels on bars
-    for bar in bars:
-        height = bar.get_height()
-        if height > 1e6:
-            label = f"{height/1e6:.2f}M"
-        elif height > 1e3:
-            label = f"{height/1e3:.2f}K"
-        else:
-            label = f"{height:.0f}"
-        ax.text(bar.get_x() + bar.get_width() / 2.0, height, label, ha="center", va="bottom", fontweight="bold")
+        libraries = [r["library"].capitalize() for r in sorted_data]
+        throughput = [r["throughput_steps_per_s"] for r in sorted_data]
+        colors = [COLORS.get(r["library"].lower(), "#666666") for r in sorted_data]
 
-    ax.set_ylabel("Throughput (steps/second)", fontsize=12, fontweight="bold")
-    ax.set_title("Library Performance Comparison", fontsize=14, fontweight="bold")
-    ax.grid(True, axis="y", alpha=0.3)
+        bars = ax.bar(libraries, throughput, color=colors, alpha=0.85, edgecolor="black", width=0.6)
 
-    # Log scale if range is large
-    if max(throughput) / min(throughput) > 100:
-        ax.set_yscale("log")
+        # Value labels on top
+        for bar, tp in zip(bars, throughput):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() * 1.02,
+                fmt(tp),
+                ha="center",
+                va="bottom",
+                fontweight="bold",
+                fontsize=10,
+            )
 
+        # Speedup labels inside bars
+        if len(throughput) > 1:
+            baseline = min(throughput)
+            for bar, tp in zip(bars, throughput):
+                if tp > baseline * 1.5:
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() * 0.5,
+                        f"{tp/baseline:.0f}×",
+                        ha="center",
+                        va="center",
+                        color="white",
+                        fontweight="bold",
+                        fontsize=12,
+                    )
+
+        ax.set_ylabel("Throughput (steps/second)", fontsize=11)
+        ax.set_title(f"{device.upper()} ({fmt(num_envs)} envs)", fontsize=13, fontweight="bold")
+        ax.grid(True, axis="y", alpha=0.3)
+
+        if max(throughput) / max(min(throughput), 1) > 50:
+            ax.set_yscale("log")
+
+    fig.suptitle("Library Comparison", fontsize=14, fontweight="bold", y=1.02)
     plt.tight_layout()
-    output_path = output_dir / "library_comparison.png"
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Saved: {output_path}")
+    path = output_dir / "library_comparison.png"
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    print(f"  Saved: {path}")
+    plt.close()
+
+
+def plot_memory_scaling(results: list[dict], output_dir: Path):
+    """Plot memory usage vs num_envs, always showing CPU and GPU side-by-side."""
+    data = [
+        r
+        for r in results
+        if is_successful(r) and (r.get("cpu_delta_mb") is not None or r.get("gpu_allocated_mb") is not None)
+    ]
+    by_device = split_by_device(data)
+
+    # Always show both CPU and GPU panels
+    devices = ["cpu", "gpu"]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), squeeze=False)
+    axes = axes[0]
+
+    for idx, device in enumerate(devices):
+        ax = axes[idx]
+        device_data = by_device.get(device, [])
+        is_gpu = device == "gpu"
+
+        ylabel = "GPU Memory (MB)" if is_gpu else "CPU Memory Delta (MB)"
+
+        if not device_data:
+            # Empty panel
+            ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=14, color="gray", transform=ax.transAxes)
+            ax.set_xlabel("Number of Parallel Environments", fontsize=11)
+            ax.set_ylabel(ylabel, fontsize=11)
+            ax.set_title(device.upper(), fontsize=13, fontweight="bold")
+            ax.grid(True, alpha=0.3)
+            continue
+
+        # Group by environment
+        by_env: dict[str, list] = {}
+        for r in device_data:
+            by_env.setdefault(r.get("env_name", "unknown"), []).append(r)
+
+        for env_name, env_data in by_env.items():
+            # Deduplicate by num_envs
+            seen = {}
+            for r in env_data:
+                seen[r["num_envs"]] = r
+            env_data = sorted(seen.values(), key=lambda x: x["num_envs"])
+
+            num_envs = [r["num_envs"] for r in env_data]
+
+            if is_gpu:
+                memory = [r.get("gpu_allocated_mb") or r.get("gpu_delta_mb") or 0 for r in env_data]
+            else:
+                memory = [r.get("cpu_delta_mb") or 0 for r in env_data]
+
+            # Filter zero values
+            valid = [(n, m) for n, m in zip(num_envs, memory) if m > 0]
+            if not valid:
+                continue
+            num_envs, memory = zip(*valid)
+
+            color = COLORS.get(env_name, "#666666")
+            marker = MARKERS.get(env_name, "o")
+            label = env_name.replace("-", " ").title()
+
+            ax.loglog(num_envs, memory, marker=marker, linewidth=2.5, markersize=9, label=label, color=color)
+
+            # Annotate
+            for x, y in zip(num_envs, memory):
+                ax.annotate(f"{y:.0f}", (x, y), textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8)
+
+        ax.set_xlabel("Number of Parallel Environments", fontsize=11)
+        ax.set_ylabel(ylabel, fontsize=11)
+        ax.set_title(device.upper(), fontsize=13, fontweight="bold")
+        ax.legend(fontsize=9, loc="lower right")
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Memory Usage", fontsize=14, fontweight="bold", y=1.02)
+    plt.tight_layout()
+    path = output_dir / "memory_scaling.png"
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    print(f"  Saved: {path}")
     plt.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate plots from benchmark results")
-    parser.add_argument(
-        "--input",
-        type=str,
-        help="Input CSV file (default: auto-detect from benchmarks/results/)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="benchmarks/results/plots",
-        help="Output directory for plots (default: benchmarks/results/plots)",
-    )
-    parser.add_argument(
-        "--plot-type",
-        type=str,
-        choices=["all", "throughput", "efficiency", "memory", "scan", "comparison"],
-        default="all",
-        help="Type of plot to generate (default: all)",
-    )
-
+    parser = argparse.ArgumentParser(description="Generate benchmark plots")
+    parser.add_argument("--output-dir", type=str, default="benchmarks/plots", help="Output directory")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Find input files
-    if args.input:
-        input_files = [Path(args.input)]
-    else:
-        results_dir = Path("benchmarks/results")
-        if not results_dir.exists():
-            print(f"Results directory not found: {results_dir}")
-            print("Run benchmarks first or specify --input")
-            return
+    results_dir = Path("benchmarks/results")
+    csv_files = sorted(results_dir.glob("*.csv"))
 
-        input_files = list(results_dir.glob("*.csv"))
-        if not input_files:
-            print(f"No CSV files found in {results_dir}")
-            return
+    if not csv_files:
+        print("No CSV files found in benchmarks/results/. Run benchmarks first.")
+        return
 
-    print(f"\nGenerating plots from {len(input_files)} result file(s)")
-    print(f"Output directory: {output_dir}")
-    print("=" * 70)
+    print(f"\nReading {len(csv_files)} result file(s)...")
 
-    # Process each result file
-    for input_file in input_files:
-        print(f"\nProcessing: {input_file.name}")
-        results = read_csv(input_file)
+    throughput_data: list[dict] = []
+    memory_data: list[dict] = []
+    comparison_data: list[dict] = []
 
-        if not results:
-            print(f"  No results found in {input_file.name}")
-            continue
+    for f in csv_files:
+        data = read_csv(f)
+        name = f.stem.lower()
+        if "throughput" in name:
+            throughput_data.extend(data)
+        elif "memory" in name:
+            memory_data.extend(data)
+        elif "comparison" in name:
+            comparison_data.extend(data)
 
-        # Determine plot type based on filename or --plot-type
-        filename = input_file.stem
+    print(f"\nGenerating plots to {output_dir}/")
+    print("-" * 40)
 
-        if args.plot_type in ["all", "throughput"] and "throughput" in filename:
-            plot_throughput_scaling(results, output_dir)
-            plot_scaling_efficiency(results, output_dir)
+    if throughput_data:
+        plot_throughput_scaling(throughput_data, output_dir)
 
-        if args.plot_type in ["all", "memory"] and "memory" in filename:
-            plot_memory_usage(results, output_dir)
+    if memory_data:
+        plot_memory_scaling(memory_data, output_dir)
 
-        if args.plot_type in ["all", "scan"] and ("scan" in filename or "memory" in filename):
-            plot_scan_chunk_sensitivity(results, output_dir)
+    if comparison_data:
+        plot_library_comparison(comparison_data, output_dir)
 
-        if args.plot_type in ["all", "comparison"] and "comparison" in filename:
-            plot_library_comparison(results, output_dir)
-
-    print("\n" + "=" * 70)
-    print(f"Plots saved to: {output_dir}")
-    print("=" * 70)
+    print("-" * 40)
+    print("Done!")
 
 
 if __name__ == "__main__":

@@ -30,9 +30,8 @@ import psutil
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks.config import SCAN_CHUNK_SENSITIVITY_CONFIGS, THROUGHPUT_CONFIGS
+from benchmarks.config import get_scan_sensitivity_configs, get_throughput_configs
 from benchmarks.utils import (
-    estimate_pytree_memory_mb,
     format_number,
     get_device_info,
 )
@@ -41,6 +40,7 @@ from myriad.envs import make_env
 from myriad.platform.shared import TrainingEnvState
 from myriad.platform.step_functions import make_train_step_fn
 from myriad.utils import to_array
+from myriad.utils.memory import estimate_pytree_memory_mb
 
 
 def get_process_memory_mb() -> float:
@@ -241,10 +241,10 @@ def main():
 
     all_results = []
 
-    # Profile num_envs scaling
+    # Profile num_envs scaling (uses env-specific configs)
     if args.profile in ["envs", "both"]:
-        print("\n>>> Profiling memory vs num_envs")
-        for config in THROUGHPUT_CONFIGS:
+        print(f"\n>>> Profiling memory vs num_envs for {args.env}")
+        for config in get_throughput_configs(env=args.env):
             result = profile_memory_at_scale(
                 env_name=args.env,
                 num_envs=config.num_envs,
@@ -252,10 +252,10 @@ def main():
             )
             all_results.append(result)
 
-    # Profile scan_chunk_size sensitivity
+    # Profile scan_chunk_size sensitivity (uses env-specific configs)
     if args.profile in ["scan", "both"]:
-        print("\n>>> Profiling memory vs scan_chunk_size")
-        for config in SCAN_CHUNK_SENSITIVITY_CONFIGS:
+        print(f"\n>>> Profiling memory vs scan_chunk_size for {args.env}")
+        for config in get_scan_sensitivity_configs(env=args.env):
             result = profile_memory_at_scale(
                 env_name=args.env,
                 num_envs=config.num_envs,

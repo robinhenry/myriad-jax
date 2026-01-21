@@ -199,29 +199,3 @@ def calculate_throughput(total_steps: int, time_seconds: float) -> float:
         Throughput in steps/second
     """
     return total_steps / time_seconds
-
-
-def calculate_scaling_efficiency(
-    throughput_n: float,
-    throughput_baseline: float,
-    n_envs: int,
-    baseline_envs: int = 1,
-) -> float:
-    """Calculate parallel scaling efficiency.
-
-    Perfect scaling: efficiency = 1.0
-    Sublinear scaling: efficiency < 1.0
-    Superlinear scaling: efficiency > 1.0 (rare, usually caching effects)
-
-    Args:
-        throughput_n: Throughput at N environments
-        throughput_baseline: Throughput at baseline (usually 1 env)
-        n_envs: Number of environments at N
-        baseline_envs: Number of environments at baseline
-
-    Returns:
-        Scaling efficiency (0.0 to 1.0 typically)
-    """
-    # Expected throughput if scaling were perfect
-    expected_throughput = throughput_baseline * (n_envs / baseline_envs)
-    return throughput_n / expected_throughput

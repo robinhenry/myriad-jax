@@ -1,9 +1,14 @@
 """Configuration for Myriad benchmarks.
 
-This module defines the test matrix for performance benchmarking.
+Loads device and environment-specific configs from config.yaml.
+Structure: device (cpu/gpu) -> benchmark type -> environment -> configs
 """
 
 from dataclasses import dataclass
+from pathlib import Path
+
+import jax
+import yaml
 
 
 @dataclass
@@ -12,46 +17,136 @@ class BenchmarkConfig:
 
     num_envs: int
     scan_chunk_size: int
-    num_steps: int = 1000  # Steps to run for timing
-    warmup_steps: int = 10  # Warmup iterations
-    num_timing_runs: int = 5  # Statistical runs (exclude warmup)
+    num_steps: int = 1000
+    warmup_steps: int = 10
+    num_timing_runs: int = 5
 
 
-# Test matrix for throughput scaling
-# Strategy: Start with standard scan_chunk_size (256), then reduce it
-# as num_envs increases to manage memory
-THROUGHPUT_CONFIGS = [
-    # Small scale: standard configuration
-    BenchmarkConfig(num_envs=100, scan_chunk_size=256, num_steps=1000),
-    BenchmarkConfig(num_envs=1_000, scan_chunk_size=256, num_steps=1000),
-    BenchmarkConfig(num_envs=10_000, scan_chunk_size=256, num_steps=1000),
-    # Large scale: start reducing scan_chunk_size to manage memory
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=128, num_steps=1000),
-    BenchmarkConfig(num_envs=500_000, scan_chunk_size=64, num_steps=500),
-    BenchmarkConfig(num_envs=1_000_000, scan_chunk_size=32, num_steps=100),
-    # Extreme scale: minimal scan_chunk_size (if memory allows)
-    BenchmarkConfig(num_envs=2_000_000, scan_chunk_size=16, num_steps=100),
-    BenchmarkConfig(num_envs=5_000_000, scan_chunk_size=8, num_steps=50),
-]
+def get_device() -> str:
+    """Detect current JAX device platform."""
+    return jax.devices()[0].platform
 
-# Test matrix for scan_chunk_size sensitivity
-# Fix num_envs at a high value and sweep scan_chunk_size
-SCAN_CHUNK_SENSITIVITY_CONFIGS = [
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=8, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=16, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=32, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=64, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=128, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=256, num_steps=500),
-    BenchmarkConfig(num_envs=100_000, scan_chunk_size=512, num_steps=500),
-]
 
-# Comparison configurations for library benchmarking
-# Use moderate scale to be fair across libraries
-COMPARISON_CONFIG = BenchmarkConfig(
-    num_envs=1_000,
-    scan_chunk_size=256,
-    num_steps=10_000,  # Run longer for statistical significance
-    warmup_steps=10,
-    num_timing_runs=10,
-)
+def _load_yaml() -> dict:
+    """Load raw YAML config."""
+    config_path = Path(__file__).parent / "config.yaml"
+    with open(config_path) as f:
+        return yaml.safe_load(f)
+
+
+def load_config(device: str | None = None) -> dict:
+    """Load config for specified device.
+
+    Args:
+        device: "cpu" or "gpu". Auto-detected if None.
+
+    Returns:
+        Merged config dict with base settings and device-specific benchmarks.
+    """
+    cfg = _load_yaml()
+
+    device = device or get_device()
+    if device not in ("cpu", "gpu"):
+        device = "cpu"
+
+    base = cfg.get("base", {})
+    device_cfg = cfg.get(device, {})
+
+    return {**base, **device_cfg}
+
+
+def get_envs(device: str | None = None) -> list[str]:
+    """Get list of available environments for benchmarking."""
+    cfg = load_config(device)
+    # Get envs from throughput config keys
+    throughput = cfg.get("throughput", {})
+    return list(throughput.keys())
+
+
+def get_throughput_configs(
+    device: str | None = None, env: str | None = None
+) -> list[BenchmarkConfig] | dict[str, list[BenchmarkConfig]]:
+    """Get throughput benchmark configs.
+
+    Args:
+        device: "cpu" or "gpu". Auto-detected if None.
+        env: Environment name. If None, returns dict of all envs.
+
+    Returns:
+        List of configs for specified env, or dict mapping env -> configs.
+    """
+    cfg = load_config(device)
+    throughput = cfg.get("throughput", {})
+
+    def make_configs(env_configs: list) -> list[BenchmarkConfig]:
+        return [
+            BenchmarkConfig(
+                num_envs=c["num_envs"],
+                scan_chunk_size=c["scan_chunk_size"],
+                num_steps=c.get("num_steps", 1000),
+                warmup_steps=cfg.get("warmup_steps", 10),
+                num_timing_runs=cfg.get("num_timing_runs", 5),
+            )
+            for c in env_configs
+        ]
+
+    if env:
+        return make_configs(throughput.get(env, []))
+
+    return {env_name: make_configs(configs) for env_name, configs in throughput.items()}
+
+
+def get_scan_sensitivity_configs(
+    device: str | None = None, env: str | None = None
+) -> list[BenchmarkConfig] | dict[str, list[BenchmarkConfig]]:
+    """Get scan chunk sensitivity configs.
+
+    Args:
+        device: "cpu" or "gpu". Auto-detected if None.
+        env: Environment name. If None, returns dict of all envs.
+
+    Returns:
+        List of configs for specified env, or dict mapping env -> configs.
+    """
+    cfg = load_config(device)
+    scan_sensitivity = cfg.get("scan_sensitivity", {})
+
+    def make_configs(env_configs: list) -> list[BenchmarkConfig]:
+        return [
+            BenchmarkConfig(
+                num_envs=c["num_envs"],
+                scan_chunk_size=c["scan_chunk_size"],
+                num_steps=c.get("num_steps", 500),
+                warmup_steps=cfg.get("warmup_steps", 10),
+                num_timing_runs=cfg.get("num_timing_runs", 5),
+            )
+            for c in env_configs
+        ]
+
+    if env:
+        return make_configs(scan_sensitivity.get(env, []))
+
+    return {env_name: make_configs(configs) for env_name, configs in scan_sensitivity.items()}
+
+
+def get_comparison_config(device: str | None = None, env: str = "cartpole") -> BenchmarkConfig:
+    """Get library comparison config.
+
+    Args:
+        device: "cpu" or "gpu". Auto-detected if None.
+        env: Environment name.
+
+    Returns:
+        BenchmarkConfig for the specified environment.
+    """
+    cfg = load_config(device)
+    comparison = cfg.get("comparison", {})
+    comp = comparison.get(env, {"num_envs": 1000, "scan_chunk_size": 256, "num_steps": 10000})
+
+    return BenchmarkConfig(
+        num_envs=comp.get("num_envs", 1000),
+        scan_chunk_size=comp.get("scan_chunk_size", 256),
+        num_steps=comp.get("num_steps", 10000),
+        warmup_steps=cfg.get("warmup_steps", 10),
+        num_timing_runs=cfg.get("num_timing_runs", 10),
+    )

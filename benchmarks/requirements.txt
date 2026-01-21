@@ -2,5 +2,5 @@
 matplotlib>=3.7.0
 
 # Library comparisons (optional)
-gymnax>=0.0.6  # For Gymnax comparison
-gymnasium>=0.29.0  # For Gymnasium comparison
+gymnax>=0.0.9  # For Gymnax comparison
+gymnasium>=1.2.3  # For Gymnasium comparison

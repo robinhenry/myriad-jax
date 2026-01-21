@@ -42,7 +42,7 @@ import jax
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks.config import COMPARISON_CONFIG
+from benchmarks.config import get_comparison_config
 from benchmarks.utils import (
     calculate_throughput,
     format_number,
@@ -115,7 +115,7 @@ def benchmark_myriad(num_envs: int, steps_per_env: int) -> dict:
         agent_state,
         training_state,
         steps_per_env,
-        num_runs=COMPARISON_CONFIG.num_timing_runs,
+        num_runs=get_comparison_config().num_timing_runs,
         warmup_steps=0,  # Already compiled
     )
 
@@ -218,7 +218,7 @@ def benchmark_gymnax(num_envs: int, steps_per_env: int) -> dict:
             env_states,
             obs,
             steps_per_env,
-            num_runs=COMPARISON_CONFIG.num_timing_runs,
+            num_runs=get_comparison_config().num_timing_runs,
             warmup_steps=0,
         )
 
@@ -293,7 +293,7 @@ def benchmark_gymnasium(total_steps: int) -> dict:
         # Timing runs
         print("    Timing execution...")
         times = []
-        for run in range(COMPARISON_CONFIG.num_timing_runs):
+        for run in range(get_comparison_config().num_timing_runs):
             obs, _ = env.reset()
             start = time.perf_counter()
             steps_done = 0
@@ -375,14 +375,14 @@ def main():
     parser.add_argument(
         "--num-envs",
         type=int,
-        default=COMPARISON_CONFIG.num_envs,
-        help=f"Number of parallel environments for Myriad/Gymnax (default: {COMPARISON_CONFIG.num_envs})",
+        default=get_comparison_config().num_envs,
+        help=f"Number of parallel environments for Myriad/Gymnax (default: {get_comparison_config().num_envs})",
     )
     parser.add_argument(
         "--steps-per-env",
         type=int,
-        default=COMPARISON_CONFIG.num_steps,
-        help=f"Steps per environment (default: {COMPARISON_CONFIG.num_steps})",
+        default=get_comparison_config().num_steps,
+        help=f"Steps per environment (default: {get_comparison_config().num_steps})",
     )
     parser.add_argument(
         "--output",

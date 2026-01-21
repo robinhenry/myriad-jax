@@ -38,10 +38,9 @@ import jax
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks.config import THROUGHPUT_CONFIGS
+from benchmarks.config import get_throughput_configs
 from benchmarks.utils import (
     calculate_throughput,
-    estimate_pytree_memory_mb,
     format_number,
     get_device_info,
     time_jitted_fn,
@@ -52,6 +51,7 @@ from myriad.envs import make_env
 from myriad.platform.shared import TrainingEnvState
 from myriad.platform.step_functions import make_train_step_fn
 from myriad.utils import to_array
+from myriad.utils.memory import estimate_pytree_memory_mb
 
 
 def setup_environment(env_name: str, num_envs: int):
@@ -326,36 +326,36 @@ def main():
     print(f"Devices: {device_info['devices']}")
     print("=" * 70)
 
-    # Determine configurations to run
+    # Determine configurations to run (auto-detected based on device)
+    # Config structure: {env_name: [BenchmarkConfig, ...]}
     if args.full:
-        # Run full test matrix
-        configs = THROUGHPUT_CONFIGS
-        envs = ["cartpole", "gene-circuit"]
+        # Run full test matrix (device and env-appropriate configs from config.yaml)
+        env_configs = get_throughput_configs()  # Returns dict: env -> configs
     elif args.num_envs:
-        # Single configuration
-        configs = [
-            type(
-                "Config",
-                (),
-                {
-                    "num_envs": args.num_envs,
-                    "scan_chunk_size": args.scan_chunk_size,
-                    "num_steps": args.num_steps,
-                    "warmup_steps": 10,
-                    "num_timing_runs": 5,
-                },
-            )()
-        ]
-        envs = [args.env]
+        # Single configuration for specified env
+        env_configs = {
+            args.env: [
+                type(
+                    "Config",
+                    (),
+                    {
+                        "num_envs": args.num_envs,
+                        "scan_chunk_size": args.scan_chunk_size,
+                        "num_steps": args.num_steps,
+                        "warmup_steps": 10,
+                        "num_timing_runs": 5,
+                    },
+                )()
+            ]
+        }
     else:
-        # Quick test with default values
+        # Quick test: first 3 configs for cartpole only
         print("\nRunning quick test. Use --full for complete benchmark or --num-envs for custom test.")
-        configs = THROUGHPUT_CONFIGS[:3]  # Just first 3 configs
-        envs = ["cartpole"]
+        env_configs = {"cartpole": get_throughput_configs(env="cartpole")[:3]}
 
     # Run benchmarks
     all_results = []
-    for env_name in envs:
+    for env_name, configs in env_configs.items():
         for config in configs:
             result = benchmark_configuration(
                 env_name=env_name,
