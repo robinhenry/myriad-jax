@@ -1,13 +1,5 @@
 # Motivation & Philosophy
 
-As engineers, we love building things.
-
-But sometimes we build tools for the sake of building tools. Myriad has the potential to fall into this category: after all, there already exist plenty of RL/control/JAX libraries out there.
-
-What follows is our justification for why we think Myriad is needed.
-
-> *Disagree? We'd love to chat, you might save us valuable time!*
-
 ## The Scientific Challenge
 Scientific systems — from gene circuits to chemical reactors — present a unique set of obstacles that make standard analysis difficult:
 

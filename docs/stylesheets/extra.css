@@ -1,41 +1,32 @@
-:root {
-    /* Make the header slightly translucent for a modern feel */
-    --md-header-bg: rgba(0, 0, 0, 0.85);
-    --md-header-shadow: none;
+/* Furo theme customizations to match Gymnasium style */
 
-    /* Refine the code block colors for JAX/Python readability */
-    --md-code-bg-color: #1e293b;
-    --md-code-fg-color: #e2e8f0;
-  }
+/* 1. Fix sidebar navigation link colors - make them white/light instead of blue */
+.sidebar-tree .reference.internal {
+    color: var(--color-sidebar-link-text);
+}
 
-  /* 1. ROUNDED CORNERS (Modernize the UI) */
-  .md-typeset pre,
-  .md-typeset code,
-  .md-typeset .admonition,
-  .md-typeset details {
-    border-radius: 8px;
-  }
+.sidebar-tree .current > .reference.internal {
+    color: var(--color-sidebar-link-text--top-level);
+}
 
-  /* 2. GRADIENT TEXT FOR BRANDING (Optional: Makes 'Myriad' pop) */
-  /* Requires the site title to be wrapped or targeted, this targets main headers */
-  .md-typeset h1 {
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
+/* Override blue link colors in sidebar */
+.sidebar-tree a {
+    color: var(--color-foreground-primary);
+}
 
-  /* 3. CLEANER SIDEBAR IN DARK MODE */
-  [data-md-color-scheme="slate"] .md-sidebar {
-    background-color: transparent;
-  }
+.sidebar-tree a:hover {
+    color: var(--color-foreground-primary);
+    text-decoration: underline;
+}
 
-  /* 4. TABBED CODE BLOCKS - make them pop */
-  .tabbed-set {
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  }
+/* 2. Reduce the main documentation title size */
+.sidebar-brand-text {
+    font-size: 1.25rem !important;
+    font-weight: 600;
+}
 
-  /* 5. REMOVE SHADOWS ON LIGHT MODE HEADER for a flatter look */
-  [data-md-color-scheme="default"] .md-header {
-    box-shadow: 0 1px 0 0 #e5e7eb;
-  }
+/* 3. Additional refinements for consistency */
+.sidebar-tree .caption-text {
+    color: var(--color-foreground-primary);
+    font-weight: 600;
+}
