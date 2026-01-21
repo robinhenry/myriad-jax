@@ -25,7 +25,7 @@
 
 ## At a Glance
 
-Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where the combination of uncertainty, stochasticity, and rare discrete dynamics force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor, THIRD EXAMPLE?*). 🛝
+Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where uncertainty, stochasticity, and rare discrete dynamics play a big role and force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor, THIRD EXAMPLE?*). 🛝
 
 It's a **ready-to-go experimental platform**. You can use one of the already-implemented tasks/problems, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
 
