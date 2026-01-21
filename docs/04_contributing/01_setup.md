@@ -139,21 +139,6 @@ Reference implementation: `src/myriad/envs/cartpole/`
 
 Reference implementation: `src/myriad/agents/dqn.py`
 
-## Documentation
-
-Build docs locally:
-
-```bash
-mkdocs serve
-```
-
-View at `http://localhost:8000`
-
-When writing docs, follow the rules in `docs/WRITING_GUIDE.md`:
-
-- No generic AI marketing speak
-- Focus on technical accuracy
-- Show code over prose
 
 ## Continuous Integration
 

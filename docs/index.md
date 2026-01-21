@@ -29,12 +29,12 @@
 :hidden:
 :caption: API Reference
 
-03_api/index
-03_api/env
-03_api/agent
-03_api/spaces
-03_api/platform
-03_api/types
+03_api/01_index
+03_api/02_env
+03_api/03_agent
+03_api/04_spaces
+03_api/05_platform
+03_api/06_types
 ```
 
 ```{toctree}
