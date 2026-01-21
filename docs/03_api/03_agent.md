@@ -136,9 +136,3 @@ This design enables:
 - Efficient batched inference
 - JIT compilation
 - Functional purity
-
-## Next Steps
-
-- [Custom Agent Guide](../user-guide/custom_agent.md): Implement your own agent
-- [Training Guide](../user-guide/running_experiments.md): Train agents at scale
-- [Agent Examples](https://github.com/robinhenry/myriad-jax/tree/main/src/myriad/agents): Browse source code

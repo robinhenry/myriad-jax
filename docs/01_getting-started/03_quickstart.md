@@ -68,6 +68,6 @@ myriad train \
 
 ## Next steps
 
-- [Core Concepts](../user-guide/concepts.md): Understand the three-layer architecture
-- [Custom Environment](../user-guide/custom_env.md): Implement your own physics
-- [Running Experiments](../user-guide/running_experiments.md): Advanced configuration options
+- [Core Concepts](../02_user-guide/01_concepts.md): Understand the three-layer architecture
+- [Custom Environment](../02_user-guide/02_custom_env.md): Implement your own physics
+- [Running Experiments](../02_user-guide/04_running_experiments.md): Advanced configuration options
