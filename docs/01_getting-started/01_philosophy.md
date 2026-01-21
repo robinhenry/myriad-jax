@@ -39,7 +39,7 @@ However, we think we can make the whole process more efficient by filtering out 
 
 And we'd like to make it super easy, so that many people can join in on the fun.
 
-With this in mind, here are a few principles we'd like to adhere to as we keep on developing Myriad:
+With this in mind, here are a few principles we'd like to adhere to as we keep developing Myriad:
 
 ### 1. Optimize for real-world experimental time (& embrace parallelism)
 
