@@ -8,9 +8,9 @@
 :hidden:
 :caption: Getting Started
 
-getting-started/introduction
-getting-started/installation
-getting-started/quickstart
+01_getting-started/01_philosophy
+01_getting-started/02_installation
+01_getting-started/03_quickstart
 ```
 
 ```{toctree}
@@ -18,10 +18,10 @@ getting-started/quickstart
 :hidden:
 :caption: User Guide
 
-user-guide/concepts
-user-guide/custom_env
-user-guide/custom_agent
-user-guide/running_experiments
+02_user-guide/01_concepts
+02_user-guide/02_custom_env
+02_user-guide/03_custom_agent
+02_user-guide/04_running_experiments
 ```
 
 ```{toctree}
@@ -29,12 +29,12 @@ user-guide/running_experiments
 :hidden:
 :caption: API Reference
 
-api/index
-api/env
-api/agent
-api/spaces
-api/platform
-api/types
+03_api/index
+03_api/env
+03_api/agent
+03_api/spaces
+03_api/platform
+03_api/types
 ```
 
 ```{toctree}
@@ -42,7 +42,7 @@ api/types
 :hidden:
 :caption: Contributing
 
-contributing/setup
-contributing/configuration
-contributing/architecture
+04_contributing/01_setup
+04_contributing/02_configuration
+04_contributing/03_architecture
 ```

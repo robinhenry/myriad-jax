@@ -25,25 +25,34 @@
 
 ## At a Glance
 
-Myriad provides the computational backend to control biological and chemical systems where stochasticity is an important plays a big role. By leveraging JAX, we replace weeks of sequential lab time with minutes of GPU simulation.
+Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where the combination of uncertainty, stochasticity, and rare discrete dynamics force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor, THIRD EXAMPLE?*). 🛝
+
+It's a **ready-to-go experimental platform**. You can use one of the already-implement tasks/problems, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
+
+Last but not least, it yields results that are 100% reproducible. 🌟
+
+> *Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](TODO: LINK_TO_DOCS_HERE).*
+
 
 ### Key Features
 
-* **⚡ Massive GPU Parallelism:** run 100k+ environments simultaneously.
+* **⚡ Massive GPU Parallelism:** run algorithms on 1M+ of environments simultaneously.
 
-* **🎲 Exact Stochastic Simulations:** native JAX implementation of the Gillespie Algorithm (SSA) for discrete, asynchronous molecular events.
+* **🏎️ JAX JIT Optimization:** Myriad is *fast*, even on CPU.
 
-* **∇ Differentiable "White-Box" Physics:** exposes underlying ODEs and jump processes for gradient-based system ID and active learning.
+* **✅ 100% Reproducible:** Myriad is fully deterministic. Using the same initial random seed and configuration file will yield the same results → great for science.
+
+* **🎲 Exact Stochastic Simulations:** native JAX implementation of the Gillespie Algorithm (aka SSA) for discrete, asynchronous molecular events.
+
+* **∇ Differentiable "White-Box" Physics:** exposes underlying physics, ODEs, and jump processes for gradient-based system ID and active learning.
 
 * **🛠 Research-Ready:** pre-configured with [Hydra](https://hydra.cc/), [Pydantic](https://docs.pydantic.dev/), and [W&B](https://wandb.ai/site) support.
 
-*Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](TODO: LINK_TO_DOCS_HERE).*
+### Ecosystem
 
-### Ecosystem & Fit
+Many amazing RL x JAX tools already exist! Here's how we believe Myriad complements them.
 
-Myriad is designed to complement existing RL x JAX tools, not replace them.
-
-| Feature | **Gymnasium** | **Brax** | **Myriad** |
+| Feature | **Gymnasium/Gymnax** | **Brax** | **Myriad** |
 | :--- | :--- | :--- | :--- |
 | **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
 | **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
@@ -55,12 +64,12 @@ Myriad is designed to complement existing RL x JAX tools, not replace them.
 
 * **Use [Brax](https://github.com/google/brax) if:** you need massive-scale robotics or contact dynamics.
 
-* **Use [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAI/JaxMARL) if:** you need standard baselines or multi-agent RL.
+* **Use [Gymnasium](https://gymnasium.farama.org/), [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAI/JaxMARL) if:** you need standard baselines or multi-agent RL.
 
 
 ## Installation
 
-**Requirements:** Python 3.10+, JAX 0.7+
+**Requirements:** Python 3.10+, JAX 0.7+.
 
 > [!IMPORTANT]
 > **GPU Support:** JAX installation can be hardware-specific. We strongly recommend [installing JAX](https://github.com/google/jax#installation) according to your CUDA/cuDNN version *before* installing Myriad if you encounter issues.
@@ -92,25 +101,28 @@ Myriad is designed to be used programmatically (for research loops) or via CLI (
 ```python
 from myriad import create_config, train_and_evaluate
 
-# Configure a system ID experiment on a stochastic gene network
+# Configure a gene expression control experiment across 10k cells
 config = create_config(
     env="gene-circuit-v1",      # A stochastic gene circuit (Gillespie)
-    agent="dqn",                # The algorithm to use
+    agent="dqn",                # The algorithm to use (eg, 'pid', 'pqn')
     num_envs=10_000,            # 10k parallel simulations (cells)
-    sysid_mode=True             # Goal: Infer parameters, not just control
+    scan_autotune=True,         # Automatically optimize GPU training loop parameters
 )
 
 # Run the experiment (JIT-compiled & distributed on GPU)
 results = train_and_evaluate(config)
 
-# Analyze population statistics
-print(f"Parameter Estimate Mean: {results.params.mean():.4f}")
-print(f"Population Variance: {results.params.var():.4f}")
+# Inspect performance metrics
+metrics = results.eval_metrics
+print(f"Return (mean +/- std): {metrics.mean_return} +/- {metrics.std_return}")
+
+# Quickly plot convergence curve
+TO ADD
 ```
 
 ### CLI Usage
 
-Leverage [Hydra](https://hydra.cc/) to run massive parameter sweeps or system ID experiments directly from the terminal without writing boilerplate.
+Leverage [Hydra](https://hydra.cc/) to run massive parameter sweeps or experiments directly from the terminal.
 
 ```bash
 # Train a DQN agent on 50,000 parallel cartpole environments
@@ -133,7 +145,7 @@ See the [Documentation](add link) for a full list of examples and configuration 
 
 ## Citation
 
-If you use Myriad in your work, please cite our paper:
+If you use Myriad in your work, please cite the original paper:
 
 ```bibtex
 @article{...}
@@ -141,4 +153,4 @@ If you use Myriad in your work, please cite our paper:
 
 ---
 
-*Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems — whether they are biological circuits, chemical reactors, or robotic swarms.*
+*A little bit of history: Myriad is named after the Greek *myrias* ("ten thousand"), inspired by microfluidic "mother machines" that observe 100,000+ cells simultaneously. It brings this paradigm to computational research: providing a myriad of viewpoints from which to learn about and control complex systems — whether they are biological circuits, chemical reactors, or robotic swarms.*

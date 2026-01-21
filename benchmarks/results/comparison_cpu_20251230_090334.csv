@@ -1,0 +1,2 @@
+compile_time_s,device,library,num_envs,runtime_mean_s,runtime_std_s,steps_per_env,throughput_steps_per_s,total_steps,total_time_s
+0.20495641697198153,cpu,myriad,100,0.0020862211007624865,5.588423311321693e-05,100,4793355.793566238,10000,0.207042638072744
