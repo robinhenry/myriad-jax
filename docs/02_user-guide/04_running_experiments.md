@@ -182,9 +182,3 @@ See `myriad render --help` for all options.
 | `myriad render` | Render episodes to video | `myriad render episodes/ --fps 60` |
 
 All commands support `--help` for detailed usage information.
-
-## Next steps
-
-- [Configuration System](../contributing/configuration.md): Hydra config details (for advanced users)
-- [Custom Environment Guide](custom_env.md): Implement your own environments
-- [Custom Agent Guide](custom_agent.md): Implement learning algorithms

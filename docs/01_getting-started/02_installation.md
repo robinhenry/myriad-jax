@@ -6,7 +6,18 @@
 - JAX 0.7.2+
 - Poetry (recommended) or pip
 
-## Install from source
+## Install via `pip`
+
+```bash
+# Standard installation
+pip install myriad-jax
+
+# With generic GPU dependencies (checks for nvidia-related packages)
+pip install "myriad-jax[gpu]"
+```
+
+
+## Install from source (for development)
 
 Clone the repository:
 
@@ -56,9 +67,3 @@ Run tests:
 ```bash
 python -m pytest
 ```
-
-## Next steps
-
-- [Quickstart](quickstart.md): Your first training run
-- [Core Concepts](../user-guide/concepts.md): Understanding Myriad's architecture
-- [Custom Environment](../user-guide/custom_env.md): Implement your own physics

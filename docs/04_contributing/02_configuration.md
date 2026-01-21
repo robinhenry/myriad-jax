@@ -3,7 +3,7 @@
 ```{note}
 **Advanced Topic**
 
-This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../user-guide/running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
+This document explains Myriad's Hydra-based configuration system in detail. Most users only need to know how to override config values (see [Running Experiments](../02_user-guide/04_running_experiments.md)). This guide is for contributors or advanced users who need to understand the configuration architecture.
 ```
 
 Myriad uses [Hydra](https://hydra.cc) for composable configuration management. Configs are organized into three categories: `env/`, `agent/`, and `run/`.
@@ -619,9 +619,3 @@ python scripts/evaluate.py \
   --config-name=experiments/eval_bangbang_cartpole \
   eval_rollouts=200
 ```
-
-## Next steps
-
-- [Running Experiments](../user-guide/running_experiments.md): Basic config usage
-- [Setup Guide](setup.md): Development environment
-- [JAX Architecture](architecture.md): Pure functional design principles

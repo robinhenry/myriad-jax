@@ -3,7 +3,7 @@
 ```{warning}
 **For Contributors**
 
-This document explains Myriad's internal JAX architecture for developers modifying the engine. If you're just using Myriad to build experiments, you don't need most of this detail. See the [User Guide](../user-guide/concepts.md) instead.
+This document explains Myriad's internal JAX architecture for developers modifying the engine. If you're just using Myriad to build experiments, you don't need most of this detail. See the [User Guide](../02_user-guide/01_concepts.md) instead.
 ```
 
 ## Pure Functional Design
@@ -295,9 +295,3 @@ See `src/myriad/envs/ccas_ccar/physics.py` for example.
 2. **Chunk execution**: Use `scan` to reduce Python overhead
 3. **Static arguments**: Mark config as static for better optimization
 4. **Profile first**: Use JAX profiling tools to find bottlenecks
-
-## Next steps
-
-- [JAX documentation](https://jax.readthedocs.io): Official JAX docs
-- [Setup Guide](setup.md): Development environment and testing
-- [Configuration System](configuration.md): Hydra config internals
