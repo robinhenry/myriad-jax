@@ -11,7 +11,7 @@ This directory contains the Sphinx documentation for Myriad.
 Install the documentation dependencies:
 
 ```bash
-poetry install
+poetry install --with dev
 ```
 
 ### Build HTML Documentation

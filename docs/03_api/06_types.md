@@ -133,9 +133,3 @@ Myriad uses standard JAX types throughout:
 - `jax.numpy`: JAX's NumPy-compatible array operations
 
 See [JAX documentation](https://jax.readthedocs.io/) for details.
-
-## Next Steps
-
-- [Environment API](env.md): Environment-specific types
-- [Agent API](agent.md): Agent-specific types
-- [Platform API](platform.md): Training result types

@@ -32,9 +32,3 @@ class Agent(Protocol):
 Coming soon.
 
 See `src/myriad/agents/dqn.py` for reference implementation.
-
-## Next steps
-
-- [DQN source](https://github.com/robinhenry/myriad/blob/main/src/myriad/agents/dqn.py): Reference code
-- [Agents API Reference](../api-reference/agents.md): Protocol specification
-- [Core Concepts](concepts.md): Understanding the three-layer pattern

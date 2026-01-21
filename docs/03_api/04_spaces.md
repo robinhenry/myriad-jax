@@ -112,9 +112,3 @@ action_space=Discrete(2)
 The agent's behavior adapts to the space type:
 - **Discrete**: DQN uses discrete action selection
 - **Box**: PQN uses continuous action parameterization
-
-## Next Steps
-
-- [Environment API](env.md): Using spaces with environments
-- [Agent API](agent.md): Creating agents for different action spaces
-- [Core Types](types.md): Related type definitions

@@ -112,9 +112,3 @@ This design enables:
 - Efficient compilation
 - Reproducible rollouts
 - Gradient-based optimization
-
-## Next Steps
-
-- [Custom Environment Guide](../user-guide/custom_env.md): Build your own environment
-- [Core Concepts](../user-guide/concepts.md): Understand the three-layer architecture
-- [Environment Examples](https://github.com/robinhenry/myriad-jax/tree/main/src/myriad/envs): Browse source code

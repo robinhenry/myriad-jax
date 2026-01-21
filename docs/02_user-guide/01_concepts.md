@@ -334,9 +334,3 @@ The gene circuit environment (`ccas_ccar_v1`) demonstrates why this separation i
 **Any agent** works with any task automatically. The gene circuit uses the same DQN and PQN agents as CartPole—no special modifications required.
 
 If you can cleanly separate these concerns for a system with multi-timescale dynamics, stochastic behavior, and 10+ unknown parameters, you can handle your system too.
-
-## Next steps
-
-- [Custom Environment Guide](custom_env.md): Implement your own three-layer environment
-- [Running Experiments](running_experiments.md): Train agents on your tasks
-- [Custom Agent Guide](custom_agent.md): Implement learning algorithms

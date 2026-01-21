@@ -6,26 +6,26 @@ Welcome to the Myriad API reference. This documentation is automatically generat
 
 The Myriad API is organized around three core concepts, reflecting the three-layer architecture:
 
-**[Environments](env.md)** - Pure JAX environment dynamics and task definitions
+**[Environments](02_env.md)** - Pure JAX environment dynamics and task definitions
 
-**[Agents](agent.md)** - RL and control algorithms for decision-making
+**[Agents](03_agent.md)** - RL and control algorithms for decision-making
 
-**[Spaces](spaces.md)** - Action and observation space definitions
+**[Spaces](04_spaces.md)** - Action and observation space definitions
 
-**[Platform](platform.md)** - Training infrastructure and utilities
+**[Platform](05_platform.md)** - Training infrastructure and utilities
 
-**[Core Types](types.md)** - Shared types and data structures
+**[Core Types](06_types.md)** - Shared types and data structures
 
 ## Quick Links
 
 ```{toctree}
 :maxdepth: 2
 
-env
-agent
-spaces
-platform
-types
+02_env
+03_agent
+04_spaces
+05_platform
+06_types
 ```
 
 ## Entry Points

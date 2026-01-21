@@ -1,6 +1,6 @@
 # Development Setup
 
-This guide is for contributors who want to modify Myriad's internals. If you just want to use Myriad to build experiments, see the [Installation guide](../getting-started/installation.md) instead.
+This guide is for contributors who want to modify Myriad's internals. If you just want to use Myriad to build experiments, see the [Installation guide](../01_getting-started/02_installation.md) instead.
 
 ## Requirements
 
@@ -115,7 +115,7 @@ When modifying environments or agents, you must follow JAX rules:
 - **Masking**: Use mask-aware execution for auto-reset
 - **JIT**: Keep static args separate (`static_argnames`)
 
-See [JAX Architecture](architecture.md) for details.
+See [JAX Architecture](03_architecture.md) for details.
 
 ## Making changes
 
@@ -139,21 +139,6 @@ Reference implementation: `src/myriad/envs/cartpole/`
 
 Reference implementation: `src/myriad/agents/dqn.py`
 
-## Documentation
-
-Build docs locally:
-
-```bash
-mkdocs serve
-```
-
-View at `http://localhost:8000`
-
-When writing docs, follow the rules in `docs/WRITING_GUIDE.md`:
-
-- No generic AI marketing speak
-- Focus on technical accuracy
-- Show code over prose
 
 ## Continuous Integration
 
@@ -165,9 +150,3 @@ On pull requests, CI runs:
 - `mypy` (type checking)
 
 Ensure all checks pass before requesting review.
-
-## Next steps
-
-- [JAX Architecture](architecture.md): Pure functional design principles
-- [Configuration System](configuration.md): Hydra setup details
-- [User Guide](../user-guide/concepts.md): Three-layer pattern overview

@@ -113,10 +113,4 @@ Contains:
 ```
 
 **Note:** For advanced use cases, you can still use the lower-level Pydantic models directly.
-See [Configuration Guide](../contributing/configuration.md) for details.
-
-## Next Steps
-
-- [Running Experiments](../user-guide/running_experiments.md): Detailed training guide
-- [Configuration System](../contributing/configuration.md): Hydra config reference
-- [Quickstart](../getting-started/quickstart.md): Your first training run
+See [Configuration Guide](../04_contributing/02_configuration.md) for details.
