@@ -57,7 +57,7 @@ Many amazing RL x JAX tools already exist! Here's how we believe Myriad compleme
 | **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
 | **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
 | **Differentiable?** | No | Yes | **Yes** |
-| **System ID** | Low support | Low support | **Native** |
+| **System ID** | Low support | Low support | **Key focus** |
 | **Primary Goal** | Agent Performance | Fast Physical Control | **Active Learning & Stochastic Control** |
 
 * **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
@@ -138,18 +138,17 @@ See the [Documentation](add link) for a full list of examples and configuration 
 
 | Environment | Type | Description |
 | --- | --- | --- |
-| `gene-circuit-v1` | **Bio / Stochastic** | **(Flagship)** Stochastic gene expression with asynchronous division. Ideal for testing noise-robust control policies (SSA). |
+| `ccas-ccar-v1` | **Bio / Stochastic** | **(Flagship)** Stochastic gene expression with asynchronous division. Ideal for testing noise-robust control policies (SSA). |
 | `cartpole-sysid` | **Classic / SysID** | An inverted pendulum where the agent must excite the system to infer the pole's mass and length while balancing. |
-| `chem-reactor-v0` | **Chem / ODE** | Continuous Stirred Tank Reactor (CSTR) with uncertain reaction rates. |
 
 
-## Citation
+<!-- ## Citation
 
 If you use Myriad in your work, please cite the original paper:
 
 ```bibtex
 @article{...}
-```
+``` -->
 
 ---
 
