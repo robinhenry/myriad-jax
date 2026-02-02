@@ -3,14 +3,14 @@
 import jax.numpy as jnp
 import pytest
 
-from myriad.envs.cartpole.physics import PhysicsState
 from myriad.utils.observations import get_field_index
+from tests.conftest import MockObs
 
 
 # Test get_field_index
 def test_get_field_index_valid_field():
     """Test getting index for a valid field name."""
-    sample_obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
+    sample_obs = MockObs(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
 
     assert get_field_index(sample_obs, "x") == 0
     assert get_field_index(sample_obs, "x_dot") == 1
@@ -20,7 +20,7 @@ def test_get_field_index_valid_field():
 
 def test_get_field_index_invalid_field():
     """Test error when field name doesn't exist."""
-    sample_obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
+    sample_obs = MockObs(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
 
     with pytest.raises(ValueError, match="Observation field 'invalid_field' not found"):
         get_field_index(sample_obs, "invalid_field")

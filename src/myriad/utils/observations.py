@@ -4,44 +4,27 @@ This module provides utilities for working with observations in different format
 - to_array(): Convert observations to JAX arrays
 - get_field_index(): Map field names to array indices (for NamedTuple observations)
 
-Usage Example for Agent Developers:
------------------------------------
-If your agent needs to work with specific observation fields (e.g., "theta", "x"),
-use get_field_index() during initialization and indexing during action selection:
-
-    from myriad.utils.observations import get_field_index
-
-    # In agent's _init() function:
-    def _init(key, sample_obs, params):
-        # Compute field index once during initialization
-        obs_index = get_field_index(sample_obs, params.obs_field)
-        return AgentState(obs_index=obs_index)
-
-    # In agent's _select_action() function (JIT-compiled):
-    def _select_action(key, obs, agent_state, params, deterministic=False):
-        # Extract field value using pre-computed index
-        field_value = obs[agent_state.obs_index]
-        # ... use field_value for action selection
-        return action, agent_state
-
-See src/myriad/agents/bangbang.py for a complete reference implementation.
+See src/myriad/agents/bangbang.py for an example of how to use them in practice.
 """
 
 from typing import Any
 
 import jax.numpy as jnp
+from jax import Array
+
+from myriad.core.types import Observation
 
 
-def to_array(obs):
+def to_array(obs: Observation | Array) -> Array:
     """Convert observation to array format.
 
     Handles different observation types:
     - Arrays (JAX/numpy): Returned as-is
-    - NamedTuples with .to_array(): Converted to array
+    - Observations with .to_array(): Converted via that method
     - Other types: Attempted conversion via jnp.asarray
 
     Args:
-        obs: Observation (array, NamedTuple, or other)
+        obs: Observation (satisfying the Observation Protocol) or array
 
     Returns:
         Array representation of the observation
@@ -51,11 +34,11 @@ def to_array(obs):
     """
     # Already an array - return as-is
     if isinstance(obs, (jnp.ndarray, type(jnp.array(0)))):
-        return obs
+        return obs  # type: ignore[return-value]
 
-    # Has .to_array() method (e.g., PhysicsState NamedTuple)
-    if hasattr(obs, "to_array") and callable(obs.to_array):
-        return obs.to_array()
+    # Has .to_array() method (satisfies Observation Protocol)
+    if hasattr(obs, "to_array") and callable(obs.to_array):  # type: ignore[union-attr]
+        return obs.to_array()  # type: ignore[union-attr]
 
     # Try generic conversion
     try:
@@ -75,7 +58,7 @@ def get_field_index(sample_obs: Any, field_name: str) -> int:
     initialization and the result cached for use during action selection.
 
     Args:
-        sample_obs: Sample observation (must be a NamedTuple with ._fields)
+        sample_obs: Sample observation (must be a NamedTuple or similar with ._fields)
         field_name: Name of the field to look up (e.g., "theta", "x")
 
     Returns:
