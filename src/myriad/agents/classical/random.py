@@ -1,9 +1,10 @@
 from typing import Any, Tuple
 
-import chex
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Space
+from myriad.core.types import Observation, PRNGKey
 
 from ..agent import Agent
 
@@ -22,31 +23,28 @@ class AgentState:
     ...
 
 
-def _init(_key: chex.PRNGKey, _sample_obs: chex.Array, _params: AgentParams) -> AgentState:
+def _init(key: PRNGKey, sample_obs: Observation, params: AgentParams) -> AgentState:
+    """Initialize a random agent"""
     return AgentState()
 
 
 def _select_action(
-    key: chex.PRNGKey,
-    _obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
-    deterministic: bool = False,  # noqa: ARG001
-) -> Tuple[chex.Array, AgentState]:
+    deterministic: bool,
+) -> Tuple[Array, AgentState]:
     """Select a random action (deterministic flag ignored for random agent)."""
-    return params.action_space.sample(key), agent_state
+    return params.action_space.sample(key), state
 
 
-def _update(
-    _key: chex.PRNGKey, agent_state: AgentState, _transition: Any, _params: AgentParams
-) -> Tuple[AgentState, dict]:
-    return agent_state, {}
+def _update(key: PRNGKey, state: AgentState, batch: Any, params: AgentParams) -> Tuple[AgentState, dict]:
+    return state, {}
 
 
 def make_agent(action_space: Space) -> Agent:
     """Factory function to create an instance of the RandomAgent."""
-
-    # Create the default parameters for this agent
     params = AgentParams(action_space=action_space)
 
     return Agent(
