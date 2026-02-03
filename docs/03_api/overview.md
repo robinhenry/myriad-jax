@@ -6,7 +6,7 @@ Welcome to the Myriad API reference. This documentation is automatically generat
 
 The Myriad API is organized around four core concepts:
 
-**[Environments](env.md)** - Pure JAX environment dynamics and task definitions
+**[Environments](envs/index.md)** - Pure JAX environment dynamics and task definitions
 
 **[Agents](agent.md)** - RL and control algorithms for decision-making
 

@@ -134,8 +134,8 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 autodoc_type_aliases = {
-    "PRNGKey": "chex.PRNGKey",
-    "Array": "chex.Array",
+    "PRNGKey": "myriad.core.types.PRNGKey",
+    "Array": "jax.Array",
     "ArrayTree": "chex.ArrayTree",
 }
 
@@ -151,7 +151,7 @@ napoleon_use_admonition_for_references = False
 napoleon_use_ivar = True
 napoleon_use_param = True
 napoleon_use_rtype = True
-napoleon_preprocess_types = False
+napoleon_preprocess_types = True
 napoleon_type_aliases = autodoc_type_aliases
 napoleon_attr_annotations = True
 
@@ -162,4 +162,5 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "flax": ("https://flax.readthedocs.io/en/latest/", None),
+    "chex": ("https://chex.readthedocs.io/en/latest/", None),
 }

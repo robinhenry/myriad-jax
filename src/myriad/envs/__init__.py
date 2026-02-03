@@ -29,11 +29,6 @@ def make_env(env_id: str, **kwargs) -> Environment:
     """
     A general factory function to create any registered environment.
 
-    Available environments:
-
-    - `cartpole-control`: Standard inverted pendulum balancing task.
-    - `ccas-ccar-control`: Bacterial gene circuit control.
-
     Args:
         env_id: The string identifier of the environment to create.
         **kwargs: Keyword arguments that will be passed to the specific
