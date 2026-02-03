@@ -92,9 +92,9 @@ The `sweep` command integrates with W&B to override Hydra parameters during hype
 
 ## Programmatic usage
 
-```{literalinclude} ../../examples/07_quickstart_simple.py
+```{literalinclude} ../../examples/original/07_quickstart_simple.py
 :language: python
-:caption: examples/07_quickstart_simple.py
+:caption: examples/original/07_quickstart_simple.py
 :lines: 8-18
 ```
 
@@ -106,23 +106,23 @@ Use `evaluate()` for non-learning controllers (PID, MPC, scripted) or benchmarki
 
 **Random baseline:**
 
-```{literalinclude} ../../examples/05_random_baseline.py
+```{literalinclude} ../../examples/original/05_random_baseline.py
 :language: python
-:caption: examples/05_random_baseline.py
+:caption: examples/original/05_random_baseline.py
 :lines: 8-20
 ```
 
 **Pre-trained agent:**
 
-See [examples/04_evaluate_pretrained.py](../../examples/04_evaluate_pretrained.py) for loading and evaluating saved agents.
+See [examples/original/04_evaluate_pretrained.py](../../examples/original/04_evaluate_pretrained.py) for loading and evaluating saved agents.
 
 ## Episode collection
 
 Collect full trajectories during evaluation for analysis or visualization:
 
-```{literalinclude} ../../examples/08_episode_collection.py
+```{literalinclude} ../../examples/original/08_episode_collection.py
 :language: python
-:caption: examples/08_episode_collection.py
+:caption: examples/original/08_episode_collection.py
 :lines: 9-39
 ```
 
@@ -136,15 +136,15 @@ Save episodes to disk during training for qualitative monitoring.
 
 **Configuration and usage:**
 
-```{literalinclude} ../../examples/09_periodic_episode_saving.py
+```{literalinclude} ../../examples/original/09_periodic_episode_saving.py
 :language: python
-:caption: examples/09_periodic_episode_saving.py
+:caption: examples/original/09_periodic_episode_saving.py
 :lines: 11-28
 ```
 
 **Loading saved episodes:**
 
-```{literalinclude} ../../examples/09_periodic_episode_saving.py
+```{literalinclude} ../../examples/original/09_periodic_episode_saving.py
 :language: python
 :lines: 33-53
 ```

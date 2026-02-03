@@ -7,8 +7,8 @@ and permissive so concrete environments remain free to use dataclasses,
 Flax structs, NamedTuples, etc., while still providing helpful static typing
 and documentation.
 
-Design Rationale: Config vs Params
------------------------------------
+**Design Rationale: Config vs Params**
+
 Environments separate static configuration (EnvironmentConfig) from dynamic
 parameters (EnvironmentParams) to optimize JAX compilation:
 

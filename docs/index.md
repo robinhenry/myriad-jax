@@ -6,7 +6,7 @@
 ```{toctree}
 :maxdepth: 2
 :hidden:
-:caption: Getting Started
+:caption: Introduction
 
 01_getting-started/01_philosophy
 01_getting-started/02_installation
@@ -16,7 +16,7 @@
 ```{toctree}
 :maxdepth: 2
 :hidden:
-:caption: User Guide
+:caption: Core Concepts
 
 02_user-guide/01_concepts
 02_user-guide/02_custom_env
@@ -31,12 +31,19 @@
 :hidden:
 :caption: API Reference
 
-03_api/01_index
-03_api/02_env
-03_api/03_agent
-03_api/04_spaces
-03_api/05_platform
-03_api/06_types
+03_api/overview
+03_api/env
+03_api/agent
+03_api/platform
+03_api/core
+```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: Tutorials
+
+tutorials/quickstart.ipynb
 ```
 
 ```{toctree}

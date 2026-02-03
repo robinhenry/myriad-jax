@@ -1,6 +1,11 @@
 from .bio.ccas_ccar.tasks import control as ccas_ccar_control
 from .classic.cartpole.tasks import control as cartpole_control
-from .environment import Environment
+from .environment import (
+    Environment,
+    EnvironmentConfig,
+    EnvironmentParams,
+    EnvironmentState,
+)
 
 # The registry mapping environment IDs to their factory functions
 ENV_REGISTRY = {
@@ -10,10 +15,24 @@ ENV_REGISTRY = {
     "ccas-ccar-control": ccas_ccar_control.make_env,
 }
 
+__all__ = [
+    "make_env",
+    "Environment",
+    "EnvironmentConfig",
+    "EnvironmentParams",
+    "EnvironmentState",
+    "ENV_REGISTRY",
+]
+
 
 def make_env(env_id: str, **kwargs) -> Environment:
     """
     A general factory function to create any registered environment.
+
+    Available environments:
+
+    - `cartpole-control`: Standard inverted pendulum balancing task.
+    - `ccas-ccar-control`: Bacterial gene circuit control.
 
     Args:
         env_id: The string identifier of the environment to create.

@@ -1,4 +1,4 @@
-from .agent import Agent
+from .agent import Agent, AgentParams, AgentState
 from .classical import bangbang, pid, random
 from .rl import dqn, pqn
 
@@ -11,10 +11,25 @@ AGENT_REGISTRY = {
     "pqn": pqn.make_agent,
 }
 
+__all__ = [
+    "make_agent",
+    "Agent",
+    "AgentParams",
+    "AgentState",
+    "AGENT_REGISTRY",
+]
+
 
 def make_agent(agent_id: str, **kwargs) -> Agent:
     """
     A general factory function to create any registered agent.
+
+    Available agents:
+    - `dqn`: Deep Q-Network for discrete action spaces.
+    - `pqn`: Parametric Q-Network for continuous action spaces.
+    - `random`: Uniform random action selection.
+    - `bangbang`: Simple threshold-based controller.
+    - `pid`: Proportional-Integral-Derivative controller.
 
     Args:
         agent_id: The string identifier of the agent to create.
