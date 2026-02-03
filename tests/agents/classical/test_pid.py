@@ -3,78 +3,18 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from myriad.agents.agent import Agent
 from myriad.agents.classical.pid import AgentState, make_agent
 from myriad.core.spaces import Box, Discrete
-from myriad.envs.cartpole.physics import PhysicsState
+from tests.conftest import MockObs
 
 
-# Fixtures for action spaces
 @pytest.fixture
 def box_action_space() -> Box:
-    return Box(low=-2.0, high=2.0, shape=(1,))
+    return Box(low=-2.0, high=3.0, shape=(1,))
 
 
-@pytest.fixture
-def vector_box_action_space() -> Box:
-    return Box(low=-1.0, high=1.0, shape=(2,))
-
-
-# Fixtures for agents
-@pytest.fixture
-def p_controller(box_action_space: Box) -> Agent:
-    """Pure proportional controller (P-only)"""
-    return make_agent(action_space=box_action_space, kp=1.0, ki=0.0, kd=0.0, setpoint=0.0, obs_field="theta")
-
-
-@pytest.fixture
-def pi_controller(box_action_space: Box) -> Agent:
-    """Proportional-Integral controller (PI)"""
-    return make_agent(action_space=box_action_space, kp=1.0, ki=0.1, kd=0.0, setpoint=0.0, obs_field="theta")
-
-
-@pytest.fixture
-def pid_controller(box_action_space: Box) -> Agent:
-    """Full PID controller"""
-    return make_agent(action_space=box_action_space, kp=1.0, ki=0.1, kd=0.5, setpoint=0.0, obs_field="theta")
-
-
-# Fixtures for observations
-@pytest.fixture
-def obs_at_setpoint() -> PhysicsState:
-    """Observation at setpoint (zero error)"""
-    return PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
-
-
-@pytest.fixture
-def obs_above_setpoint() -> PhysicsState:
-    """Observation above setpoint (positive error)"""
-    return PhysicsState(x=0.0, x_dot=0.0, theta=0.5, theta_dot=0.0)
-
-
-@pytest.fixture
-def obs_below_setpoint() -> PhysicsState:
-    """Observation below setpoint (negative error)"""
-    return PhysicsState(x=0.0, x_dot=0.0, theta=-0.5, theta_dot=0.0)
-
-
-# Test agent creation
-def test_make_agent_default(box_action_space: Box):
-    """Test creating agent with default parameters"""
-    agent = make_agent(action_space=box_action_space)
-    assert agent is not None
-    assert isinstance(agent.params.action_space, Box)
-    assert agent.params.kp == 1.0
-    assert agent.params.ki == 0.0
-    assert agent.params.kd == 0.0
-    assert agent.params.setpoint == 0.0
-    assert agent.params.obs_field == "theta"
-    assert agent.params.dt == 0.02
-    assert agent.params.anti_windup == 10.0
-
-
-def test_make_agent_custom_params(box_action_space: Box):
-    """Test creating agent with custom parameters"""
+def test_make_agent_box(box_action_space: Box):
+    """Test agent creation and validation for Box action space."""
     agent = make_agent(
         action_space=box_action_space,
         kp=2.0,
@@ -92,310 +32,207 @@ def test_make_agent_custom_params(box_action_space: Box):
     assert agent.params.obs_field == "x"
     assert agent.params.dt == 0.01
     assert agent.params.anti_windup == 5.0
+    assert agent.params.control_low == -2.0
+    assert agent.params.control_high == 3.0
+    assert agent.params.bin_edges is None
 
 
-# Test validation
-def test_make_agent_invalid_space():
-    """Test that Discrete action spaces require control bounds"""
+def test_make_agent_discrete():
+    agent = make_agent(
+        action_space=Discrete(n=3),
+        kp=2.0,
+        ki=0.5,
+        kd=1.0,
+        setpoint=1.5,
+        obs_field="x",
+        dt=0.01,
+        anti_windup=5.0,
+        control_low=-3.0,
+        control_high=6.0,
+    )
+    assert agent.params.control_low == -3.0
+    assert agent.params.control_high == 6.0
+    chex.assert_trees_all_close(agent.params.bin_edges, jnp.array([-3.0, 0.0, 3.0, 6.0]), atol=1e-6)
+
+
+def test_make_agent_discrete_requires_bounds():
+    """Test that Discrete action spaces require control bounds."""
     with pytest.raises(ValueError, match="control_low and control_high must be specified"):
         make_agent(action_space=Discrete(n=2))
 
 
-def test_make_agent_empty_obs_field(box_action_space: Box):
-    """Test that empty obs_field is rejected"""
+def test_make_agent_invalid_obs_field(box_action_space: Box):
+    """Test that invalid obs_field is rejected."""
     with pytest.raises(ValueError, match="must be a non-empty string"):
         make_agent(action_space=box_action_space, obs_field="")
-
-
-def test_make_agent_invalid_obs_field(box_action_space: Box):
-    """Test that non-string obs_field is rejected"""
     with pytest.raises(ValueError, match="must be a non-empty string"):
         make_agent(action_space=box_action_space, obs_field=123)  # type: ignore
 
 
-# Test initialization
-def test_init(key, p_controller: Agent):
-    """Test agent initialization returns state with zero integral and error"""
-    sample_obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
-    state = p_controller.init(key, sample_obs, p_controller.params)
+def test_init(key, make_obs, box_action_space: Box):
+    """Test agent initialization returns state with zero integral and error."""
+    agent = make_agent(action_space=box_action_space, obs_field="theta")
+    state = agent.init(key, make_obs(), agent.params)
     assert isinstance(state, AgentState)
     assert state.integral_error == 0.0
     assert state.previous_error == 0.0
-    assert state.obs_index >= 0
+    assert state.obs_index == 2
 
 
-# Test P-only controller (proportional term)
-def test_p_controller_at_setpoint(key, p_controller: Agent, obs_at_setpoint: PhysicsState):
-    """P controller at setpoint should output zero action"""
-    agent_state = p_controller.init(key, obs_at_setpoint, p_controller.params)
-    action, new_state = p_controller.select_action(key, obs_at_setpoint, agent_state, p_controller.params)
+def test_select_action_p_controller(key, make_obs, box_action_space: Box):
+    """Test P-only controller: error produces proportional action."""
+    agent = make_agent(action_space=box_action_space, kp=2.0, ki=0.0, kd=0.0, setpoint=0.0, obs_field="theta")
+    state = agent.init(key, make_obs(), agent.params)
 
-    # Zero error -> zero action
-    chex.assert_trees_all_close(action, jnp.array([0.0]))
-    # State should remain zero
-    assert new_state.integral_error == 0.0
-    assert new_state.previous_error == 0.0
+    # At setpoint: zero action
+    action_zero, _ = agent.select_action(key, make_obs(theta=0.0), state, agent.params, deterministic=True)
+    chex.assert_trees_all_close(action_zero, jnp.array([0.0]))
 
+    # Above setpoint: negative action (error = setpoint - obs = -0.5)
+    action_neg, _ = agent.select_action(key, make_obs(theta=0.5), state, agent.params, deterministic=True)
+    chex.assert_trees_all_close(action_neg, jnp.array([-1.0]), atol=1e-6)
 
-def test_p_controller_above_setpoint(key, p_controller: Agent, obs_above_setpoint: PhysicsState):
-    """P controller above setpoint should output negative action"""
-    agent_state = p_controller.init(key, obs_above_setpoint, p_controller.params)
-    action, new_state = p_controller.select_action(key, obs_above_setpoint, agent_state, p_controller.params)
-
-    # Positive observation (theta=0.5) with setpoint=0 -> error = -0.5
-    # Control = kp * error = 1.0 * (-0.5) = -0.5
-    expected_action = jnp.array([-0.5])
-    chex.assert_trees_all_close(action, expected_action, atol=1e-6)
-
-    # State should track error
-    assert new_state.previous_error == -0.5
+    # Below setpoint: positive action (error = 0.5)
+    action_pos, _ = agent.select_action(key, make_obs(theta=-0.5), state, agent.params, deterministic=True)
+    chex.assert_trees_all_close(action_pos, jnp.array([1.0]), atol=1e-6)
 
 
-def test_p_controller_below_setpoint(key, p_controller: Agent, obs_below_setpoint: PhysicsState):
-    """P controller below setpoint should output positive action"""
-    agent_state = p_controller.init(key, obs_below_setpoint, p_controller.params)
-    action, new_state = p_controller.select_action(key, obs_below_setpoint, agent_state, p_controller.params)
+def test_select_action_pi_controller(key, make_obs, box_action_space: Box):
+    """Test PI controller: integral accumulates and anti-windup limits it."""
+    agent = make_agent(
+        action_space=box_action_space, kp=1.0, ki=0.1, kd=0.0, setpoint=0.0, obs_field="theta", anti_windup=10.0
+    )
+    state = agent.init(key, make_obs(), agent.params)
 
-    # Negative observation (theta=-0.5) with setpoint=0 -> error = 0.5
-    # Control = kp * error = 1.0 * 0.5 = 0.5
-    expected_action = jnp.array([0.5])
-    chex.assert_trees_all_close(action, expected_action, atol=1e-6)
+    # Run multiple steps with constant error - integral should accumulate
+    obs = make_obs(theta=0.5)
+    action1, state1 = agent.select_action(key, obs, state, agent.params, deterministic=True)
+    assert state1.integral_error == -0.5
+    assert action1 == -0.5 + 0.1 * (-0.5)
 
+    action2, state2 = agent.select_action(key, obs, state1, agent.params, deterministic=True)
+    assert state2.integral_error == -1.0
+    assert action2 == -0.5 + 0.1 * (-1.0)
 
-# Test PI controller (integral term)
-def test_pi_controller_accumulates_integral(key, pi_controller: Agent, obs_above_setpoint: PhysicsState):
-    """PI controller should accumulate integral error over multiple steps"""
-    agent_state = pi_controller.init(key, obs_above_setpoint, pi_controller.params)
-
-    # First step
-    action1, state1 = pi_controller.select_action(key, obs_above_setpoint, agent_state, pi_controller.params)
-
-    # Second step with same error
-    action2, state2 = pi_controller.select_action(key, obs_above_setpoint, state1, pi_controller.params)
-
-    # Integral should accumulate in magnitude (error is negative, so integral becomes more negative)
-    assert jnp.abs(state2.integral_error) > jnp.abs(state1.integral_error)
-
-    # Action should increase in magnitude due to integral term
-    assert jnp.abs(action2[0]) > jnp.abs(action1[0])
-
-
-def test_pi_controller_integral_reset_on_sign_change(key, pi_controller: Agent):
-    """Test integral accumulation with changing error"""
-    agent_state = pi_controller.init(key, PhysicsState(0, 0, 0, 0), pi_controller.params)
-
-    # Step with positive error
-    obs_pos = PhysicsState(x=0.0, x_dot=0.0, theta=-0.5, theta_dot=0.0)  # error = +0.5
-    _, state1 = pi_controller.select_action(key, obs_pos, agent_state, pi_controller.params)
-    integral_after_pos = state1.integral_error
-
-    # Step with negative error
-    obs_neg = PhysicsState(x=0.0, x_dot=0.0, theta=0.5, theta_dot=0.0)  # error = -0.5
-    _, state2 = pi_controller.select_action(key, obs_neg, state1, pi_controller.params)
-
-    # Integral should decrease (opposite sign error)
-    assert state2.integral_error < integral_after_pos
-
-
-# Test PID controller (derivative term)
-def test_pid_controller_derivative_term(key, pid_controller: Agent):
-    """Test that derivative term responds to rate of change of error"""
-    agent_state = pid_controller.init(key, PhysicsState(0, 0, 0, 0), pid_controller.params)
-
-    # First step: error = 0.1
-    obs1 = PhysicsState(x=0.0, x_dot=0.0, theta=-0.1, theta_dot=0.0)
-    action1, state1 = pid_controller.select_action(key, obs1, agent_state, pid_controller.params)
-
-    # Second step: error increases to 0.5 (rapid change)
-    obs2 = PhysicsState(x=0.0, x_dot=0.0, theta=-0.5, theta_dot=0.0)
-    action2, state2 = pid_controller.select_action(key, obs2, state1, pid_controller.params)
-
-    # Derivative term should contribute to larger action
-    # (error increased, so derivative is positive, adding to control)
-    assert state2.previous_error == 0.5
-
-
-def test_pid_controller_all_terms_contribute(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """Test that P, I, and D terms all contribute to control output"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-
-    # Run for a few steps
-    state = agent_state
-    for _ in range(3):
-        _, state = pid_controller.select_action(key, obs_above_setpoint, state, pid_controller.params)
-
-    # After multiple steps with constant error:
-    # - Integral should have accumulated
-    # - Previous error should be set
-    assert state.integral_error != 0.0
-    assert state.previous_error != 0.0
-
-
-# Test action clamping
-def test_action_clamping_to_bounds(key, box_action_space: Box):
-    """Test that control output is clamped to action space bounds"""
-    # Create controller with very high gain to force saturation
-    agent = make_agent(action_space=box_action_space, kp=100.0, setpoint=0.0, obs_field="theta")
-    agent_state = agent.init(key, PhysicsState(0, 0, 0, 0), agent.params)
-
-    # Large error should saturate
-    obs_large_error = PhysicsState(x=0.0, x_dot=0.0, theta=10.0, theta_dot=0.0)
-    action, _ = agent.select_action(key, obs_large_error, agent_state, agent.params)
-
-    # Action should be clamped to bounds [-2, 2]
-    assert jnp.all(action >= box_action_space.low)
-    assert jnp.all(action <= box_action_space.high)
-
-
-# Test anti-windup
-def test_anti_windup_limits_integral(key, pi_controller: Agent):
-    """Test that anti-windup prevents integral from growing unbounded"""
-    agent_state = pi_controller.init(key, PhysicsState(0, 0, 0, 0), pi_controller.params)
-
-    # Run many steps with constant large error to accumulate integral
-    obs_large_error = PhysicsState(x=0.0, x_dot=0.0, theta=10.0, theta_dot=0.0)
-    state = agent_state
+    # Run many steps with large error - integral should be clamped by anti-windup
+    obs_large = make_obs(theta=10.0)
+    state_windup = state
     for _ in range(1000):
-        _, state = pi_controller.select_action(key, obs_large_error, state, pi_controller.params)
-
-    # Integral should be clamped to anti_windup limit
-    assert jnp.abs(state.integral_error) <= pi_controller.params.anti_windup
+        _, state_windup = agent.select_action(key, obs_large, state_windup, agent.params, deterministic=True)
+    assert jnp.abs(state_windup.integral_error) == agent.params.anti_windup
 
 
-# Test different observation fields
-def test_select_action_different_obs_fields(key, box_action_space: Box):
-    """Test obs_field parameter works with different fields"""
-    # Agent controlling "x" field
+def test_select_action_pid_controller(key, make_obs, box_action_space: Box):
+    """Test full PID controller: derivative responds to error rate of change."""
+    agent = make_agent(action_space=box_action_space, kp=1.0, ki=0.1, kd=0.5, setpoint=0.0, obs_field="theta", dt=0.2)
+    state = agent.init(key, make_obs(), agent.params)
+
+    # First step with small error
+    _, state1 = agent.select_action(key, make_obs(theta=-0.1), state, agent.params, deterministic=True)
+    assert state1.previous_error == 0.1
+
+    # Second step with larger error - derivative term should contribute
+    action2, state2 = agent.select_action(key, make_obs(theta=-0.5), state1, agent.params, deterministic=True)
+    assert state2.previous_error == 0.5
+    assert state2.integral_error != 0.0
+
+    # Work out the exact expected action
+    p_term = 0.5
+    i_term = (0.1 * 0.2) + 0.5 * 0.2
+    d_term = (0.5 - 0.1) / 0.2
+    chex.assert_trees_all_close(action2, jnp.array([1.0 * p_term + 0.1 * i_term + 0.5 * d_term]))
+
+
+def test_select_action_clamping(key, make_obs, box_action_space: Box):
+    """Test that control output is clamped to action space bounds."""
+    agent = make_agent(action_space=box_action_space, kp=100.0, setpoint=0.0, obs_field="theta")
+    state = agent.init(key, make_obs(), agent.params)
+
+    # Large error should saturate at bounds [-2, 2]
+    action, _ = agent.select_action(key, make_obs(theta=10.0), state, agent.params, deterministic=True)
+    chex.assert_trees_all_close(action, box_action_space.low)
+
+    action, _ = agent.select_action(key, make_obs(theta=-10.0), state, agent.params, deterministic=True)
+    chex.assert_trees_all_close(action, box_action_space.high)
+
+
+def test_select_action_different_obs_fields(key, make_obs, box_action_space: Box):
+    """Test obs_field parameter works with different fields."""
     agent_x = make_agent(action_space=box_action_space, kp=1.0, setpoint=0.0, obs_field="x")
-    obs = PhysicsState(x=0.5, x_dot=0.0, theta=0.0, theta_dot=0.0)
-    state_x = agent_x.init(key, obs, agent_x.params)
-    action_x, _ = agent_x.select_action(key, obs, state_x, agent_x.params)
+    state = agent_x.init(key, make_obs(), agent_x.params)
 
-    # error = 0 - 0.5 = -0.5, control = 1.0 * (-0.5) = -0.5
-    chex.assert_trees_all_close(action_x, jnp.array([-0.5]), atol=1e-6)
-
-    # Agent controlling "x_dot" field
-    agent_x_dot = make_agent(action_space=box_action_space, kp=1.0, setpoint=0.0, obs_field="x_dot")
-    obs2 = PhysicsState(x=0.0, x_dot=0.3, theta=0.0, theta_dot=0.0)
-    state_x_dot = agent_x_dot.init(key, obs2, agent_x_dot.params)
-    action_x_dot, _ = agent_x_dot.select_action(key, obs2, state_x_dot, agent_x_dot.params)
-
-    # error = 0 - 0.3 = -0.3
-    chex.assert_trees_all_close(action_x_dot, jnp.array([-0.3]), atol=1e-6)
+    action, _ = agent_x.select_action(key, make_obs(x=0.5), state, agent_x.params, deterministic=True)
+    chex.assert_trees_all_close(action, jnp.array([-0.5]), atol=1e-6)
 
 
-# Test non-zero setpoint
-def test_non_zero_setpoint(key, box_action_space: Box):
-    """Test PID controller with non-zero setpoint"""
-    agent = make_agent(action_space=box_action_space, kp=1.0, setpoint=1.0, obs_field="theta")
-    agent_state = agent.init(key, PhysicsState(0, 0, 0, 0), agent.params)
+@pytest.mark.parametrize(
+    ("theta", "action"),
+    [
+        (-1.5, 1),  # control=1.5, middle bin [0, 3)
+        (-4.5, 2),  # control=4.5, upper bin [3, 6]
+        (1.5, 0),  # control=-1.5, lower bin [-3, 0)
+        (-100.0, 2),  # control clamped to 6.0, upper bin
+        (100.0, 0),  # control clamped to -3.0, lower bin
+    ],
+)
+def test_select_action_discrete(key, make_obs, theta, action):
+    """Test that continuous control is discretized into bins for Discrete action space.
 
-    # Observation at 0.5, setpoint at 1.0 -> error = 0.5
-    obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.5, theta_dot=0.0)
-    action, _ = agent.select_action(key, obs, agent_state, agent.params)
-
-    # Control = kp * error = 1.0 * 0.5 = 0.5
-    chex.assert_trees_all_close(action, jnp.array([0.5]), atol=1e-6)
-
-
-# Test determinism
-def test_select_action_deterministic(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """Same inputs should yield same outputs (deterministic policy)"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-    action1, state1 = pid_controller.select_action(key, obs_above_setpoint, agent_state, pid_controller.params)
-    action2, state2 = pid_controller.select_action(key, obs_above_setpoint, agent_state, pid_controller.params)
-
-    chex.assert_trees_all_close(action1, action2)
-    chex.assert_trees_all_close(state1, state2)
-
-
-def test_select_action_deterministic_flag_ignored(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """The deterministic flag should be ignored (always deterministic)"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-    action1, _ = pid_controller.select_action(
-        key, obs_above_setpoint, agent_state, pid_controller.params, deterministic=True
+    Discrete(n=3) with control_low=-3.0, control_high=6.0
+    bin_edges: [-3.0, 0.0, 3.0, 6.0] (approximately, due to FP precision)
+    action 0: control in [-3.0, ~0.0)
+    action 1: control in [~0.0, 3.0)
+    action 2: control in [3.0, 6.0]
+    """
+    agent = make_agent(
+        action_space=Discrete(n=3),
+        kp=1.0,
+        ki=0.0,
+        kd=0.0,
+        setpoint=0.0,
+        obs_field="theta",
+        control_low=-3.0,
+        control_high=6.0,
     )
-    action2, _ = pid_controller.select_action(
-        key, obs_above_setpoint, agent_state, pid_controller.params, deterministic=False
-    )
-    chex.assert_trees_all_close(action1, action2)
+    state = agent.init(key, make_obs(), agent.params)
+    result, _ = agent.select_action(key, make_obs(theta=theta), state, agent.params, deterministic=True)
+    assert result == action
 
 
-# Test vector action spaces
-def test_select_action_vector_action_space(key, vector_box_action_space: Box, obs_above_setpoint: PhysicsState):
-    """Test Box with shape=(2,) works correctly"""
-    agent = make_agent(action_space=vector_box_action_space, kp=1.0, setpoint=0.0, obs_field="theta")
-    agent_state = agent.init(key, obs_above_setpoint, agent.params)
-    action, _ = agent.select_action(key, obs_above_setpoint, agent_state, agent.params)
-
-    # Should broadcast to action shape
-    assert action.shape == (2,)
-    # Both dimensions should have same value (broadcasted)
-    chex.assert_trees_all_close(action, jnp.array([-0.5, -0.5]), atol=1e-6)
-
-
-# Test update
-def test_update(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """Test update returns unchanged state and empty metrics"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-    updated_state, metrics = pid_controller.update(key, agent_state, None, pid_controller.params)
+def test_update(key, make_obs, box_action_space: Box):
+    """Test update returns unchanged state and empty metrics."""
+    agent = make_agent(action_space=box_action_space)
+    state = agent.init(key, make_obs(), agent.params)
+    updated_state, metrics = agent.update(key, state, None, agent.params)
     assert isinstance(updated_state, AgentState)
     assert metrics == {}
 
 
-# Test JAX JIT compatibility
-def test_jit_compatibility_select_action(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """Verify select_action works with JAX JIT compilation"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-    jitted_select = jax.jit(pid_controller.select_action, static_argnames=("deterministic",))
-    action, state = jitted_select(key, obs_above_setpoint, agent_state, pid_controller.params, False)
+def test_jax_transforms(key, make_obs, box_action_space: Box):
+    """End-to-end test with JIT and vmap."""
+    agent = make_agent(action_space=box_action_space, kp=1.0, setpoint=0.0, obs_field="theta")
 
-    assert action.shape == (1,)
+    # JIT compatibility
+    jitted_init = jax.jit(agent.init)
+    jitted_select = jax.jit(agent.select_action, static_argnames=("deterministic",))
+
+    state = jitted_init(key, make_obs(), agent.params)
     assert isinstance(state, AgentState)
 
+    action, _ = jitted_select(key, make_obs(theta=0.5), state, agent.params, False)
+    chex.assert_trees_all_close(action, jnp.array([-0.5]), atol=1e-6)
 
-def test_jit_compatibility_init(key, pid_controller: Agent):
-    """Verify agent init works with JAX JIT compilation"""
-    jitted_init = jax.jit(pid_controller.init)
-    sample_obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
-    state = jitted_init(key, sample_obs, pid_controller.params)
-    assert isinstance(state, AgentState)
-
-
-def test_jit_compatibility_update(key, pid_controller: Agent, obs_above_setpoint: PhysicsState):
-    """Verify agent update works with JAX JIT compilation"""
-    agent_state = pid_controller.init(key, obs_above_setpoint, pid_controller.params)
-    jitted_update = jax.jit(pid_controller.update)
-    updated_state, metrics = jitted_update(key, agent_state, None, pid_controller.params)
-    assert isinstance(updated_state, AgentState)
-    assert metrics == {}
-
-
-# Test vmap compatibility (for vectorized environments)
-def test_vmap_compatibility(key, pid_controller: Agent):
-    """Verify agent works with vmap (batched observations)"""
-    # Create batch of observations
-    batch_size = 3
-    obs_batch = PhysicsState(
-        x=jnp.array([0.0, 0.0, 0.0]),
-        x_dot=jnp.array([0.0, 0.0, 0.0]),
-        theta=jnp.array([-0.5, 0.0, 0.5]),  # Below, at, above setpoint
-        theta_dot=jnp.array([0.0, 0.0, 0.0]),
+    # Vmap compatibility
+    batch_size = 4
+    obs_batch = MockObs(
+        x=jnp.zeros(batch_size),
+        x_dot=jnp.zeros(batch_size),
+        theta=jnp.array([-0.5, 0.0, 0.5, 1.0]),
+        theta_dot=jnp.zeros(batch_size),
     )
-
-    # Initialize agent state (uses first observation)
-    sample_obs = PhysicsState(x=0.0, x_dot=0.0, theta=0.0, theta_dot=0.0)
-    agent_state = pid_controller.init(key, sample_obs, pid_controller.params)
-
-    # Generate batch of keys
     keys = jax.random.split(key, batch_size)
+    vmapped_select = jax.vmap(agent.select_action, in_axes=(0, 0, None, None, None))
+    actions, _ = vmapped_select(keys, obs_batch, state, agent.params, False)
 
-    # Vmap select_action over the batch
-    vmapped_select = jax.vmap(pid_controller.select_action, in_axes=(0, 0, None, None, None))
-    actions, states = vmapped_select(keys, obs_batch, agent_state, pid_controller.params, False)
-
-    # Check results
     assert actions.shape == (batch_size, 1)
-    # First action should be positive (theta < 0), last should be negative (theta > 0)
-    assert actions[0, 0] > 0
-    assert actions[2, 0] < 0
+    chex.assert_trees_all_close(actions, jnp.array([[0.5], [0.0], [-0.5], [-1.0]]), atol=1e-6)

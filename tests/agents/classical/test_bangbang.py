@@ -12,7 +12,7 @@ from tests.conftest import MockObs
 def test_make_agent_discrete():
     """Test agent creation and validation for Discrete action space."""
     agent = make_agent(action_space=Discrete(n=3), threshold=1.5, obs_field="x")
-    assert agent.params.action_space.n == 3
+    assert agent.params.action_space.n == 3  # type: ignore
     assert agent.params.threshold == 1.5
     assert agent.params.obs_field == "x"
     assert agent.params.invert is False

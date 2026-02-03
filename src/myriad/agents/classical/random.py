@@ -43,7 +43,7 @@ def _update(key: PRNGKey, state: AgentState, batch: Any, params: AgentParams) ->
     return state, {}
 
 
-def make_agent(action_space: Space) -> Agent:
+def make_agent(action_space: Space) -> Agent[AgentState, AgentParams, Observation]:
     """Factory function to create an instance of the RandomAgent."""
     params = AgentParams(action_space=action_space)
 

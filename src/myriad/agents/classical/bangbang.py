@@ -84,7 +84,7 @@ def _select_action(
 
     Args:
         key: Random key (unused, policy is deterministic)
-        obs: Current observation (NamedTuple or array)
+        obs: Current observation (NamedTuple-like)
         state: Current agent state (contains obs_index)
         params: Agent hyperparameters (contains threshold, pre-computed actions, invert flag)
         deterministic: Ignored (bang-bang is always deterministic)
@@ -120,7 +120,7 @@ def make_agent(
     threshold: float = 0.0,
     obs_field: str = "theta",
     invert: bool = False,
-) -> Agent:
+) -> Agent[AgentState, AgentParams, Observation]:
     """Factory function to create a bang-bang controller agent.
 
     Args:

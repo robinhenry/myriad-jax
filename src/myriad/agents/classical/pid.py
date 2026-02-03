@@ -1,7 +1,7 @@
-"""PID controller agent for JAX-based RL environments.
+"""A classical PID controller agent.
 
 A deterministic, stateful control policy that uses Proportional-Integral-Derivative
-control to minimize error between observation and setpoint.
+(PID) control to minimize the error between an observed variable and a setpoint.
 
 Control Law:
     u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*de(t)/dt
@@ -11,22 +11,17 @@ Action Space Behavior:
     - Box: Continuous control clipped to action_space bounds
     - Discrete(n): Continuous control discretized into n bins
 
-This is a classical control strategy useful for:
-    - Baseline comparisons with learned policies
-    - Stabilization and tracking tasks
-    - System identification experiments
-    - Debugging environment dynamics
-
 Note: This is a non-learning agent (update() does nothing).
 """
 
 from typing import Any, Tuple
 
-import chex
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Box, Discrete, Space
+from myriad.core.types import Observation, PRNGKey
 from myriad.utils.observations import get_field_index, to_array
 
 from ..agent import Agent
@@ -42,7 +37,7 @@ class AgentParams:
         ki: Integral gain
         kd: Derivative gain
         setpoint: Desired value for the controlled variable
-        obs_field: Field name from observation NamedTuple to control
+        obs_field: Field name from the observation NamedTuple to control (ie, to compare to the setpoint)
         dt: Time step for integral/derivative computation (seconds)
         anti_windup: Maximum absolute value for integral term (prevents windup)
         control_low: Lower bound for continuous control signal (for discretization)
@@ -56,11 +51,11 @@ class AgentParams:
     kd: float
     setpoint: float
     obs_field: str = struct.field(pytree_node=False)
-    dt: float = 0.02  # Default 50Hz
-    anti_windup: float = 10.0
-    control_low: float = -1.0
-    control_high: float = 1.0
-    bin_edges: chex.Array | None = None
+    dt: float
+    anti_windup: float
+    control_low: float
+    control_high: float
+    bin_edges: Array | None = None
 
 
 @struct.dataclass
@@ -74,11 +69,11 @@ class AgentState:
     """
 
     obs_index: int
-    integral_error: chex.Array
-    previous_error: chex.Array
+    integral_error: Array
+    previous_error: Array
 
 
-def _init(_key: chex.PRNGKey, sample_obs: chex.Array, params: AgentParams) -> AgentState:
+def _init(key: PRNGKey, sample_obs: Observation, params: AgentParams) -> AgentState:
     """Initialize the PID controller and compute observation index."""
     obs_index = get_field_index(sample_obs, params.obs_field)
     return AgentState(
@@ -89,12 +84,12 @@ def _init(_key: chex.PRNGKey, sample_obs: chex.Array, params: AgentParams) -> Ag
 
 
 def _select_action(
-    _key: chex.PRNGKey,
-    obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
-    deterministic: bool = False,  # noqa: ARG001
-) -> Tuple[chex.Array, AgentState]:
+    deterministic: bool,
+) -> Tuple[Array, AgentState]:
     """Select PID control action based on error from setpoint.
 
     Computes: u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*de(t)/dt
@@ -104,9 +99,9 @@ def _select_action(
     For Discrete action spaces, discretizes the continuous control into bins.
 
     Args:
-        _key: Random key (unused, policy is deterministic)
-        obs: Current observation (NamedTuple or array)
-        agent_state: Current agent state (contains integral, previous error)
+        key: Random key (unused, policy is deterministic)
+        obs: Current observation (NamedTuple-like)
+        state: Current agent state (contains integral, previous error)
         params: Agent hyperparameters (PID gains, setpoint, etc.)
         deterministic: Ignored (PID is always deterministic)
 
@@ -117,7 +112,7 @@ def _select_action(
     obs_array = to_array(obs)
 
     # Extract the observation value at the specified field index
-    obs_value = obs_array[agent_state.obs_index]
+    obs_value = obs_array[state.obs_index]
 
     # Compute error: e(t) = setpoint - measurement
     error = params.setpoint - obs_value
@@ -126,12 +121,12 @@ def _select_action(
     p_term = params.kp * error
 
     # Integral term with anti-windup
-    integral = agent_state.integral_error + error * params.dt
+    integral = state.integral_error + error * params.dt
     integral = jnp.clip(integral, -params.anti_windup, params.anti_windup)
     i_term = params.ki * integral
 
     # Derivative term
-    derivative = (error - agent_state.previous_error) / params.dt
+    derivative = (error - state.previous_error) / params.dt
     d_term = params.kd * derivative
 
     # Compute continuous control output
@@ -159,7 +154,7 @@ def _select_action(
 
     # Update state
     new_state = AgentState(
-        obs_index=agent_state.obs_index,
+        obs_index=state.obs_index,
         integral_error=integral,
         previous_error=error,
     )
@@ -167,11 +162,9 @@ def _select_action(
     return action, new_state
 
 
-def _update(
-    _key: chex.PRNGKey, agent_state: AgentState, _transition: Any, _params: AgentParams
-) -> Tuple[AgentState, dict]:
+def _update(key: PRNGKey, state: AgentState, batch: Any, params: AgentParams) -> Tuple[AgentState, dict]:
     """Update the PID controller (no learning, returns empty metrics)."""
-    return agent_state, {}
+    return state, {}
 
 
 def make_agent(
@@ -181,15 +174,12 @@ def make_agent(
     kd: float = 0.0,
     setpoint: float = 0.0,
     obs_field: str = "theta",
-    dt: float = 0.02,
+    dt: float = 1.0,
     anti_windup: float = 10.0,
     control_low: float | None = None,
     control_high: float | None = None,
-) -> Agent:
+) -> Agent[AgentState, AgentParams, Observation]:
     """Factory function to create a PID controller agent.
-
-    The agent will automatically detect the observation field index when initialized
-    by introspecting the sample observation's NamedTuple structure.
 
     Args:
         action_space: Action space (Box or Discrete)
@@ -201,24 +191,22 @@ def make_agent(
             Default 0.0 (no derivative action).
         setpoint: Desired value for obs[obs_field]. Default 0.0.
         obs_field: Field name from observation NamedTuple to control.
-                  Default "theta" (pole angle for CartPole).
+            Default "theta" (pole angle for CartPole).
         dt: Time step in seconds for integral/derivative computation.
-            Should match environment step rate. Default 0.02 (50Hz).
+            Should match environment step rate. Default 1s (1Hz).
         anti_windup: Maximum absolute value for integral term to prevent windup.
-                    Default 10.0.
+            Default 10.0.
         control_low: Lower bound for continuous control signal. For Box action spaces,
-                    defaults to action_space.low. For Discrete, must be specified.
-                    Default None.
+            defaults to action_space.low. For Discrete, must be specified. Default None.
         control_high: Upper bound for continuous control signal. For Box action spaces,
-                     defaults to action_space.high. For Discrete, must be specified.
-                     Default None.
+            defaults to action_space.high. For Discrete, must be specified. Default None.
 
     Returns:
         Agent instance with PID control policy
 
     Raises:
         ValueError: If action_space is not Box/Discrete, obs_field is invalid,
-                   or control bounds are not specified for Discrete action space
+            or control bounds are not specified for Discrete action space
     """
 
     if not obs_field or not isinstance(obs_field, str):

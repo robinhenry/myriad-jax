@@ -16,6 +16,9 @@ class MockObs(NamedTuple):
     theta: jax.Array | float = 0.0
     theta_dot: jax.Array | float = 0.0
 
+    def to_array(self) -> jax.Array:
+        return jnp.asarray(self)
+
 
 @pytest.fixture
 def make_obs():
