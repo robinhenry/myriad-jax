@@ -1,13 +1,12 @@
 """Shared utilities for CartPole task wrappers."""
 
-from typing import Tuple
-
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Discrete
+from myriad.core.types import PRNGKey
 
 from ..physics import PhysicsState
 
@@ -24,13 +23,13 @@ class TaskConfig:
     x_threshold: float = 2.4  # meters
 
 
-def check_termination(physics_state, t: chex.Array, task_config: TaskConfig) -> chex.Array:
+def check_termination(physics_state: PhysicsState, t: Array, task_config: TaskConfig) -> Array:
     """Common termination check for CartPole tasks.
 
     The episode terminates if:
     - Pole angle exceeds threshold (falls over)
     - Cart position exceeds threshold (goes off track)
-    - Maximum timesteps reached
+    - Maximum timestep reached
 
     Args:
         physics_state: PhysicsState with x and theta fields
@@ -54,9 +53,6 @@ def get_cartpole_obs(physics_state: PhysicsState) -> PhysicsState:
     For CartPole, the system is fully observable, so observation = state.
     This eliminates duplication and makes observability explicit.
 
-    Classical controllers can access fields by name (obs.theta),
-    while neural network agents can call obs.to_array().
-
     Args:
         physics_state: PhysicsState with x, x_dot, theta, theta_dot fields
 
@@ -66,7 +62,7 @@ def get_cartpole_obs(physics_state: PhysicsState) -> PhysicsState:
     return physics_state
 
 
-def get_cartpole_obs_shape() -> Tuple[int, ...]:
+def get_cartpole_obs_shape() -> tuple[int, ...]:
     """Get the shape of the CartPole observation space.
 
     Returns:
@@ -84,7 +80,7 @@ def get_cartpole_action_space() -> Discrete:
     return Discrete(n=2)
 
 
-def sample_initial_physics(key: chex.PRNGKey):
+def sample_initial_physics(key: PRNGKey):
     """Sample initial physics state with small random perturbations.
 
     Initializes the pole with small random perturbations around the upright equilibrium position.

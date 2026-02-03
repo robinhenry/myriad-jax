@@ -3,7 +3,7 @@
 This module contains the ground truth dynamics for the cart-pole system,
 completely decoupled from any task-specific logic (rewards, terminations, observations).
 
-The physics can be reused by different tasks (control, SysID, etc.) and can be
+The physics can be reused by different tasks (control, system ID, etc.) and can be
 directly accessed by model-based methods like MPC planners or Neural ODEs.
 """
 
@@ -12,6 +12,7 @@ from typing import NamedTuple
 import chex
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 
 class PhysicsState(NamedTuple):
@@ -28,12 +29,12 @@ class PhysicsState(NamedTuple):
         theta_dot: Pole angular velocity (rad/s)
     """
 
-    x: chex.Array
-    x_dot: chex.Array
-    theta: chex.Array
-    theta_dot: chex.Array
+    x: Array
+    x_dot: Array
+    theta: Array
+    theta_dot: Array
 
-    def to_array(self) -> chex.Array:
+    def to_array(self) -> Array:
         """Convert to flat array for NN-based agents.
 
         Returns:
@@ -42,7 +43,7 @@ class PhysicsState(NamedTuple):
         return jnp.stack([self.x, self.x_dot, self.theta, self.theta_dot])
 
     @classmethod
-    def from_array(cls, arr: chex.Array) -> "PhysicsState":
+    def from_array(cls, arr: Array) -> "PhysicsState":
         """Create state from flat array.
 
         Args:
@@ -89,14 +90,11 @@ class PhysicsParams:
 
 def step_physics(
     state: PhysicsState,
-    action: chex.Array,
+    action: Array,
     params: PhysicsParams,
     config: PhysicsConfig,
 ) -> PhysicsState:
     """Pure physics step using Euler integration.
-
-    This function computes the next physical state given the current state and action.
-    It contains NO task logic: no rewards, terminations, or observations.
 
     The cart-pole dynamics are based on the equations from Barto, Sutton, Anderson (1983).
 

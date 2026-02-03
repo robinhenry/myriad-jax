@@ -1,5 +1,5 @@
-from .cartpole.tasks import control as cartpole_control, sysid as cartpole_sysid
-from .ccas_ccar.tasks import control as ccas_ccar_control, sysid as ccas_ccar_sysid
+from .bio.ccas_ccar.tasks import control as ccas_ccar_control, sysid as ccas_ccar_sysid
+from .classic.cartpole.tasks import control as cartpole_control, sysid as cartpole_sysid
 from .environment import Environment
 
 # The registry mapping environment IDs to their factory functions

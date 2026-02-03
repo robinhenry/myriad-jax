@@ -18,8 +18,7 @@ def make_agent(agent_id: str, **kwargs) -> Agent:
 
     Args:
         agent_id: The string identifier of the agent to create.
-        **kwargs: Keyword arguments that will be passed to the specific
-                  agent's make_agent function.
+        **kwargs: Keyword arguments that will be passed to the specific agent's make_agent function.
 
     Returns:
         An instance of the requested Agent.
