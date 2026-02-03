@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from myriad.envs.cartpole.physics import PhysicsConfig, PhysicsParams, PhysicsState, step_physics
+from myriad.envs.classic.cartpole.physics import PhysicsConfig, PhysicsParams, PhysicsState, step_physics
 
 
 @pytest.fixture

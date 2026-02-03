@@ -1,28 +1,24 @@
 """Integration tests for CartPole environments.
 
 This file contains high-level integration tests for the CartPole environments.
-Detailed unit tests are organized in the cartpole/ subdirectory:
-- cartpole/test_physics.py - Pure physics dynamics tests
-- cartpole/test_base.py - Shared task utilities tests
-- cartpole/tasks/test_control.py - Control task tests
-- cartpole/tasks/test_sysid.py - System identification task tests
+Detailed unit tests are organized in:
+- test_physics.py - Pure physics dynamics tests
+- tasks/test_base.py - Shared task utilities tests
+- tasks/test_control.py - Control task tests
 """
 
 import chex
 import jax
 import jax.numpy as jnp
-import pytest
 
 from myriad.envs import make_env as make_env_from_registry
-from myriad.envs.cartpole.tasks.control import ControlTaskState
-from myriad.envs.cartpole.tasks.sysid import SysIDTaskState
+from myriad.envs.classic.cartpole.tasks.control import ControlTaskState
 from myriad.envs.environment import Environment
 
 
-@pytest.mark.parametrize("env_name", ["cartpole-control", "cartpole-sysid"])
-def test_env_registry_integration(env_name: str):
-    """Test that CartPole environments can be created via ENV_REGISTRY."""
-    env = make_env_from_registry(env_name)
+def test_env_registry_integration():
+    """Test that CartPole control environment can be created via ENV_REGISTRY."""
+    env = make_env_from_registry("cartpole-control")
 
     # Verify it's a valid Environment
     assert isinstance(env, Environment)
@@ -68,57 +64,6 @@ def test_control_task_full_episode():
     # Should have completed or failed
     assert steps > 0
     assert total_reward == steps  # Control task gives +1 per step
-
-
-def test_sysid_task_full_episode():
-    """Test a complete episode rollout for SysID task."""
-    env = make_env_from_registry("cartpole-sysid")
-    key = jax.random.key(42)
-
-    # Reset
-    obs, state = env.reset(key, env.params, env.config)
-    assert isinstance(state, SysIDTaskState)
-
-    steps = 0
-
-    # Run episode with random actions
-    for i in range(200):
-        key, action_key, step_key = jax.random.split(key, 3)
-        action = env.get_action_space(env.config).sample(action_key)
-        obs, state, reward, done, info = env.step(step_key, state, action, env.params, env.config)
-
-        # Info should contain true parameters
-        assert "true_pole_mass" in info
-        assert "true_pole_length" in info
-
-        steps += 1
-
-        if done == 1.0:
-            break
-
-    # Should have completed or failed
-    assert steps > 0
-
-
-def test_control_and_sysid_observation_space_matches():
-    """Test that control and sysid tasks have the same observation space."""
-    control_env = make_env_from_registry("cartpole-control")
-    sysid_env = make_env_from_registry("cartpole-sysid")
-
-    assert control_env.get_obs_shape(control_env.config) == sysid_env.get_obs_shape(sysid_env.config)
-    assert control_env.get_action_space(control_env.config).n == sysid_env.get_action_space(sysid_env.config).n
-
-
-def test_control_and_sysid_action_space_matches():
-    """Test that control and sysid tasks have the same action space."""
-    control_env = make_env_from_registry("cartpole-control")
-    sysid_env = make_env_from_registry("cartpole-sysid")
-
-    control_space = control_env.get_action_space(control_env.config)
-    sysid_space = sysid_env.get_action_space(sysid_env.config)
-
-    assert control_space.n == sysid_space.n
-    assert control_space.shape == sysid_space.shape
 
 
 def test_vectorized_environments():

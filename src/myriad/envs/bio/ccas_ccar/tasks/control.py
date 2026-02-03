@@ -265,7 +265,7 @@ def make_env(
     config: ControlTaskConfig | None = None,
     params: ControlTaskParams | None = None,
     **kwargs,
-) -> Environment[ControlTaskState, ControlTaskParams, ControlTaskConfig]:
+) -> Environment[ControlTaskState, ControlTaskConfig, ControlTaskParams, CcasCcarControlObs]:
     """Create a CcaS-CcaR control task environment.
 
     Args:

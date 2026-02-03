@@ -326,7 +326,7 @@ def make_env(
     config: SysIDTaskConfig | None = None,
     params: SysIDTaskParams | None = None,
     **kwargs,
-) -> Environment[SysIDTaskState, SysIDTaskParams, SysIDTaskConfig]:
+) -> Environment[SysIDTaskState, SysIDTaskConfig, SysIDTaskParams, CcasCcarSysIDObs]:
     """Create a CcaS-CcaR SysID task environment.
 
     Args:

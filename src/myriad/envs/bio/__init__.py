@@ -7,6 +7,6 @@ This module provides modular task wrappers for the bi-stable genetic circuit:
 The physics layer (Gillespie algorithm) is shared across all tasks.
 """
 
-from .tasks import control, sysid
+from .ccas_ccar.tasks import control, sysid
 
 __all__ = ["control", "sysid"]

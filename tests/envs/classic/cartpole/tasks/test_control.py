@@ -18,8 +18,8 @@ import pytest
 
 from myriad.core import spaces
 from myriad.envs import make_env as make_env_from_registry
-from myriad.envs.cartpole.physics import PhysicsState
-from myriad.envs.cartpole.tasks.control import (
+from myriad.envs.classic.cartpole.physics import PhysicsState
+from myriad.envs.classic.cartpole.tasks.control import (
     ControlTaskConfig,
     ControlTaskParams,
     ControlTaskState,
