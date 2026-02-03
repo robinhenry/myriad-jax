@@ -9,7 +9,9 @@ from pathlib import Path
 import click
 import numpy as np
 
-from myriad.utils.rendering import render_cartpole_frame, render_ccas_ccar_frame, render_episode_to_video
+from myriad.envs.bio.ccas_ccar.rendering import render_ccas_ccar_frame
+from myriad.envs.classic.cartpole.rendering import render_cartpole_frame
+from myriad.utils.rendering import render_episode_to_video
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

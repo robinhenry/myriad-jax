@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from myriad.utils.rendering.cartpole import render_cartpole_frame
+from myriad.envs.classic.cartpole.rendering import render_cartpole_frame
 
 
 class TestRenderCartPoleFrame:

@@ -2,8 +2,8 @@
 
 import pytest
 
-from myriad.envs.ccas_ccar.physics import PhysicsConfig, PhysicsParams
-from myriad.envs.ccas_ccar.tasks.base import TaskConfig
+from myriad.envs.bio.ccas_ccar.physics import PhysicsConfig, PhysicsParams
+from myriad.envs.bio.ccas_ccar.tasks.base import TaskConfig
 
 
 @pytest.fixture

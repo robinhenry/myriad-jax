@@ -120,7 +120,7 @@ class RemoteLogger:
             max_frames: Maximum frames per episode (None = full episode)
 
         Example:
-            >>> from myriad.utils.rendering import render_cartpole_frame
+            >>> from myriad.envs.classic.cartpole.rendering import render_cartpole_frame
             >>> logger.log_videos("episodes/step_1000000", render_cartpole_frame, 1000000)
         """
         if not self.use_wandb:

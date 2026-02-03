@@ -9,7 +9,8 @@ This example shows how to:
 import numpy as np
 
 from myriad import create_eval_config, evaluate
-from myriad.utils.rendering import frames_to_video, render_ccas_ccar_frame
+from myriad.envs.bio.ccas_ccar.rendering import render_ccas_ccar_frame
+from myriad.utils.rendering import frames_to_video
 
 # Configuration
 OUTPUT_VIDEO = "videos/ccas_ccar_episode.mp4"

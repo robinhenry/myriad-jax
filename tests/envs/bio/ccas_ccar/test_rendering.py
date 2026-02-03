@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from myriad.utils.rendering.ccas_ccar import render_ccas_ccar_frame, render_population_heatmap
+from myriad.envs.bio.ccas_ccar.rendering import render_ccas_ccar_frame, render_population_heatmap
 
 
 class TestRenderCcasCcarFrame:

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from myriad.utils.rendering.video import frames_to_video, render_episode_to_video
+from myriad.utils.rendering import frames_to_video, render_episode_to_video
 
 
 class TestFramesToVideo:

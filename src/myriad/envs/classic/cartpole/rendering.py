@@ -84,22 +84,17 @@ def render_cartpole_frame(
     # Convert matplotlib figure to numpy RGB array
     fig.canvas.draw()
 
-    # Get ARGB buffer (FigureCanvasMac on macOS)
-    # Note: The actual pixel dimensions may differ from fig size due to DPI/retina scaling
-    buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)  # type: ignore
+    # Get RGBA buffer using standard method (Matplotlib 3.x+)
+    # This is more robust than tostring_argb which is backend-dependent
+    buf = fig.canvas.buffer_rgba()
 
-    # Calculate actual pixel dimensions from buffer size
-    # ARGB format: 4 bytes per pixel
-    num_pixels = len(buf) // 4
-    height_pixels = int(np.sqrt(num_pixels * figsize[1] / figsize[0]))
-    width_pixels = num_pixels // height_pixels
+    # Convert buffer to numpy array
+    # shape is (height, width, 4) for RGBA
+    frame_rgba = np.asarray(buf)
 
-    # Reshape and convert ARGB to RGB
-    buf = buf.reshape(height_pixels, width_pixels, 4)
-    frame = np.zeros((height_pixels, width_pixels, 3), dtype=np.uint8)
-    frame[:, :, 0] = buf[:, :, 1]  # R
-    frame[:, :, 1] = buf[:, :, 2]  # G
-    frame[:, :, 2] = buf[:, :, 3]  # B
+    # Extract RGB channels (drop Alpha)
+    # Copy to ensure contiguous array and correct type
+    frame = np.array(frame_rgba[:, :, :3], dtype=np.uint8)
 
     plt.close(fig)
 

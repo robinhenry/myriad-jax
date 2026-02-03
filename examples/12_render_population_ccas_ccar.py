@@ -12,7 +12,8 @@ Shows:
 import numpy as np
 
 from myriad import create_eval_config, evaluate
-from myriad.utils.rendering import frames_to_video, render_population_heatmap
+from myriad.envs.bio.ccas_ccar.rendering import render_population_heatmap
+from myriad.utils.rendering import frames_to_video
 
 # Configuration
 OUTPUT_VIDEO = "videos/ccas_ccar_population.mp4"
