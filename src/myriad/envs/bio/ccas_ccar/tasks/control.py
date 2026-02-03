@@ -10,12 +10,13 @@ Task variants:
 
 from typing import Any, Dict, NamedTuple, Tuple
 
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Discrete
+from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
@@ -40,8 +41,8 @@ class ControlTaskState(NamedTuple):
     """
 
     physics: PhysicsState
-    t: chex.Array
-    F_target: chex.Array
+    t: Array
+    F_target: Array
 
 
 @struct.dataclass
@@ -80,12 +81,12 @@ class ControlTaskParams:
 
 
 def _step(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     state: ControlTaskState,
-    action: chex.Array,
+    action: Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[CcasCcarControlObs, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> Tuple[CcasCcarControlObs, ControlTaskState, Array, Array, Dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -148,7 +149,7 @@ def _step(
 
 
 def _reset(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
 ) -> Tuple[CcasCcarControlObs, ControlTaskState]:

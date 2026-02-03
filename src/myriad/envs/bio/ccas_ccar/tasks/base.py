@@ -5,8 +5,10 @@ from typing import NamedTuple
 import chex
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Discrete
+from myriad.core.types import PRNGKey
 
 from ..physics import PhysicsState
 
@@ -26,11 +28,11 @@ class CcasCcarControlObs(NamedTuple):
         F_target: Target trajectory [current, t+1, ..., t+n_horizon]
     """
 
-    F_normalized: chex.Array
-    U_obs: chex.Array
-    F_target: chex.Array
+    F_normalized: Array
+    U_obs: Array
+    F_target: Array
 
-    def to_array(self) -> chex.Array:
+    def to_array(self) -> Array:
         """Convert to flat array for NN-based agents.
 
         Returns:
@@ -39,7 +41,7 @@ class CcasCcarControlObs(NamedTuple):
         return jnp.concatenate([jnp.array([self.F_normalized, self.U_obs]), self.F_target])
 
     @classmethod
-    def from_array(cls, arr: chex.Array) -> "CcasCcarControlObs":
+    def from_array(cls, arr: Array) -> "CcasCcarControlObs":
         """Create observation from flat array.
 
         Args:
@@ -67,11 +69,11 @@ class CcasCcarSysIDObs(NamedTuple):
         padding: Zero padding for consistent observation shape
     """
 
-    F_normalized: chex.Array
-    U_obs: chex.Array
-    padding: chex.Array
+    F_normalized: Array
+    U_obs: Array
+    padding: Array
 
-    def to_array(self) -> chex.Array:
+    def to_array(self) -> Array:
         """Convert to flat array for NN-based agents.
 
         Returns:
@@ -80,7 +82,7 @@ class CcasCcarSysIDObs(NamedTuple):
         return jnp.array([self.F_normalized, self.U_obs, self.padding])
 
     @classmethod
-    def from_array(cls, arr: chex.Array) -> "CcasCcarSysIDObs":
+    def from_array(cls, arr: Array) -> "CcasCcarSysIDObs":
         """Create observation from flat array.
 
         Args:
@@ -108,7 +110,7 @@ class TaskConfig:
     F_obs_normalizer: float = 80.0  # Normalization constant for F observations
 
 
-def check_termination(t: chex.Array, task_config: TaskConfig) -> chex.Array:
+def check_termination(t: Array, task_config: TaskConfig) -> Array:
     """Common termination check for CcaS-CcaR tasks.
 
     The episode terminates when maximum timesteps is reached.
@@ -134,7 +136,7 @@ def get_ccas_ccar_action_space() -> Discrete:
     return Discrete(n=2)
 
 
-def sample_initial_physics(key: chex.PRNGKey) -> PhysicsState:
+def sample_initial_physics(key: PRNGKey) -> PhysicsState:
     """Sample initial physics state.
 
     For the gene circuit, we start from zero proteins at time 0.
@@ -156,7 +158,7 @@ def sample_initial_physics(key: chex.PRNGKey) -> PhysicsState:
 def generate_constant_target(
     n_horizon: int,
     F_target_value: float,
-) -> chex.Array:
+) -> Array:
     """Generate a constant target trajectory.
 
     Args:
@@ -170,14 +172,14 @@ def generate_constant_target(
 
 
 def generate_sinewave_target(
-    key: chex.PRNGKey,
-    t: chex.Array,
+    key: PRNGKey,
+    t: Array,
     n_horizon: int,
     timestep_minutes: float,
     period_minutes: float = 600.0,
     amplitude: float = 20.0,
     vshift: float = 30.0,
-) -> chex.Array:
+) -> Array:
     """Generate a sinusoidal target trajectory.
 
     Creates a time-varying target that follows a sine wave pattern.

@@ -24,11 +24,12 @@ Reference:
 
 from typing import NamedTuple
 
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
+from myriad.core.types import PRNGKey
 from myriad.physics import hill_function
 from myriad.physics.gillespie import run_gillespie_loop
 
@@ -42,9 +43,9 @@ class PhysicsState(NamedTuple):
         F: GFP reporter protein concentration (molecules)
     """
 
-    time: chex.Array
-    H: chex.Array
-    F: chex.Array
+    time: Array
+    H: Array
+    F: Array
 
 
 @struct.dataclass
@@ -90,9 +91,9 @@ class PhysicsParams:
 
 def compute_propensities(
     state: PhysicsState,
-    action: chex.Array,
+    action: Array,
     config: PhysicsConfig,
-) -> chex.Array:
+) -> Array:
     """Compute reaction propensities (rates) for all five reactions.
 
     Args:
@@ -127,7 +128,7 @@ def compute_propensities(
     return jnp.array([r1, r2, r3, r4, r5])
 
 
-def apply_reaction(state: PhysicsState, reaction_idx: chex.Array) -> PhysicsState:
+def apply_reaction(state: PhysicsState, reaction_idx: Array) -> PhysicsState:
     """Apply a single reaction to update the state.
 
     Uses jax.lax.switch for JAX-compatible control flow.
@@ -165,9 +166,9 @@ def apply_reaction(state: PhysicsState, reaction_idx: chex.Array) -> PhysicsStat
 
 
 def step_physics(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     state: PhysicsState,
-    action: chex.Array,
+    action: Array,
     params: PhysicsParams,
     config: PhysicsConfig,
 ) -> PhysicsState:
