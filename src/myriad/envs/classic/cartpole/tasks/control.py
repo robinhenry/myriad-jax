@@ -4,14 +4,15 @@ Standard balancing task: Keep the pole upright for as long as possible.
 Reward: +1 per timestep the pole remains balanced.
 """
 
-from typing import Any, Dict, NamedTuple, Tuple
+from typing import Any, Dict, NamedTuple
 
-import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Discrete
+from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
@@ -34,7 +35,7 @@ class ControlTaskState(NamedTuple):
     """
 
     physics: PhysicsState
-    t: chex.Array
+    t: Array
 
 
 @struct.dataclass
@@ -61,12 +62,12 @@ class ControlTaskParams:
 
 
 def _step(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     state: ControlTaskState,
-    action: chex.Array,
+    action: Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[PhysicsState, ControlTaskState, chex.Array, chex.Array, Dict[str, Any]]:
+) -> tuple[PhysicsState, ControlTaskState, Array, Array, Dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -77,8 +78,8 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation (PhysicsState - fully observable)
-        next_state: Next task state
+        obs_next: Next observation (PhysicsState = fully observable)
+        next_state: Next environment state
         reward: Reward (+1.0 per step)
         done: Termination flag (1.0 if done, 0.0 otherwise)
         info: Empty dict (no auxiliary information)
@@ -105,10 +106,10 @@ def _step(
 
 
 def _reset(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[PhysicsState, ControlTaskState]:
+) -> tuple[PhysicsState, ControlTaskState]:
     """Reset the control task to initial state.
 
     Initializes the pole with small random perturbations around the upright position.
@@ -157,7 +158,7 @@ def get_obs(
     return get_cartpole_obs(state.physics)
 
 
-def get_obs_shape(config: ControlTaskConfig) -> Tuple[int, ...]:
+def get_obs_shape(config: ControlTaskConfig) -> tuple[int, ...]:
     """Get the shape of the observation space.
 
     Args:
@@ -185,7 +186,7 @@ def make_env(
     config: ControlTaskConfig | None = None,
     params: ControlTaskParams | None = None,
     **kwargs,
-) -> Environment[ControlTaskState, ControlTaskParams, ControlTaskConfig]:
+) -> Environment[ControlTaskState, ControlTaskConfig, ControlTaskParams, PhysicsState]:
     """Create a CartPole control task environment.
 
     Args:
