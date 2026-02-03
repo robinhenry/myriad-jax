@@ -1,4 +1,4 @@
-from .bio.ccas_ccar.tasks import control as ccas_ccar_control, sysid as ccas_ccar_sysid
+from .bio.ccas_ccar.tasks import control as ccas_ccar_control
 from .classic.cartpole.tasks import control as cartpole_control
 from .environment import Environment
 
@@ -8,7 +8,6 @@ ENV_REGISTRY = {
     "cartpole-control": cartpole_control.make_env,
     # Modular CcaS-CcaR tasks
     "ccas-ccar-control": ccas_ccar_control.make_env,
-    "ccas-ccar-sysid": ccas_ccar_sysid.make_env,
 }
 
 

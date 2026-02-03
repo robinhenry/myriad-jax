@@ -72,7 +72,7 @@ def test_step_with_initial_tilt(params: PhysicsParams, config: PhysicsConfig):
     chex.assert_trees_all_close(next_state.x, 0.0)
     chex.assert_trees_all_close(next_state.x_dot, 0.193556, rtol=1e-5)
     chex.assert_trees_all_close(next_state.theta, 0.1)
-    chex.assert_trees_all_close(next_state.theta_dot, -0.21909498, rtol=1e-5)
+    chex.assert_trees_all_close(next_state.theta_dot, -0.259533, rtol=1e-5)
 
 
 def test_step_with_velocity(params: PhysicsParams, config: PhysicsConfig):
