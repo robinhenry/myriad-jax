@@ -1,5 +1,3 @@
-"""Tests for CartPole physics dynamics."""
-
 import chex
 import jax
 import jax.numpy as jnp

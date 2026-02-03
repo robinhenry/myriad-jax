@@ -1,5 +1,3 @@
-"""Shared fixtures for CartPole tests."""
-
 import pytest
 
 from myriad.envs.classic.cartpole.physics import PhysicsConfig, PhysicsParams
