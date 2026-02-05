@@ -231,3 +231,28 @@ class EvalConfig(BaseModel):
 
     # --- Logging (optional) ---
     wandb: WandbConfig | None = None  # None = disabled (provide WandbConfig to enable)
+
+
+def config_to_eval_config(config: Config) -> EvalConfig:
+    """Extract evaluation configuration from a training Config.
+
+    Args:
+        config: A training Config
+
+    Returns:
+        EvalConfig with evaluation-relevant fields extracted
+    """
+    return EvalConfig(
+        run=EvalRunConfig(
+            seed=config.run.seed,
+            eval_rollouts=config.run.eval_rollouts,
+            eval_max_steps=config.run.eval_max_steps,
+            eval_episode_save_frequency=config.run.eval_episode_save_frequency,
+            eval_episode_save_count=config.run.eval_episode_save_count,
+            eval_render_videos=config.run.eval_render_videos,
+            eval_video_fps=config.run.eval_video_fps,
+        ),
+        agent=config.agent,
+        env=config.env,
+        wandb=config.wandb,
+    )

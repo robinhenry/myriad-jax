@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, cast
 
 import chex
@@ -15,8 +16,10 @@ from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from myriad.core.spaces import Box, Space
 from myriad.core.types import BaseModel
 from myriad.envs.environment import Environment
-from myriad.platform import logging_utils, step_functions, training
+from myriad.platform import step_functions, training
 from myriad.platform.initialization import get_factory_kwargs
+from myriad.platform.logging import SessionLogger
+from myriad.platform.logging.backends import wandb as wandb_backend
 from myriad.platform.training import TrainingEnvState
 
 
@@ -239,12 +242,9 @@ def _register_test_components(monkeypatch):
 
 @pytest.fixture
 def wandb_stub(monkeypatch):
-    from myriad.platform import remote_logger
-
     stub = _WandbStub()
-    monkeypatch.setattr(logging_utils, "wandb", stub)
-    monkeypatch.setattr(logging_utils, "_wandb_import_error", None, raising=False)
-    monkeypatch.setattr(remote_logger, "wandb", stub)
+    monkeypatch.setattr(wandb_backend, "wandb", stub)
+    monkeypatch.setattr(wandb_backend, "_wandb_import_error", None, raising=False)
     return stub
 
 
@@ -324,7 +324,9 @@ def test_run_training_loop_without_wandb(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, wandb_run=None)
+    # Create SessionLogger with no wandb
+    session_logger = SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed)
+    training._run_training_loop(config, session_logger)
 
     assert "carry" in captured
     steps_per_env = config.run.steps_per_env
@@ -343,8 +345,9 @@ def test_run_training_loop_without_wandb(monkeypatch):
 def test_run_training_loop_with_wandb_logs(wandb_stub):
     """When W&B is enabled the loop should emit train and eval payloads."""
     config = _create_config(wandb_enabled=True)
-    wandb_run = logging_utils.maybe_init_wandb(config)
-    training._run_training_loop(config, wandb_run)
+    wandb_run = wandb_backend.init_wandb(config)
+    session_logger = SessionLogger(wandb_run=wandb_run, run_dir=Path.cwd(), seed=config.run.seed)
+    training._run_training_loop(config, session_logger)
 
     assert wandb_stub.init_kwargs is not None
     assert wandb_stub.init_kwargs["config"]["run"]["seed"] == 0
@@ -363,19 +366,19 @@ def test_train_and_evaluate_calls_finish(wandb_stub):
     assert wandb_stub.finish_called is True
 
 
-def test_maybe_init_wandb_disabled_returns_none():
+def test_init_wandb_disabled_returns_none():
     """Disabled W&B config should skip initialization."""
     config = _create_config(wandb_enabled=False)
-    assert logging_utils.maybe_init_wandb(config) is None
+    assert wandb_backend.init_wandb(config) is None
 
 
-def test_maybe_init_wandb_raises_without_package(monkeypatch):
+def test_init_wandb_raises_without_package(monkeypatch):
     """Enabled W&B must error if the package import is unavailable."""
     config = _create_config(wandb_enabled=True)
-    monkeypatch.setattr(logging_utils, "wandb", None)
-    monkeypatch.setattr(logging_utils, "_wandb_import_error", ImportError("missing"), raising=False)
+    monkeypatch.setattr(wandb_backend, "wandb", None)
+    monkeypatch.setattr(wandb_backend, "_wandb_import_error", ImportError("missing"), raising=False)
     with pytest.raises(RuntimeError):
-        logging_utils.maybe_init_wandb(config)
+        wandb_backend.init_wandb(config)
 
 
 def test_get_factory_kwargs_excludes_name():
@@ -426,7 +429,7 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, wandb_run=None)
+    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
 
     # Chunk size should be clamped to at least 1
     assert captured.get("mask_length", 0) == 100
@@ -454,7 +457,7 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, wandb_run=None)
+    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
 
     # Total active steps across all chunks should equal steps_per_env
     assert sum(active_counts) == config.run.steps_per_env
@@ -485,7 +488,7 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, wandb_run=None)
+    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
 
     # Remove the JIT trace call (first call with 0 or minimal steps)
     actual_chunks = [size for size in chunk_sizes_observed if size > 0]
@@ -558,7 +561,7 @@ def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], 
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, wandb_run=None)
+    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
 
     # Extract individual components from final carry
     key, agent_state, training_env_state, buffer_state = final_states["carry"]
@@ -1009,14 +1012,14 @@ def test_on_policy_training_logging_frequency(monkeypatch):
     log_checkpoints: list[int] = []
 
     # Capture when logging happens
-    original_log_training_step = training.MetricsLogger.log_training_step
+    original_log_training_step = SessionLogger.log_training_step
 
     def instrumented_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk):
         log_checkpoints.append(steps_per_env)
         return original_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk)
 
-    monkeypatch.setattr(training.MetricsLogger, "log_training_step", instrumented_log_training_step)
-    training._run_training_loop(config, wandb_run=None)
+    monkeypatch.setattr(SessionLogger, "log_training_step", instrumented_log_training_step)
+    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
 
     # Should log at: 8, 16, 24 (every log_frequency=8 steps per env)
     expected_checkpoints = [8, 16, 24]

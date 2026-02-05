@@ -15,8 +15,8 @@ from omegaconf import DictConfig, OmegaConf
 
 from myriad.configs.default import Config, EvalConfig
 from myriad.envs.classic.cartpole.rendering import render_cartpole_frame
-from myriad.platform.episode_manager import render_episodes_to_videos
 from myriad.platform.evaluation import evaluate
+from myriad.platform.logging.backends.disk import render_episodes_to_videos
 from myriad.platform.training import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU

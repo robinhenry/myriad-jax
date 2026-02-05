@@ -7,9 +7,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import chex
 import numpy as np
+from flax import struct
 
 from myriad.configs.default import Config
+from myriad.envs.environment import EnvironmentState
+
+
+@struct.dataclass
+class TrainingEnvState:
+    """Container for the state of a training environment, including observations.
+
+    This struct groups the environment state with the current observations for
+    efficient handling in training loops. The observations are stored as arrays
+    (not NamedTuples) to ensure compatibility with platform utilities like
+    where_mask and mask_tree.
+    """
+
+    env_state: EnvironmentState
+    obs: chex.Array
 
 
 @dataclass
@@ -126,7 +143,6 @@ class TrainingResults:
             f")"
         )
 
-    # TODO: address the concern highlighted in the docstring, if still relevant
     def save_agent(self, path: str | Path) -> None:
         """Save trained agent state to file.
 

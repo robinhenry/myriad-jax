@@ -10,12 +10,23 @@ from myriad.agents.agent import Agent, AgentState
 from myriad.core.replay_buffer import ReplayBufferState
 from myriad.core.types import PRNGKey, Transition
 
-from .shared import TrainingEnvState
+from .types import TrainingEnvState
 
 
 def tree_select(mask: Array, new_tree: Any, old_tree: Any) -> Any:
-    """Selects between two pytrees using a scalar boolean mask."""
+    """Select between pytrees using a SCALAR boolean mask.
 
+    Uses jax.lax.select which expects a scalar condition. For batched selection
+    where the mask is a vector (one bool per batch element), use mask_tree instead.
+
+    Args:
+        mask: Scalar boolean array controlling selection
+        new_tree: PyTree to select when mask is True
+        old_tree: PyTree to select when mask is False
+
+    Returns:
+        PyTree with same structure, elements from new_tree where mask is True
+    """
     return jax.tree_util.tree_map(lambda new, old: jax.lax.select(mask, new, old), new_tree, old_tree)
 
 
@@ -35,10 +46,20 @@ def where_mask(mask: Array, new_value: Array, old_value: Array) -> Array:
     return jnp.where(_expand_mask(mask_bool, new_value.ndim), new_value, old_value)
 
 
-# TODO: what's the difference between tree_select() and mask_tree()? Do we need both?
 def mask_tree(mask: Array, new_tree: Any, old_tree: Any) -> Any:
-    """Selects between two pytrees using a (potentially vector) mask."""
+    """Select between pytrees using a VECTOR boolean mask (batched selection).
 
+    Uses jnp.where with broadcasting, allowing per-element selection across a batch.
+    For scalar conditions where the entire tree is selected/rejected, use tree_select.
+
+    Args:
+        mask: Vector boolean array of shape (batch_size,) controlling per-element selection
+        new_tree: PyTree to select from when corresponding mask element is True
+        old_tree: PyTree to select from when corresponding mask element is False
+
+    Returns:
+        PyTree with same structure, per-batch-element selection based on mask
+    """
     return jax.tree_util.tree_map(lambda new, old: where_mask(mask, new, old), new_tree, old_tree)
 
 

@@ -1,6 +1,7 @@
 """Platform module for training and evaluation infrastructure."""
 
 from .evaluation import evaluate
+from .logging import SessionLogger
 from .training import train_and_evaluate
 from .types import EvaluationMetrics, EvaluationResults, TrainingMetrics, TrainingResults
 
@@ -11,4 +12,5 @@ __all__ = [
     "TrainingMetrics",
     "EvaluationMetrics",
     "EvaluationResults",
+    "SessionLogger",
 ]

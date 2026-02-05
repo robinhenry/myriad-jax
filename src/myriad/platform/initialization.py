@@ -55,6 +55,7 @@ def get_factory_kwargs(config: BaseModel) -> dict:
     kwargs = config.model_dump()
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
-    # TODO: check that it really makes sense to pop batch_size here
-    kwargs.pop("batch_size", None)  # batch_size is a platform parameter, not passed to factories
+    # batch_size is a platform parameter used for replay buffer sampling,
+    # not an agent construction parameter
+    kwargs.pop("batch_size", None)
     return kwargs

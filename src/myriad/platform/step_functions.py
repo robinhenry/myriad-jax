@@ -24,7 +24,7 @@ from myriad.envs.environment import Environment
 from myriad.utils import to_array
 
 from .scan_utils import mask_tree, where_mask
-from .shared import TrainingEnvState
+from .types import TrainingEnvState
 
 
 def make_train_step_fn(
@@ -112,9 +112,12 @@ def make_train_step_fn(
         # Reset only the environments that are done
         new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
 
-        # TODO: does it make sense to convert observations to arrays before putting together the new state? Why do we
-        # not use the NamedTuple observations?
-        # Convert reset observations to arrays
+        # Convert reset observations to arrays.
+        # Design choice: We convert to arrays because:
+        # 1. Neural networks expect flat arrays, not NamedTuples
+        # 2. Replay buffer stores arrays for efficient batched sampling
+        # 3. Platform utilities (where_mask, mask_tree) work on arrays
+        # The conversion happens once at reset (vectorized), not per-step.
         new_obs_array = to_array_batch(new_obs)
 
         # If done, use the new state, otherwise keep the existing one (pure array operations)
