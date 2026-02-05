@@ -32,7 +32,7 @@ def make_env(env_id: str, **kwargs) -> Environment:
     Args:
         env_id: The string identifier of the environment to create.
         **kwargs: Keyword arguments that will be passed to the specific
-                  environment's make_env function.
+                  environment's ``make_env()`` function.
 
     Returns:
         An instance of the requested Environment.

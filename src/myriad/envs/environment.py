@@ -36,10 +36,6 @@ from myriad.core.types import Observation, PRNGKey
 class EnvironmentConfig(Protocol):
     """Protocol for environment configuration objects.
 
-    **Static, compile-time configuration**: Pass as ``static_argnames`` to
-    :func:`jax.jit`. Changing these values requires recompilation but enables
-    better optimization.
-
     Attributes
     ----------
     max_steps : int
@@ -64,10 +60,6 @@ class EnvironmentConfig(Protocol):
 
 class EnvironmentParams(Protocol):
     """Protocol for environment parameter objects.
-
-    **Dynamic, runtime parameters**: NOT passed as static args to
-    :func:`jax.jit`. Can vary between episodes/runs without triggering
-    recompilation.
 
     Notes
     -----

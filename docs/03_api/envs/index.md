@@ -1,4 +1,4 @@
-# Environments
+# Environment
 
 ```{toctree}
 :maxdepth: 1
