@@ -24,6 +24,7 @@ obs, state, reward, done, info = env.step(key, state, action, env.params, env.co
 | ID | Category | Environment | Description |
 |----|----------|-------------|-------------|
 | `cartpole-control` | [Classic](classic/index.md) | [CartPole](classic/cartpole.md) | Inverted pendulum balancing |
+| `pendulum-control` | [Classic](classic/index.md) | [Pendulum](classic/pendulum.md) | Swing-up control |
 | `ccas-ccar-control` | [Biology](bio/index.md) | [CcaS-CcaR](bio/ccas_ccar.md) | Bacterial gene circuit control |
 
 ## Factory Function

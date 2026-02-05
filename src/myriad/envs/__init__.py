@@ -1,5 +1,6 @@
 from .bio.ccas_ccar.tasks import control as ccas_ccar_control
 from .classic.cartpole.tasks import control as cartpole_control
+from .classic.pendulum.tasks import control as pendulum_control
 from .environment import (
     Environment,
     EnvironmentConfig,
@@ -11,6 +12,8 @@ from .environment import (
 ENV_REGISTRY = {
     # Modular CartPole tasks
     "cartpole-control": cartpole_control.make_env,
+    # Modular Pendulum tasks
+    "pendulum-control": pendulum_control.make_env,
     # Modular CcaS-CcaR tasks
     "ccas-ccar-control": ccas_ccar_control.make_env,
 }
