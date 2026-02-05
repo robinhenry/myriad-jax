@@ -21,18 +21,24 @@ __all__ = [
 
 
 def make_agent(agent_id: str, **kwargs) -> Agent:
-    """
-    A general factory function to create any registered agent.
+    """Create an agent by its registered ID.
 
     Args:
         agent_id: The string identifier of the agent to create.
-        **kwargs: Keyword arguments that will be passed to the specific agent's make_agent function.
+            Available agents: ``"random"``, ``"bangbang"``, ``"pid"``, ``"dqn"``, ``"pqn"``.
+        **kwargs: Keyword arguments passed to the agent's factory function.
+            See individual agent modules for supported parameters.
 
     Returns:
         An instance of the requested Agent.
 
     Raises:
-        ValueError: If the ``agent_id`` is not found in the registry.
+        ValueError: If ``agent_id`` is not found in the registry.
+
+    Example:
+        >>> from myriad.agents import make_agent
+        >>> from myriad.core.spaces import Discrete
+        >>> agent = make_agent("dqn", action_space=Discrete(2), learning_rate=1e-3)
     """
     if agent_id not in AGENT_REGISTRY:
         raise ValueError(

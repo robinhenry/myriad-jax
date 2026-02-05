@@ -1,9 +1,16 @@
 """Deep Q-Network (DQN) agent implementation using JAX and Flax.
 
-A classic value-based RL algorithm that learns to estimate Q-values for state-action pairs
-and uses epsilon-greedy exploration.
+A classic value-based RL algorithm that learns to estimate Q-values for state-action
+pairs and uses epsilon-greedy exploration.
 
-Reference: [CleanRL](https://docs.cleanrl.dev/rl-algorithms/dqn/)
+Features:
+
+- Experience replay with uniform sampling
+- Target network for stable learning
+- Epsilon-greedy exploration with linear decay
+- Supports soft (Polyak) or hard target network updates
+
+Reference: `CleanRL DQN <https://docs.cleanrl.dev/rl-algorithms/dqn/>`_
 """
 
 from typing import Any, Tuple
@@ -46,7 +53,18 @@ class QNetwork(nn.Module):
 
 @struct.dataclass
 class AgentParams:
-    """Static parameters for the DQN agent."""
+    """Static parameters for the DQN agent.
+
+    Attributes:
+        action_space: Action space (must be Discrete).
+        learning_rate: Learning rate for Adam optimizer.
+        gamma: Discount factor for future rewards.
+        epsilon_start: Initial exploration rate.
+        epsilon_end: Final exploration rate after decay.
+        epsilon_decay_steps: Number of steps to decay epsilon from start to end.
+        target_network_frequency: Steps between target network updates.
+        tau: Soft update coefficient (1.0 = hard update, <1.0 = exponential moving average).
+    """
 
     action_space: Space
     learning_rate: float
@@ -55,15 +73,21 @@ class AgentParams:
     epsilon_end: float
     epsilon_decay_steps: int
     target_network_frequency: int
-    tau: float  # For soft updates (1.0 = hard update)
+    tau: float
 
 
 @struct.dataclass
 class AgentState:
-    """State of the DQN agent."""
+    """State of the DQN agent.
+
+    Attributes:
+        train_state: Flax TrainState containing network params and optimizer state.
+        target_params: Parameters of the target network (lagged copy of online network).
+        global_step: Number of update steps taken (used for epsilon decay and target updates).
+    """
 
     train_state: TrainState
-    target_params: Any  # Parameters of the target network
+    target_params: Any
     global_step: chex.Array
 
 
