@@ -204,13 +204,12 @@ def _make_dummy_collection_step(num_envs: int):
 
 
 def test_make_chunked_collector_basic_functionality():
-    """Test that chunked collector correctly collects rollouts across chunks."""
+    """Test that chunked collector correctly collects rollouts."""
     num_envs = 3
-    chunk_size = 4
-    total_steps = 10  # Will require 3 chunks (4 + 4 + 2)
+    total_steps = 10
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, total_steps)
 
     key = jax.random.PRNGKey(42)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
@@ -236,14 +235,13 @@ def test_make_chunked_collector_basic_functionality():
     assert not np.array_equal(key, key_out)
 
 
-def test_make_chunked_collector_with_perfect_chunk_alignment():
-    """Test chunked collector when total_steps divides evenly into chunk_size."""
+def test_make_chunked_collector_with_larger_total_steps():
+    """Test chunked collector with a larger number of total steps."""
     num_envs = 2
-    chunk_size = 5
-    total_steps = 15  # Exactly 3 chunks
+    total_steps = 15
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, total_steps)
 
     key = jax.random.PRNGKey(123)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
@@ -255,14 +253,13 @@ def test_make_chunked_collector_with_perfect_chunk_alignment():
     assert transitions.obs.shape[0] == total_steps * num_envs
 
 
-def test_make_chunked_collector_single_chunk():
-    """Test chunked collector when total_steps < chunk_size (single chunk)."""
+def test_make_chunked_collector_small_total_steps():
+    """Test chunked collector with a small number of total steps."""
     num_envs = 4
-    chunk_size = 20
-    total_steps = 7  # Less than one full chunk
+    total_steps = 7
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, total_steps)
 
     key = jax.random.PRNGKey(456)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
@@ -273,3 +270,160 @@ def test_make_chunked_collector_single_chunk():
     assert int(agent_out.step_count) == total_steps
     np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), total_steps))
     assert transitions.obs.shape[0] == total_steps * num_envs
+
+
+# -----------------------------------------------------------------------------
+# Tests for make_on_policy_chunk_runner
+# -----------------------------------------------------------------------------
+
+
+@struct.dataclass
+class _MockAgentParams:
+    learning_rate: float = 0.01
+
+
+@struct.dataclass
+class _MockOnPolicyAgentState:
+    update_count: chex.Array
+
+
+class _MockOnPolicyAgent:
+    """Mock agent for testing on-policy chunk runner."""
+
+    def __init__(self, params: _MockAgentParams):
+        self.params = params
+
+    def update(self, key, state, batch, params):
+        """Mock update that increments update count and returns metrics."""
+        new_state = _MockOnPolicyAgentState(update_count=state.update_count + 1)
+        metrics = {"loss": jnp.array(0.5)}
+        return new_state, metrics
+
+
+def _make_mock_rollout_fn(num_envs: int):
+    """Create a mock rollout function for testing on-policy chunk runner."""
+
+    def rollout_fn(key, agent_state, env_states):
+        # Simulate collecting a rollout by incrementing counters
+        new_env_counter = env_states.counter + 1
+        new_agent_state = _MockOnPolicyAgentState(update_count=agent_state.update_count)
+
+        # Create a dummy rollout batch (transitions)
+        obs = jnp.ones((num_envs,), dtype=jnp.float32)
+        actions = jnp.zeros((num_envs,), dtype=jnp.int32)
+        rewards = jnp.ones((num_envs,), dtype=jnp.float32) * 0.1
+        next_obs = jnp.ones((num_envs,), dtype=jnp.float32)
+        dones = jnp.zeros((num_envs,), dtype=jnp.bool_)
+
+        rollout_batch = Transition(obs, actions, rewards, next_obs, dones)
+
+        new_env_states = _DummyEnvState(counter=new_env_counter)
+        key, _ = jax.random.split(key)
+        return key, new_agent_state, new_env_states, rollout_batch
+
+    return rollout_fn
+
+
+def test_make_on_policy_chunk_runner_basic():
+    """Test that on-policy chunk runner correctly processes rollout-update cycles."""
+    num_envs = 2
+    chunk_size = 5
+
+    # Create mock agent and rollout function
+    params = _MockAgentParams(learning_rate=0.01)
+    agent = _MockOnPolicyAgent(params)
+    rollout_fn = _make_mock_rollout_fn(num_envs)
+
+    run_chunk = runners.make_on_policy_chunk_runner(rollout_fn, agent)
+
+    key = jax.random.PRNGKey(42)
+    agent_state = _MockOnPolicyAgentState(update_count=jnp.array(0, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.zeros((num_envs,), dtype=jnp.int32))
+
+    # All steps active
+    active_mask = jnp.ones((chunk_size,), dtype=jnp.bool_)
+
+    (key_out, agent_out, env_out), metrics_history = run_chunk(
+        (key, agent_state, env_states),
+        active_mask,
+    )
+
+    # Agent should have been updated chunk_size times
+    assert int(agent_out.update_count) == chunk_size
+
+    # Env counter should have advanced chunk_size times
+    np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), chunk_size))
+
+    # Metrics should have shape (chunk_size,)
+    assert metrics_history["loss"].shape == (chunk_size,)
+
+    # Key should have changed
+    assert not np.array_equal(key, key_out)
+
+
+def test_make_on_policy_chunk_runner_with_partial_active_mask():
+    """Test that on-policy chunk runner respects the active mask."""
+    num_envs = 2
+    chunk_size = 6
+
+    params = _MockAgentParams(learning_rate=0.01)
+    agent = _MockOnPolicyAgent(params)
+    rollout_fn = _make_mock_rollout_fn(num_envs)
+
+    run_chunk = runners.make_on_policy_chunk_runner(rollout_fn, agent)
+
+    key = jax.random.PRNGKey(123)
+    agent_state = _MockOnPolicyAgentState(update_count=jnp.array(0, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.zeros((num_envs,), dtype=jnp.int32))
+
+    # Only first 3 steps active
+    active_mask = jnp.array([True, True, True, False, False, False], dtype=jnp.bool_)
+
+    (key_out, agent_out, env_out), metrics_history = run_chunk(
+        (key, agent_state, env_states),
+        active_mask,
+    )
+
+    # Only 3 active updates
+    assert int(agent_out.update_count) == 3
+
+    # Env counter should have advanced only 3 times
+    np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), 3))
+
+    # Metrics for inactive steps should be zeroed
+    assert metrics_history["loss"].shape == (chunk_size,)
+    np.testing.assert_allclose(metrics_history["loss"][:3], np.full((3,), 0.5))
+    np.testing.assert_allclose(metrics_history["loss"][3:], np.zeros((3,)))
+
+
+def test_make_on_policy_chunk_runner_all_inactive():
+    """Test that on-policy chunk runner preserves state when all steps inactive."""
+    num_envs = 2
+    chunk_size = 4
+
+    params = _MockAgentParams(learning_rate=0.01)
+    agent = _MockOnPolicyAgent(params)
+    rollout_fn = _make_mock_rollout_fn(num_envs)
+
+    run_chunk = runners.make_on_policy_chunk_runner(rollout_fn, agent)
+
+    key = jax.random.PRNGKey(999)
+    initial_update_count = 10
+    initial_env_count = 5
+    agent_state = _MockOnPolicyAgentState(update_count=jnp.array(initial_update_count, dtype=jnp.int32))
+    env_states = _DummyEnvState(counter=jnp.full((num_envs,), initial_env_count, dtype=jnp.int32))
+
+    # All steps inactive
+    active_mask = jnp.zeros((chunk_size,), dtype=jnp.bool_)
+
+    (key_out, agent_out, env_out), metrics_history = run_chunk(
+        (key, agent_state, env_states),
+        active_mask,
+    )
+
+    # State should be unchanged
+    assert int(agent_out.update_count) == initial_update_count
+    np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), initial_env_count))
+
+    # All metrics should be zero
+    np.testing.assert_allclose(metrics_history["loss"], np.zeros((chunk_size,)))
