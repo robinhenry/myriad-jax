@@ -12,7 +12,7 @@ from myriad.utils import to_array
 
 from .episode_manager import save_episodes_to_disk
 from .initialization import initialize_environment_and_agent
-from .logging_utils import maybe_init_wandb, wandb
+from .logging_utils import maybe_close_wandb, maybe_init_wandb
 from .metrics_logger import MetricsLogger
 from .scan_utils import (
     make_chunk_runner,
@@ -49,7 +49,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     # Initialize parallel environments
     env_keys = jax.random.split(env_key, config.run.num_envs)
     obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
-    # Convert observations to arrays for platform (lean approach: single conversion point)
+
+    # Convert observations to arrays
     obs_array = jax.vmap(to_array)(obs)
     training_env_states = TrainingEnvState(env_state=env_states, obs=obs_array)
 
@@ -90,24 +91,18 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     # Build jitted execution primitives
     eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
 
-    # Chunking configuration:
-    # - scan_chunk_size controls how many rollout-update cycles (on-policy) or training steps (off-policy)
-    #   are batched into a single jax.lax.scan
-    # - Larger chunks reduce Python overhead but increase XLA compile time
-    # - chunk_size is ensured to be at least 1 to prevent errors
     chunk_size = max(1, config.run.scan_chunk_size)
 
+    # TODO: it's odd to have a second `if use_rollout_training` block here. Why don't we combine this block with
+    # the previous one just above? It'll be easier to read and maintain. Unless there's a good reason to split
+    # them that I'm missing.
     if use_rollout_training:
         # On-policy: create chunk runner that batches multiple rollout-update cycles
-        # This avoids returning to Python after each rollout, addressing the regression
-        # from the previous platform where everything was in a single jitted scan
         assert rollout_fn is not None  # Guaranteed by use_rollout_training logic
         assert config.run.rollout_steps is not None  # Guaranteed by use_rollout_training logic
         run_chunk_fn = make_on_policy_chunk_runner(
             rollout_fn=rollout_fn,
             agent=agent,
-            chunk_size=chunk_size,
-            rollout_steps=config.run.rollout_steps,
         )
     else:
         # Off-policy: create chunk runner that batches multiple step-update cycles
@@ -327,5 +322,4 @@ def train_and_evaluate(config: Config) -> TrainingResults:
         results = _run_training_loop(config, wandb_run)
         return results
     finally:
-        if wandb_run is not None and wandb is not None:
-            wandb.finish()
+        maybe_close_wandb(wandb_run)

@@ -15,6 +15,7 @@ from typing import Any, Callable
 import numpy as np
 
 from myriad.configs.default import Config, EvalConfig
+from myriad.utils import rendering
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +25,14 @@ def save_episodes_to_disk(
     global_step: int,
     save_count: int,
     config: Config | EvalConfig,
-) -> str | None:
+) -> Path | None:
     """Save episode trajectories to disk for later analysis.
 
     Episodes are saved as compressed numpy archives (.npz) with the following structure:
-    - episodes/step_{global_step}/episode_{i}.npz (relative to Hydra output dir)
+    - ``episodes/step_{global_step}/episode_{i}.npz`` (relative to Hydra output dir)
 
-    After saving, episodes can be rendered to videos using render_episodes_to_videos(),
-    which will create MP4 files in a videos/ directory.
+    After saving, episodes can be rendered to videos using :func:`render_episodes_to_videos`,
+    which will create MP4 files in a ``videos/`` directory.
 
     Args:
         episode_data: Dictionary containing episode data from evaluation
@@ -89,7 +90,7 @@ def save_episodes_to_disk(
 
     if saved_count > 0:
         logger.info(f"Saved {saved_count}/{num_to_save} episodes to {episodes_dir}")
-        return str(episodes_dir)
+        return episodes_dir
     else:
         return None
 
@@ -112,7 +113,6 @@ def render_episodes_to_videos(
     Returns:
         Number of videos successfully rendered
     """
-    from myriad.utils.rendering import render_episode_to_video
 
     episodes_path = Path(episodes_dir).resolve()
     if not episodes_path.exists():
@@ -147,7 +147,7 @@ def render_episodes_to_videos(
             video_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Render episode to video
-            render_episode_to_video(
+            rendering.render_episode_to_video(
                 episode_data,
                 render_frame_fn,
                 video_path,

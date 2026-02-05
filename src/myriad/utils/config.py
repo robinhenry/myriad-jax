@@ -1,5 +1,3 @@
-"""Config loading utilities for Myriad examples and scripts."""
-
 from pathlib import Path
 from typing import Type, TypeVar
 

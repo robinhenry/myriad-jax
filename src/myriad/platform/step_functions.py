@@ -12,14 +12,14 @@ from __future__ import annotations
 from functools import partial
 from typing import Callable
 
-import chex
 import jax
 import jax.numpy as jnp
+from jax import Array
 
 from myriad.agents.agent import Agent, AgentState
 from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from myriad.core.spaces import Space
-from myriad.core.types import Transition
+from myriad.core.types import PRNGKey, Transition
 from myriad.envs.environment import Environment
 from myriad.utils import to_array
 
@@ -60,12 +60,12 @@ def make_train_step_fn(
 
     @partial(jax.jit, static_argnames=["batch_size"])
     def train_step(
-        key: chex.PRNGKey,
+        key: PRNGKey,
         agent_state: AgentState,
         training_env_states: TrainingEnvState,
         buffer_state: ReplayBufferState | None,
         batch_size: int,
-    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState | None, dict]:
+    ) -> tuple[PRNGKey, AgentState, TrainingEnvState, ReplayBufferState | None, dict]:
         """Executes one step of training across all parallel environments. This function is pure and jitted."""
 
         last_obs = training_env_states.obs
@@ -111,6 +111,9 @@ def make_train_step_fn(
 
         # Reset only the environments that are done
         new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+
+        # TODO: does it make sense to convert observations to arrays before putting together the new state? Why do we
+        # not use the NamedTuple observations?
         # Convert reset observations to arrays
         new_obs_array = to_array_batch(new_obs)
 
@@ -149,10 +152,10 @@ def make_collection_step_fn(
     to_array_batch = jax.vmap(to_array)
 
     def collection_step(
-        key: chex.PRNGKey,
+        key: PRNGKey,
         agent_state: AgentState,
         training_env_states: TrainingEnvState,
-    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], Transition]:
+    ) -> tuple[tuple[PRNGKey, AgentState, TrainingEnvState], Transition]:
         """Execute one step of rollout collection: select action, step env, collect transition."""
         last_obs = training_env_states.obs
 
@@ -241,8 +244,8 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
 
     @partial(jax.jit, static_argnames=["return_episodes"])
     def eval_rollout(
-        key: chex.PRNGKey, agent_state: AgentState, return_episodes: bool = False
-    ) -> tuple[chex.PRNGKey, dict[str, chex.Array]]:
+        key: PRNGKey, agent_state: AgentState, return_episodes: bool = False
+    ) -> tuple[PRNGKey, dict[str, Array]]:
         # Reset evaluation environments
         key, reset_key = jax.random.split(key)
         reset_keys = jax.random.split(reset_key, num_eval_envs)
@@ -276,7 +279,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
             # Use None as placeholders when not collecting episodes
             episode_obs = episode_actions = episode_rewards = episode_dones = None  # type: ignore[assignment]
 
-        def cond_fun(carry: tuple) -> chex.Array:
+        def cond_fun(carry: tuple) -> Array:
             if return_episodes:
                 _, _, _, _, dones, step, _, _, _, _ = carry
             else:
@@ -391,7 +394,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
     return eval_rollout
 
 
-def make_sample_transition(key: chex.PRNGKey, sample_obs: chex.Array, action_space: Space) -> Transition:
+def make_sample_transition(key: PRNGKey, sample_obs: Array, action_space: Space) -> Transition:
     """Creates a sample transition PyTree for replay buffer initialization."""
     sample_action = action_space.sample(key)
     sample_reward = jnp.array(0.0, dtype=jnp.float32)

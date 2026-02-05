@@ -1,28 +1,25 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable
 
-import chex
 import jax
 import jax.numpy as jnp
+from jax import Array
 
-from myriad.agents.agent import AgentState
+from myriad.agents.agent import Agent, AgentState
 from myriad.core.replay_buffer import ReplayBufferState
-from myriad.core.types import Transition
+from myriad.core.types import PRNGKey, Transition
 
 from .shared import TrainingEnvState
 
-# Generic type for carry state
-CarryT = TypeVar("CarryT")
 
-
-def tree_select(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
+def tree_select(mask: Array, new_tree: Any, old_tree: Any) -> Any:
     """Selects between two pytrees using a scalar boolean mask."""
 
     return jax.tree_util.tree_map(lambda new, old: jax.lax.select(mask, new, old), new_tree, old_tree)
 
 
-def _expand_mask(mask: chex.Array, target_ndim: int) -> chex.Array:
+def _expand_mask(mask: Array, target_ndim: int) -> Array:
     """Reshapes a mask so it can broadcast to a target rank."""
 
     expand_dims = target_ndim - mask.ndim
@@ -31,17 +28,22 @@ def _expand_mask(mask: chex.Array, target_ndim: int) -> chex.Array:
     return mask.reshape(mask.shape + (1,) * expand_dims)
 
 
-def where_mask(mask: chex.Array, new_value: chex.Array, old_value: chex.Array) -> chex.Array:
+def where_mask(mask: Array, new_value: Array, old_value: Array) -> Array:
     """Selects array values using a boolean mask, supporting broadcasting."""
 
     mask_bool = mask.astype(jnp.bool_)
     return jnp.where(_expand_mask(mask_bool, new_value.ndim), new_value, old_value)
 
 
-def mask_tree(mask: chex.Array, new_tree: Any, old_tree: Any) -> Any:
+# TODO: what's the difference between tree_select() and mask_tree()? Do we need both?
+def mask_tree(mask: Array, new_tree: Any, old_tree: Any) -> Any:
     """Selects between two pytrees using a (potentially vector) mask."""
 
     return jax.tree_util.tree_map(lambda new, old: where_mask(mask, new, old), new_tree, old_tree)
+
+
+# Type alias for carry tuple
+_CarryT = tuple[PRNGKey, AgentState, TrainingEnvState, ReplayBufferState]
 
 
 def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
@@ -88,16 +90,10 @@ def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
         A jitted function that runs a chunk of training steps with mask-aware state updates.
     """
 
-    def run_chunk(
-        carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],
-        active_mask: chex.Array,
-    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState], Any]:
+    def run_chunk(carry: _CarryT, active_mask: Array) -> tuple[_CarryT, Any]:
         active_mask = active_mask.astype(jnp.bool_)
 
-        def body(
-            carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState],
-            active: chex.Array,
-        ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState, ReplayBufferState], dict]:
+        def body(carry: _CarryT, active: Array) -> tuple[_CarryT, dict]:
             key, agent_state, training_env_states, buffer_state = carry
             key_new, agent_state_new, training_env_states_new, buffer_state_new, metrics = train_step_fn(
                 key=key,
@@ -124,12 +120,11 @@ def make_chunk_runner(train_step_fn: Callable, batch_size: int) -> Callable:
     return jax.jit(run_chunk)
 
 
-def make_on_policy_chunk_runner(
-    rollout_fn: Callable,
-    agent,  # Agent type - avoiding circular import
-    chunk_size: int,
-    rollout_steps: int,
-) -> Callable:
+# Type alias for carry type in function below
+_CarryOnPolicyT = tuple[PRNGKey, AgentState, TrainingEnvState]
+
+
+def make_on_policy_chunk_runner(rollout_fn: Callable, agent: Agent) -> Callable:
     """Create a chunked runner for on-policy training that batches multiple rollout-update cycles.
 
     This function addresses the regression from the previous platform where the entire training
@@ -159,17 +154,11 @@ def make_on_policy_chunk_runner(
         where carry = (key, agent_state, training_env_states)
     """
 
-    def run_on_policy_chunk(
-        carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState],
-        active_mask: chex.Array,
-    ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], dict]:
+    def run_on_policy_chunk(carry: _CarryOnPolicyT, active_mask: Array) -> tuple[_CarryOnPolicyT, dict]:
         """Run multiple rollout-update cycles in a single jitted scan."""
         active_mask = active_mask.astype(jnp.bool_)
 
-        def body(
-            carry: tuple[chex.PRNGKey, AgentState, TrainingEnvState],
-            active: chex.Array,
-        ) -> tuple[tuple[chex.PRNGKey, AgentState, TrainingEnvState], dict]:
+        def body(carry: _CarryOnPolicyT, active: Array) -> tuple[_CarryOnPolicyT, dict]:
             key, agent_state, training_env_states = carry
 
             # Collect rollout (jitted)
@@ -243,13 +232,13 @@ def make_chunked_collector(
     num_chunks = (total_steps + chunk_size - 1) // chunk_size  # Ceiling division
 
     def collect_chunked_rollout(
-        key: chex.PRNGKey,
+        key: PRNGKey,
         agent_state: AgentState,
         env_states: TrainingEnvState,
-    ) -> tuple[chex.PRNGKey, AgentState, TrainingEnvState, Transition]:
+    ) -> tuple[PRNGKey, AgentState, TrainingEnvState, Transition]:
         """Collect a full rollout by executing multiple fixed-size chunks."""
 
-        def chunk_body(carry: tuple, chunk_idx: chex.Array):
+        def chunk_body(carry: tuple, chunk_idx: Array):
             """Execute one chunk of the rollout collection."""
             key, agent_state, env_states = carry
 
@@ -261,7 +250,7 @@ def make_chunked_collector(
             # Create active mask: True for active iterations, False for inactive (padded) iterations
             active_mask = (jnp.arange(chunk_size) < steps_this_chunk).astype(jnp.bool_)
 
-            def step_body(step_carry: tuple, active: chex.Array):
+            def step_body(step_carry: tuple, active: Array):
                 """Single step within a chunk."""
                 key, agent_state, env_states = step_carry
 
@@ -298,7 +287,7 @@ def make_chunked_collector(
 
         # Reshape transitions from (num_chunks, chunk_size, num_envs, ...) to (total_steps, num_envs, ...)
         # Then flatten to (total_steps * num_envs, ...)
-        def reshape_transitions(x: chex.Array) -> chex.Array:
+        def reshape_transitions(x: Array) -> Array:
             # First reshape: (num_chunks, chunk_size, num_envs, ...) -> (num_chunks * chunk_size, num_envs, ...)
             flat_chunks = x.reshape(-1, num_envs, *x.shape[3:])
             # Slice to remove padding: keep only first total_steps

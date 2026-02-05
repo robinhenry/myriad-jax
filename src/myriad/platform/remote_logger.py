@@ -13,8 +13,7 @@ from .logging_utils import build_train_payload, summarize_metric, wandb
 class RemoteLogger:
     """Handles sending metrics to remote logging services.
 
-    Supports multiple destinations (W&B, etc.) without coupling
-    the core metrics capture logic to specific logging implementations.
+    Currently only supports W&B.
     """
 
     def __init__(self, wandb_run: Any | None = None):
@@ -43,12 +42,13 @@ class RemoteLogger:
             train_payload["train/steps_per_env"] = float(steps_per_env)
             wandb.log(train_payload, step=global_step)
 
-    def log_eval(self, eval_results: dict[str, Any], global_step: int) -> None:
+    def log_eval(self, eval_results: dict[str, Any], global_step: int, steps_per_env: int) -> None:
         """Send evaluation metrics to configured remote services.
 
         Args:
             eval_results: Dictionary with 'episode_return', 'episode_length', 'dones'
             global_step: Global environment steps
+            steps_per_env: Steps per individual environment
         """
         if not self.use_wandb:
             return
@@ -72,9 +72,10 @@ class RemoteLogger:
 
         if eval_payload:
             eval_payload["eval/global_env_steps"] = float(global_step)
+            eval_payload["eval/steps_per_env"] = float(steps_per_env)
             wandb.log(eval_payload, step=global_step)
 
-    def log_episodes(self, episode_dir: str, global_step: int) -> None:
+    def log_episodes(self, episode_dir: Path, global_step: int) -> None:
         """Log saved episodes to W&B as artifacts.
 
         Args:
@@ -91,7 +92,7 @@ class RemoteLogger:
                 type="evaluation_episodes",
                 description=f"Episode trajectories from evaluation at step {global_step}",
             )
-            artifact.add_dir(episode_dir)
+            artifact.add_dir(episode_dir)  # TODO: extract episode_dir str from Path object
             self.wandb_run.log_artifact(artifact)  # type: ignore[union-attr]
         except Exception as e:
             # Don't fail training if episode logging fails

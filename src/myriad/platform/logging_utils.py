@@ -7,6 +7,7 @@ import numpy as np
 
 from myriad.configs.default import Config, EvalConfig
 
+# Only import wandb if it's installed
 try:
     import wandb  # type: ignore[import]
 except ImportError as import_error:  # pragma: no cover - handled at runtime
@@ -22,10 +23,10 @@ def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
 
 
-def prepare_metrics_host(metrics_history: Any, steps_this_chunk: int) -> dict[str, Any]:
+def prepare_metrics_host(metrics_history: dict, steps_this_chunk: int) -> dict[str, Any]:
     """Transform scan metrics to host arrays, keeping only the active steps."""
 
-    if not isinstance(metrics_history, dict) or not metrics_history or steps_this_chunk <= 0:
+    if steps_this_chunk <= 0:
         return {}
 
     sliced_history = {name: values[:steps_this_chunk] for name, values in metrics_history.items()}
@@ -116,3 +117,9 @@ def maybe_init_wandb(config: Config | EvalConfig):
     init_kwargs["config"] = config.model_dump()
 
     return wandb.init(**init_kwargs)
+
+
+def maybe_close_wandb(wandb_run):
+    """Close a Weights & Biases run/connection when a run is complete."""
+    if wandb_run is not None and wandb is not None:
+        wandb.finish()

@@ -16,26 +16,20 @@ from myriad.agents.agent import AgentState
 from myriad.configs.default import Config, EvalConfig
 
 from .episode_manager import save_episodes_to_disk
-from .logging_utils import maybe_init_wandb, wandb
+from .initialization import initialize_environment_and_agent
+from .logging_utils import maybe_close_wandb, maybe_init_wandb
 from .metrics_logger import MetricsLogger
+from .step_functions import make_eval_rollout_fn
 from .types import EvaluationResults
 
 
-def _get_eval_settings(config: Config | EvalConfig) -> tuple[int, int, int]:
-    """Extract evaluation settings from either Config or EvalConfig.
-
-    Args:
-        config: Either a training Config or an EvalConfig
-
-    Returns:
-        Tuple of (seed, eval_rollouts, eval_max_steps)
-    """
-    if isinstance(config, EvalConfig):
-        return config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
-    else:
-        return config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
-
-
+# TODO: we might want to consolidate `Config | EvalConfig` into a single type. Does it really make
+# sense to have 2 different types? Perhaps there's a way to compose config types such that there's
+# a sub-type that could be used as type annotation here. Or perhaps that's a bad idea if it introduces
+# unnecessary complexity!
+# Actually: why do we even need to support `Config`? Surely, if this is an evaluate-only function, the
+# argument should be `EvalConfig`. If needed to support `Config` (eg, when a trained agent is then evaluated),
+# the `Config` should be transformed into `EvalConfig` upstream in the calling function.
 def evaluate(
     config: Config | EvalConfig,
     agent_state: AgentState | None = None,
@@ -65,20 +59,13 @@ def evaluate(
         - Optional trajectory data (if return_episodes=True)
         - Metadata (num_episodes, seed)
     """
-    from .initialization import initialize_environment_and_agent
-    from .step_functions import make_eval_rollout_fn
 
-    # Handle both EvalConfig and Config for wandb
-    wandb_config = config.wandb
-    wandb_run = (
-        maybe_init_wandb(config)
-        if isinstance(config, Config)
-        else (maybe_init_wandb(config) if wandb_config and wandb_config.enabled else None)
-    )
+    # Initialize wandb for logging
+    wandb_run = maybe_init_wandb(config)
 
     try:
         # Extract evaluation settings (works for both Config and EvalConfig)
-        seed, eval_rollouts, eval_max_steps = _get_eval_settings(config)
+        seed, eval_rollouts, eval_max_steps = config.run.seed, config.run.eval_rollouts, config.run.eval_max_steps
 
         # Initialize RNG
         key = jax.random.PRNGKey(seed)
@@ -90,7 +77,6 @@ def evaluate(
         # Initialize agent state if not provided
         if agent_state is None:
             # Get a sample observation to initialize the agent
-            # Use original NamedTuple observation (not converted array) to allow field introspection
             obs, _ = env.reset(env_key, env.params, env.config)
             agent_state = agent.init(agent_key, obs, agent.params)
 
@@ -109,30 +95,33 @@ def evaluate(
             episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
 
         # Compute summary statistics
-        mean_return = float(np.mean(episode_returns))
-        std_return = float(np.std(episode_returns))
-        min_return = float(np.min(episode_returns))
-        max_return = float(np.max(episode_returns))
+        results = EvaluationResults(
+            mean_return=float(np.mean(episode_returns)),
+            std_return=float(np.std(episode_returns)),
+            min_return=float(np.min(episode_returns)),
+            max_return=float(np.max(episode_returns)),
+            mean_length=float(np.mean(episode_lengths)),
+            std_length=float(np.std(episode_lengths)),
+            min_length=int(np.min(episode_lengths)),
+            max_length=int(np.max(episode_lengths)),
+            episode_returns=episode_returns,
+            episode_lengths=episode_lengths,
+            num_episodes=eval_rollouts,
+            seed=seed,
+            episodes=episodes_data,
+        )
 
-        mean_length = float(np.mean(episode_lengths))
-        std_length = float(np.std(episode_lengths))
-        min_length = int(np.min(episode_lengths))
-        max_length = int(np.max(episode_lengths))
-
+        # TODO: why do we check the type of `Config`? HOpefully if we address the previous todo, this should
+        # no longer be required.
         # Save episodes to disk if configured (for eval-only runs)
-        if isinstance(config, EvalConfig) and config.run.eval_episode_save_frequency > 0:
-            # Need to get episodes if not already retrieved
-            if episodes_data is None:
-                # Re-run with return_episodes=True
-                eval_key, eval_results_jax = eval_rollout_fn(eval_key, agent_state, return_episodes=True)
-                episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
-
+        if isinstance(config, EvalConfig) and episodes_data is not None:
             # Prepare episode data for saving
             eval_results_with_episodes = {
                 "episodes": episodes_data,
                 "episode_length": episode_lengths,
                 "episode_return": episode_returns,
             }
+            ## Save all episodes if `eval_episode_save_count = None`
             save_count = config.run.eval_episode_save_count or eval_rollouts
             episode_dir = save_episodes_to_disk(
                 eval_results_with_episodes, global_step=0, save_count=save_count, config=config
@@ -141,24 +130,7 @@ def evaluate(
             # Log episodes to wandb if enabled
             if episode_dir is not None and wandb_run is not None:
                 metrics_logger = MetricsLogger(wandb_run=wandb_run)
-                metrics_logger.log_episodes(episode_dir, global_step=0)
-
-        # Create results object
-        results = EvaluationResults(
-            mean_return=mean_return,
-            std_return=std_return,
-            min_return=min_return,
-            max_return=max_return,
-            mean_length=mean_length,
-            std_length=std_length,
-            min_length=min_length,
-            max_length=max_length,
-            episode_returns=episode_returns,
-            episode_lengths=episode_lengths,
-            num_episodes=eval_rollouts,
-            seed=seed,
-            episodes=episodes_data,
-        )
+                metrics_logger.log_episodes(episode_dir, steps_per_env=0)
 
         # Log to wandb if enabled
         if wandb_run is not None:
@@ -175,5 +147,4 @@ def evaluate(
         return results
 
     finally:
-        if wandb_run is not None and wandb is not None:
-            wandb.finish()
+        maybe_close_wandb(wandb_run)

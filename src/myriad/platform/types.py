@@ -16,7 +16,7 @@ from myriad.configs.default import Config
 class TrainingMetrics:
     """Training metrics collected at each logging checkpoint.
 
-    Metrics are captured at intervals defined by log_frequency in the run config.
+    Metrics are captured at intervals defined by ``log_frequency`` in the run config.
     Each list contains one entry per logging checkpoint.
     """
 
@@ -33,14 +33,14 @@ class TrainingMetrics:
     """Mean reward per step (if available)."""
 
     agent_metrics: dict[str, list[float]] | None = None
-    """Agent-specific metrics (e.g., q_value, td_error for DQN; policy_loss, value_loss for PPO)."""
+    """Agent-specific metrics (e.g., ``q_value``, ``td_error`` for DQN)."""
 
 
 @dataclass
 class EvaluationMetrics:
     """Evaluation metrics collected at each evaluation checkpoint.
 
-    Metrics are captured at intervals defined by eval_frequency in the run config.
+    Metrics are captured at intervals defined by ``eval_frequency`` in the run config.
     Each list contains one entry per evaluation checkpoint.
     """
 
@@ -51,10 +51,10 @@ class EvaluationMetrics:
     """Steps per individual environment at each evaluation."""
 
     episode_returns: list[np.ndarray]
-    """Raw episode returns from each evaluation. Each array contains returns from eval_rollouts episodes."""
+    """Raw episode returns from each evaluation. Each array contains returns from ``eval_rollouts`` episodes."""
 
     episode_lengths: list[np.ndarray]
-    """Raw episode lengths from each evaluation. Each array contains lengths from eval_rollouts episodes."""
+    """Raw episode lengths from each evaluation. Each array contains lengths from ``eval_rollouts`` episodes."""
 
     mean_return: list[float]
     """Mean episode return at each evaluation."""
@@ -70,7 +70,8 @@ class EvaluationMetrics:
 class TrainingResults:
     """Complete results from a training run.
 
-    Returned by train_and_evaluate() and contains everything needed to:
+    Returned by :func:`~myriad.platform.train_and_evaluate` and contains everything needed to:
+
     - Use the trained agent for inference
     - Analyze training progress
     - Reproduce the run
@@ -78,7 +79,7 @@ class TrainingResults:
     """
 
     agent_state: Any
-    """Trained agent state (can be used for inference with agent.select_action())."""
+    """Trained agent state (can be used for inference with ``agent.select_action()``)."""
 
     training_metrics: TrainingMetrics
     """Training metrics history (loss, reward, etc.)."""
@@ -97,15 +98,19 @@ class TrainingResults:
 
         Returns:
             Dictionary with key metrics:
-            - final_eval_return_mean: Mean return from last evaluation
-            - final_eval_return_std: Std deviation from last evaluation
-            - total_training_steps: Total global environment steps
+            - final_eval_return_mean: Mean return from last evaluation checkpoint
+            - final_eval_return_std: Std deviation from last evaluation checkpoint
+            - training_steps_per_env: Environment steps per individual environment
+            - training_global_steps: Total global environment steps across all envs
             - num_eval_checkpoints: Number of evaluations performed
         """
         return {
             "final_eval_return_mean": self.eval_metrics.mean_return[-1] if self.eval_metrics.mean_return else 0.0,
             "final_eval_return_std": self.eval_metrics.std_return[-1] if self.eval_metrics.std_return else 0.0,
-            "total_training_steps": self.training_metrics.global_steps[-1] if self.training_metrics.global_steps else 0,
+            "training_steps_per_env": self.eval_metrics.steps_per_env[-1] if self.eval_metrics.steps_per_env else 0,
+            "training_global_steps": (
+                self.training_metrics.global_steps[-1] if self.training_metrics.global_steps else 0
+            ),
             "num_eval_checkpoints": len(self.eval_metrics.global_steps),
         }
 
@@ -115,11 +120,13 @@ class TrainingResults:
         return (
             f"TrainingResults(\n"
             f"  final_eval_return={summary['final_eval_return_mean']:.1f} ± {summary['final_eval_return_std']:.1f},\n"
-            f"  total_steps={summary['total_training_steps']:,},\n"
+            f"  steps_per_env={summary['training_steps_per_env']:,},\n"
+            f"  global_steps={summary['training_global_steps']:,},\n"
             f"  num_evals={summary['num_eval_checkpoints']}\n"
             f")"
         )
 
+    # TODO: address the concern highlighted in the docstring, if still relevant
     def save_agent(self, path: str | Path) -> None:
         """Save trained agent state to file.
 
@@ -175,6 +182,7 @@ class EvaluationResults:
     """Results from an evaluation-only run.
 
     Returned by evaluate() and contains:
+
     - Summary statistics (mean, std, min, max)
     - Raw episode data (for custom analysis)
     - Optional trajectory data (if return_episodes=True)
@@ -208,10 +216,10 @@ class EvaluationResults:
 
     # --- Raw Data ---
     episode_returns: np.ndarray
-    """Raw episode returns. Shape: (num_episodes,)"""
+    """Raw episode returns. Shape: ``(num_episodes,)``"""
 
     episode_lengths: np.ndarray
-    """Raw episode lengths. Shape: (num_episodes,)"""
+    """Raw episode lengths. Shape: ``(num_episodes,)``"""
 
     # --- Metadata ---
     num_episodes: int
@@ -224,10 +232,10 @@ class EvaluationResults:
     episodes: dict[str, np.ndarray] | None = None
     """Full episode trajectories (if return_episodes=True).
     Contains:
-    - observations: Shape (num_episodes, max_steps, obs_dim)
-    - actions: Shape (num_episodes, max_steps, ...)
-    - rewards: Shape (num_episodes, max_steps)
-    - dones: Shape (num_episodes, max_steps)
+    - observations: Shape ``(num_episodes, max_steps, obs_dim)``
+    - actions: Shape ``(num_episodes, max_steps, ...)``
+    - rewards: Shape ``(num_episodes, max_steps)``
+    - dones: Shape ``(num_episodes, max_steps)``
     """
 
     def summary(self) -> dict[str, float]:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -70,6 +71,8 @@ class MetricsLogger:
         self.training_metrics.global_steps.append(global_step)
         self.training_metrics.steps_per_env.append(steps_per_env)
 
+        # TODO: do we really need to manually specify which metrics we want to extract here? This hardcoding seems
+        # not-ideal. Surely we just want to extract all available metrics? I'm not sure what's best.
         # Extract common metrics
         if "loss" in metrics_host:
             if self.training_metrics.loss is None:
@@ -113,6 +116,8 @@ class MetricsLogger:
         self.eval_metrics.global_steps.append(global_step)
         self.eval_metrics.steps_per_env.append(steps_per_env)
 
+        # TODO: it looks as though we may be repeating the mean/std computations in multiple places. For example,
+        # they also happen in evaluation.py . We probably want to be consistent and only do it in one place.
         if eval_returns is not None:
             self.eval_metrics.episode_returns.append(np.asarray(eval_returns))
             self.eval_metrics.mean_return.append(float(np.mean(eval_returns)))
@@ -123,17 +128,24 @@ class MetricsLogger:
             self.eval_metrics.mean_length.append(float(np.mean(eval_lengths)))
 
         # Send to remote logging services (W&B, etc.)
-        self.remote_logger.log_eval(eval_results, global_step)
+        self.remote_logger.log_eval(eval_results, global_step, steps_per_env)
 
-    def log_episodes(self, episode_dir: str, global_step: int) -> None:
+    def log_episodes(self, episode_dir: Path, steps_per_env: int) -> None:
         """Log saved episodes to W&B as artifacts.
 
         Args:
             episode_dir: Path to directory containing saved episodes
-            global_step: Global environment steps (for artifact versioning)
+            steps_per_env: Global environment steps (for artifact versioning)
         """
+        # TODO: we also save episodes to local files in evaluate() from evaluation.py, for example. It seems we're not
+        # being very consistent with the way we log things. Generally speaking, we want to log to memory (so that our
+        # train/eval) functions can return the data/metrics, and also to the remote wandb server. In doing so, we're
+        # also saving those to the wandb folder on the local machine, which is great. We need to make this process
+        # more consistent across the platform codebase. There should be a single clean and clear workflow for logging
+        # things.
+
         # Send to remote logging services (W&B, etc.)
-        self.remote_logger.log_episodes(episode_dir, global_step)
+        self.remote_logger.log_episodes(episode_dir, steps_per_env)
 
     def log_final(self, total_env_steps: int) -> None:
         """Log final training completion.
