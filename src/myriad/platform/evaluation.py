@@ -17,7 +17,7 @@ from myriad.configs.default import EvalConfig
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
-from .step_functions import make_eval_rollout_fn
+from .steps import make_eval_rollout_fn
 from .types import EvaluationResults
 
 

@@ -16,7 +16,7 @@ from myriad.core.replay_buffer import ReplayBuffer, ReplayBufferState
 from myriad.core.spaces import Box, Space
 from myriad.core.types import BaseModel
 from myriad.envs.environment import Environment
-from myriad.platform import step_functions, training
+from myriad.platform import steps, training
 from myriad.platform.initialization import get_factory_kwargs
 from myriad.platform.logging import SessionLogger
 from myriad.platform.logging.backends import wandb as wandb_backend
@@ -211,9 +211,9 @@ def _create_training_setup(num_envs: int = 2) -> _TrainingSetup:
     obs_host = np.asarray(jax.device_get(obs))
     obs_sample = jnp.asarray(obs_host[0], dtype=jnp.float32)
     agent_state = agent.init(key_agent, obs_sample, agent.params)
-    sample_transition = step_functions.make_sample_transition(key_buffer, obs_sample, env.get_action_space(env.config))
+    sample_transition = steps.make_sample_transition(key_buffer, obs_sample, env.get_action_space(env.config))
     buffer_state = replay_buffer.init(sample_transition)
-    train_step_fn = step_functions.make_train_step_fn(agent, env, replay_buffer, num_envs)
+    train_step_fn = steps.make_train_step_fn(agent, env, replay_buffer, num_envs)
 
     return _TrainingSetup(
         key=key_run,
@@ -286,7 +286,7 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
     """Evaluation rollout should produce return, length, and done flags."""
     state = training_setup_factory(num_envs=2)
     config = _create_config()
-    eval_rollout = step_functions.make_eval_rollout_fn(
+    eval_rollout = steps.make_eval_rollout_fn(
         state.agent, state.env, config.run.eval_rollouts, config.run.eval_max_steps
     )
     key_out, metrics = eval_rollout(state.key, state.agent_state)
@@ -305,10 +305,10 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
 
 def test_run_training_loop_without_wandb(monkeypatch):
     """Training loop executes without W&B logging when run is disabled."""
-    from myriad.platform import scan_utils
+    from myriad.platform import runners
 
     config = _create_config()
-    orig_make_chunk_runner = scan_utils.make_chunk_runner
+    orig_make_chunk_runner = runners.make_chunk_runner
     captured: dict[str, Any] = {}
 
     def instrumented_make_chunk_runner(train_step_fn, batch_size):
@@ -397,7 +397,7 @@ def test_make_sample_transition_matches_shapes():
     env = _make_test_env()
     key = jax.random.PRNGKey(0)
     obs, _ = env.reset(key, env.params, env.config)
-    transition = step_functions.make_sample_transition(key, obs, env.get_action_space(env.config))
+    transition = steps.make_sample_transition(key, obs, env.get_action_space(env.config))
 
     np.testing.assert_allclose(np.array(transition.obs), np.array(obs))
     np.testing.assert_allclose(np.array(transition.next_obs), np.array(obs))
@@ -409,13 +409,13 @@ def test_make_sample_transition_matches_shapes():
 
 def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
     """Training should complete correctly even when chunk_size > steps_per_env."""
-    from myriad.platform import scan_utils
+    from myriad.platform import runners
 
     # Use a very large chunk size relative to total steps
     config = _create_config(run_overrides={"steps_per_env": 4, "num_envs": 1, "scan_chunk_size": 100})
 
     captured: dict[str, Any] = {"active_counts": []}
-    orig_make_chunk_runner = scan_utils.make_chunk_runner
+    orig_make_chunk_runner = runners.make_chunk_runner
 
     def instrumented_make_chunk_runner(train_step_fn, batch_size):
         run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
@@ -440,12 +440,12 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
 
 def test_run_training_loop_with_chunk_size_one(monkeypatch):
     """Training should work correctly with minimal chunk_size=1."""
-    from myriad.platform import scan_utils
+    from myriad.platform import runners
 
     config = _create_config(run_overrides={"steps_per_env": 2, "num_envs": 2, "scan_chunk_size": 1})
 
     active_counts: list[int] = []
-    orig_make_chunk_runner = scan_utils.make_chunk_runner
+    orig_make_chunk_runner = runners.make_chunk_runner
 
     def instrumented_make_chunk_runner(train_step_fn, batch_size):
         run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
@@ -467,7 +467,7 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
 
 def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
     """Verify chunks align properly with logging frequency boundaries."""
-    from myriad.platform import scan_utils
+    from myriad.platform import runners
 
     # Setup: 10 steps per env, chunk_size=3, log every 4 steps
     config = _create_config(
@@ -475,7 +475,7 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
     )
 
     chunk_sizes_observed: list[int] = []
-    orig_make_chunk_runner = scan_utils.make_chunk_runner
+    orig_make_chunk_runner = runners.make_chunk_runner
 
     def instrumented_make_chunk_runner(train_step_fn, batch_size):
         run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)
@@ -543,11 +543,11 @@ def test_run_config_warns_on_inefficient_scan_chunk_size():
 
 def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Helper to run training and extract final agent, env, and buffer states."""
-    from myriad.platform import scan_utils
+    from myriad.platform import runners
 
     final_states: dict[str, Any] = {}
 
-    orig_make_chunk_runner = scan_utils.make_chunk_runner
+    orig_make_chunk_runner = runners.make_chunk_runner
 
     def instrumented_make_chunk_runner(train_step_fn, batch_size):
         run_chunk = orig_make_chunk_runner(train_step_fn, batch_size)

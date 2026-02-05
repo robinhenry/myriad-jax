@@ -1,8 +1,8 @@
-"""JAX step function factories for training, collection, and evaluation.
+"""JAX step functions and primitives for training, collection, and evaluation.
 
-This module contains pure JAX transformation utilities that define how individual
-steps are executed in training and evaluation loops. These are low-level primitives
-consumed by higher-level orchestration code.
+This module contains:
+1. Masking primitives (tree_select, mask_tree, where_mask) for conditional state updates
+2. Step function factories for training, collection, and evaluation loops
 
 All functions here are pure and designed to be jitted for maximum performance.
 """
@@ -10,7 +10,7 @@ All functions here are pure and designed to be jitted for maximum performance.
 from __future__ import annotations
 
 from functools import partial
-from typing import Callable
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -23,8 +23,111 @@ from myriad.core.types import PRNGKey, Transition
 from myriad.envs.environment import Environment
 from myriad.utils import to_array
 
-from .scan_utils import mask_tree, where_mask
 from .types import TrainingEnvState
+
+# =============================================================================
+# Masking Primitives
+# =============================================================================
+
+
+def tree_select(mask: Array, new_tree: Any, old_tree: Any) -> Any:
+    """Select between pytrees using a scalar boolean. For batched selection, use mask_tree."""
+    return jax.tree_util.tree_map(lambda new, old: jax.lax.select(mask, new, old), new_tree, old_tree)
+
+
+def _expand_mask(mask: Array, target_ndim: int) -> Array:
+    """Reshapes a mask so it can broadcast to a target rank."""
+    expand_dims = target_ndim - mask.ndim
+    if expand_dims <= 0:
+        return mask
+    return mask.reshape(mask.shape + (1,) * expand_dims)
+
+
+def where_mask(mask: Array, new_value: Array, old_value: Array) -> Array:
+    """Selects array values using a boolean mask, supporting broadcasting."""
+    mask_bool = mask.astype(jnp.bool_)
+    return jnp.where(_expand_mask(mask_bool, new_value.ndim), new_value, old_value)
+
+
+def mask_tree(mask: Array, new_tree: Any, old_tree: Any) -> Any:
+    """Select between pytrees using a vector boolean mask (per-element batched selection)."""
+    return jax.tree_util.tree_map(lambda new, old: where_mask(mask, new, old), new_tree, old_tree)
+
+
+# =============================================================================
+# Step Function Factories
+# =============================================================================
+
+
+class _EnvStepResult(NamedTuple):
+    """Result of a single environment step with auto-reset handling."""
+
+    key: PRNGKey
+    agent_state: AgentState
+    new_training_env_state: TrainingEnvState
+    transition: Transition
+
+
+def _make_env_stepper(
+    agent: Agent,
+    env: Environment,
+    num_envs: int,
+) -> Callable[[PRNGKey, AgentState, TrainingEnvState], _EnvStepResult]:
+    """Creates reusable vmapped env stepping logic with auto-reset.
+
+    Shared by make_train_step_fn and make_collection_step_fn. Handles:
+    - Vmapped env.step/reset
+    - Action selection
+    - Observation → array conversion (for platform utilities)
+    - Auto-reset via masking
+    """
+    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
+    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
+    to_array_batch = jax.vmap(to_array)
+
+    def env_step(
+        key: PRNGKey,
+        agent_state: AgentState,
+        training_env_states: TrainingEnvState,
+    ) -> _EnvStepResult:
+        """Perform one environment step with auto-reset handling."""
+        last_obs = training_env_states.obs
+
+        # Split keys for action selection, env step, and reset in one operation
+        key, action_key, step_key, reset_key = jax.random.split(key, 4)
+        action_keys = jax.random.split(action_key, num_envs)
+        step_keys = jax.random.split(step_key, num_envs)
+        reset_keys = jax.random.split(reset_key, num_envs)
+
+        # Select actions using per-env keys while sharing agent state and params
+        actions, agent_state = jax.vmap(
+            agent.select_action,
+            in_axes=(0, 0, None, None, None),
+            out_axes=(0, None),
+        )(action_keys, last_obs, agent_state, agent.params, False)
+
+        # Step environments in parallel
+        next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
+            step_keys, training_env_states.env_state, actions, env.params, env.config
+        )
+        next_obs_array = to_array_batch(next_obs)
+        dones_bool = dones.astype(jnp.bool_)
+
+        # Create transition (uses pre-reset next_obs for correct TD targets)
+        transition = Transition(last_obs, actions, rewards, next_obs_array, dones_bool)
+
+        # Handle auto-reset for completed episodes
+        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+        new_obs_array = to_array_batch(new_obs)
+
+        # If done, use the reset state, otherwise keep the stepped state
+        final_obs = where_mask(dones_bool, new_obs_array, next_obs_array)
+        final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
+        new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
+
+        return _EnvStepResult(key, agent_state, new_training_env_state, transition)
+
+    return env_step
 
 
 def make_train_step_fn(
@@ -35,28 +138,10 @@ def make_train_step_fn(
 ) -> Callable:
     """Factory to create a jitted, vmapped training step function.
 
-    Observation Handling Design (Lean Approach)
-    -------------------------------------------
-    The platform converts observations to arrays immediately after env.step() and env.reset() calls.
-    This ensures all platform utilities (where_mask, mask_tree) operate on pure arrays, maximizing
-    throughput with zero overhead in the hot path.
-
-    Why convert to arrays:
-    - Environments may return structured observations (e.g., NamedTuples like PhysicsState)
-    - Platform utilities require homogeneous arrays for efficient JAX operations
-    - Converting once per step (vectorized) is faster than checking types in every utility
-
-    Trade-offs:
-    - Memory: Negligible (e.g., 320 KB for 10k envs with 4D obs)
-    - Performance: Single vectorized conversion vs repeated type checks
-    - Agents: Can still use to_array() utility to handle either format in their own code
+    This function wraps the common env stepping logic with replay buffer handling
+    and agent updates for off-policy training.
     """
-
-    # Vmap the environment step and reset functions so we drive all envs in lockstep
-    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
-    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
-    # Vectorized observation conversion ensures platform always operates on arrays
-    to_array_batch = jax.vmap(to_array)
+    env_step = _make_env_stepper(agent, env, num_envs)
 
     @partial(jax.jit, static_argnames=["batch_size"])
     def train_step(
@@ -66,74 +151,23 @@ def make_train_step_fn(
         buffer_state: ReplayBufferState | None,
         batch_size: int,
     ) -> tuple[PRNGKey, AgentState, TrainingEnvState, ReplayBufferState | None, dict]:
-        """Executes one step of training across all parallel environments. This function is pure and jitted."""
-
-        last_obs = training_env_states.obs
-
-        # Select actions using per-env keys while sharing agent state and params
-        key, action_key = jax.random.split(key)
-        action_keys = jax.random.split(action_key, num_envs)
-        # Keep a shared agent_state while still batching per-env actions by using `out_axes=(0, None)`
-        actions, agent_state = jax.vmap(
-            agent.select_action,
-            in_axes=(0, 0, None, None, None),
-            out_axes=(0, None),
-        )(action_keys, last_obs, agent_state, agent.params, False)
-
-        # Step environments in parallel and capture the resulting transitions
-        key, step_key = jax.random.split(key)
-        step_keys = jax.random.split(step_key, num_envs)
-        next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
-            step_keys, training_env_states.env_state, actions, env.params, env.config
-        )
-        # Convert observations to arrays for platform utilities (zero overhead in hot path)
-        next_obs_array = to_array_batch(next_obs)
-        dones_bool = dones.astype(jnp.bool_)
-
-        # Create transition for this step
-        transitions = Transition(last_obs, actions, rewards, next_obs_array, dones_bool)
+        """Executes one step of training across all parallel environments."""
+        # Step environments and collect transition
+        result = env_step(key, agent_state, training_env_states)
 
         # Handle replay buffer if present (off-policy algorithms like DQN)
         if replay_buffer is not None and buffer_state is not None:
-            key, buffer_key = jax.random.split(key)
-            buffer_state, batch = replay_buffer.add_and_sample(buffer_state, transitions, batch_size, buffer_key)
+            key, buffer_key = jax.random.split(result.key)
+            buffer_state, batch = replay_buffer.add_and_sample(buffer_state, result.transition, batch_size, buffer_key)
         else:
-            # For on-policy algorithms, use the current transition directly
-            batch = transitions
+            key = result.key
+            batch = result.transition
 
-        # Update the agent with the sampled batch and report metrics
+        # Update the agent with the sampled batch
         key, update_key = jax.random.split(key)
-        agent_state, metrics = agent.update(update_key, agent_state, batch, agent.params)
+        agent_state, metrics = agent.update(update_key, result.agent_state, batch, agent.params)
 
-        # Handle auto-resetting environments that are done by splitting keys once more
-        key, reset_key = jax.random.split(key)
-        reset_keys = jax.random.split(reset_key, num_envs)
-
-        # Reset only the environments that are done
-        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
-
-        # Convert reset observations to arrays.
-        # Design choice: We convert to arrays because:
-        # 1. Neural networks expect flat arrays, not NamedTuples
-        # 2. Replay buffer stores arrays for efficient batched sampling
-        # 3. Platform utilities (where_mask, mask_tree) work on arrays
-        # The conversion happens once at reset (vectorized), not per-step.
-        new_obs_array = to_array_batch(new_obs)
-
-        # If done, use the new state, otherwise keep the existing one (pure array operations)
-        final_obs = where_mask(dones_bool, new_obs_array, next_obs_array)
-        final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
-
-        # Store the final states and observations as the new training environment state
-        new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
-
-        return (
-            key,
-            agent_state,
-            new_training_env_state,
-            buffer_state,
-            metrics,
-        )
+        return (key, agent_state, result.new_training_env_state, buffer_state, metrics)
 
     return train_step
 
@@ -148,11 +182,7 @@ def make_collection_step_fn(
     This creates a step function that collects one transition without performing agent updates.
     It's designed to be used with make_chunked_collector for efficient rollout collection.
     """
-    # Vmap the environment step and reset functions
-    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
-    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
-    # Vectorized observation conversion ensures platform always operates on arrays
-    to_array_batch = jax.vmap(to_array)
+    env_step = _make_env_stepper(agent, env, num_envs)
 
     def collection_step(
         key: PRNGKey,
@@ -160,83 +190,26 @@ def make_collection_step_fn(
         training_env_states: TrainingEnvState,
     ) -> tuple[tuple[PRNGKey, AgentState, TrainingEnvState], Transition]:
         """Execute one step of rollout collection: select action, step env, collect transition."""
-        last_obs = training_env_states.obs
-
-        # Select actions using per-env keys
-        key, action_key = jax.random.split(key)
-        action_keys = jax.random.split(action_key, num_envs)
-        actions, agent_state = jax.vmap(
-            agent.select_action,
-            in_axes=(0, 0, None, None, None),
-            out_axes=(0, None),
-        )(action_keys, last_obs, agent_state, agent.params, False)
-
-        # Step environments in parallel
-        key, step_key = jax.random.split(key)
-        step_keys = jax.random.split(step_key, num_envs)
-        next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
-            step_keys, training_env_states.env_state, actions, env.params, env.config
-        )
-        # Convert observations to arrays for platform utilities
-        next_obs_array = to_array_batch(next_obs)
-        dones_bool = dones.astype(jnp.bool_)
-
-        # Handle auto-reset for completed episodes
-        key, reset_key = jax.random.split(key)
-        reset_keys = jax.random.split(reset_key, num_envs)
-        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
-        # Convert reset observations to arrays
-        new_obs_array = to_array_batch(new_obs)
-
-        final_obs = where_mask(dones_bool, new_obs_array, next_obs_array)
-        final_env_states = mask_tree(dones_bool, new_env_states, next_env_states)
-        new_training_env_state = TrainingEnvState(env_state=final_env_states, obs=final_obs)
-
-        # Create transition for this step
-        transition = Transition(last_obs, actions, rewards, next_obs_array, dones_bool)
-
-        return (key, agent_state, new_training_env_state), transition
+        result = env_step(key, agent_state, training_env_states)
+        return (result.key, result.agent_state, result.new_training_env_state), result.transition
 
     return collection_step
 
 
 def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eval_max_steps: int) -> Callable:
-    """Factory to create a jitted evaluation rollout aligned with the training loop style.
+    """Factory to create a jitted evaluation rollout function.
 
-    Design Note: Dynamic vs Static Control Flow
-    --------------------------------------------
-    This evaluation function uses jax.lax.while_loop (dynamic control flow) rather than the
-    fixed-size masked scans used in training. This is an intentional design choice:
-
-    Why while_loop for evaluation:
-    1. **Early termination benefit**: Episodes can finish at different times. Using while_loop
-       allows us to stop as soon as all episodes complete, avoiding wasted computation.
-    2. **Infrequent execution**: Evaluation happens much less frequently than training steps
-       (e.g., every 10k-100k steps), so the compilation overhead is negligible.
-    3. **Variable episode lengths**: Some environments have highly variable episode durations.
-       Early exit can save significant computation when episodes finish quickly.
-    4. **Accurate metrics**: We need to track exact episode returns and lengths without
-       padding artifacts that would occur with masked iterations.
-
-    Why fixed-size scans for training:
-    1. **Frequent execution**: Training steps run continuously, so avoiding recompilation is critical.
-    2. **Predictable boundaries**: Logging and eval frequencies create natural boundaries.
-    3. **Batch processing**: Training benefits from fixed batch sizes for stability.
-
-    The compilation cost of while_loop is amortized over many training steps between evaluations,
-    and the performance benefit from early termination outweighs this cost.
+    Uses while_loop for early termination when all episodes complete. This differs from
+    training's fixed-size scans because eval runs infrequently and benefits from early exit.
 
     Args:
         agent: The agent to evaluate
         env: The environment to evaluate in
-        eval_rollouts: Number of evaluation episodes to run
+        eval_rollouts: Number of parallel evaluation episodes
         eval_max_steps: Maximum steps per episode
 
     Returns:
-        Callable that performs evaluation rollouts. The returned function accepts:
-        - key: PRNG key
-        - agent_state: Agent state
-        - return_episodes: If True, include full trajectories in results (default: False)
+        Function (key, agent_state, return_episodes=False) -> (key, metrics_dict)
     """
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -372,7 +345,7 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 final_actions,
                 final_rewards,
                 final_dones_ep,
-            ) = final_carry
+            ) = final_carry  # type: ignore[misc]
         else:
             key, _, final_returns, final_lengths, final_dones, _ = final_carry  # type: ignore[misc]
 

@@ -8,24 +8,24 @@ import pytest
 from flax import struct
 
 from myriad.core.types import Transition
-from myriad.platform import scan_utils
+from myriad.platform import runners, steps
 
 
 def test_tree_select_masking():
     mask_scalar = jnp.array(True)
     new_tree = {"value": jnp.array(2.0)}
     old_tree = {"value": jnp.array(-1.0)}
-    result = scan_utils.tree_select(mask_scalar, new_tree, old_tree)
+    result = steps.tree_select(mask_scalar, new_tree, old_tree)
     assert np.array(result["value"]) == pytest.approx(2.0)
 
     mask = jnp.array([True, False], dtype=jnp.bool_)
     new_value = jnp.array([5.0, 10.0])
     old_value = jnp.array([1.0, 1.0])
-    expanded = scan_utils._expand_mask(mask, target_ndim=2)
+    expanded = steps._expand_mask(mask, target_ndim=2)
     assert expanded.shape == (2, 1)
-    where_result = scan_utils.where_mask(mask, new_value, old_value)
+    where_result = steps.where_mask(mask, new_value, old_value)
     np.testing.assert_allclose(where_result, np.array([5.0, 1.0]))
-    mask_tree_result = scan_utils.mask_tree(mask, {"value": new_value}, {"value": old_value})
+    mask_tree_result = steps.mask_tree(mask, {"value": new_value}, {"value": old_value})
     np.testing.assert_allclose(mask_tree_result["value"], np.array([5.0, 1.0]))
 
 
@@ -50,7 +50,7 @@ def _dummy_train_step_fn(batch_size: int):
 
 def test_make_chunk_runner_masks_inactive_iterations():
     batch_size = 4
-    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+    run_chunk = runners.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
 
     key = jax.random.PRNGKey(0)
     agent_state = jnp.array(0.0, dtype=jnp.float32)
@@ -75,7 +75,7 @@ def test_where_mask_supports_higher_rank():
     mask = jnp.array([True, False, True])
     new = jnp.array([[1, 1], [2, 2], [3, 3]])
     old = jnp.zeros_like(new)
-    result = scan_utils.where_mask(mask, new, old)
+    result = steps.where_mask(mask, new, old)
     expected = np.array([[1, 1], [0, 0], [3, 3]])
     np.testing.assert_array_equal(result, expected)
 
@@ -84,7 +84,7 @@ def test_make_chunk_runner_with_partial_active_steps():
     """Test that chunk runner correctly handles fewer active steps than chunk size."""
     batch_size = 2
     _chunk_size = 10
-    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+    run_chunk = runners.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
 
     key = jax.random.PRNGKey(42)
     agent_state = jnp.array(0.0, dtype=jnp.float32)
@@ -117,7 +117,7 @@ def test_make_chunk_runner_with_partial_active_steps():
 def test_make_chunk_runner_with_single_step_chunks():
     """Test edge case where chunk_size effectively equals 1."""
     batch_size = 1
-    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+    run_chunk = runners.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
 
     key = jax.random.PRNGKey(123)
     agent_state = jnp.array(5.0, dtype=jnp.float32)
@@ -142,7 +142,7 @@ def test_make_chunk_runner_with_single_step_chunks():
 def test_make_chunk_runner_all_inactive_steps():
     """Test that chunk runner preserves state when all steps are inactive."""
     batch_size = 2
-    run_chunk = scan_utils.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
+    run_chunk = runners.make_chunk_runner(_dummy_train_step_fn(batch_size), batch_size)
 
     key = jax.random.PRNGKey(999)
     agent_state = jnp.array(100.0, dtype=jnp.float32)
@@ -210,7 +210,7 @@ def test_make_chunked_collector_basic_functionality():
     total_steps = 10  # Will require 3 chunks (4 + 4 + 2)
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
 
     key = jax.random.PRNGKey(42)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
@@ -243,7 +243,7 @@ def test_make_chunked_collector_with_perfect_chunk_alignment():
     total_steps = 15  # Exactly 3 chunks
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
 
     key = jax.random.PRNGKey(123)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))
@@ -262,7 +262,7 @@ def test_make_chunked_collector_single_chunk():
     total_steps = 7  # Less than one full chunk
 
     collection_step = _make_dummy_collection_step(num_envs)
-    collect_rollout = scan_utils.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
+    collect_rollout = runners.make_chunked_collector(collection_step, num_envs, chunk_size, total_steps)
 
     key = jax.random.PRNGKey(456)
     agent_state = _DummyAgentState(step_count=jnp.array(0, dtype=jnp.int32))

@@ -40,8 +40,8 @@ import jax.numpy as jnp
 
 from myriad.agents.classical.random import make_agent as make_random_agent
 from myriad.envs import make_env
-from myriad.platform.shared import TrainingEnvState
-from myriad.platform.step_functions import make_train_step_fn
+from myriad.platform.steps import make_train_step_fn
+from myriad.platform.types import TrainingEnvState
 from myriad.utils import to_array
 
 

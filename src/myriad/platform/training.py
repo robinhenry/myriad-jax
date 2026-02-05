@@ -11,12 +11,12 @@ from myriad.utils import to_array
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
-from .scan_utils import (
+from .runners import (
     make_chunk_runner,
     make_chunked_collector,
     make_on_policy_chunk_runner,
 )
-from .step_functions import (
+from .steps import (
     make_collection_step_fn,
     make_eval_rollout_fn,
     make_sample_transition,
@@ -71,12 +71,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger) -> Trainin
 
         # Create chunked collector for efficient rollout collection
         collection_step_fn = make_collection_step_fn(agent, env, config.run.num_envs)
-        rollout_fn = make_chunked_collector(
-            collection_step_fn=collection_step_fn,
-            num_envs=config.run.num_envs,
-            chunk_size=config.run.scan_chunk_size,
-            total_steps=config.run.rollout_steps,
-        )
+        rollout_fn = make_chunked_collector(collection_step_fn=collection_step_fn, total_steps=config.run.rollout_steps)
         # Create chunk runner that batches multiple rollout-update cycles
         run_chunk_fn = make_on_policy_chunk_runner(
             rollout_fn=rollout_fn,
