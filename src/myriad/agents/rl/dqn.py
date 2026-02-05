@@ -2,6 +2,8 @@
 
 A classic value-based RL algorithm that learns to estimate Q-values for state-action pairs
 and uses epsilon-greedy exploration.
+
+Reference: [CleanRL](https://docs.cleanrl.dev/rl-algorithms/dqn/)
 """
 
 from typing import Any, Tuple

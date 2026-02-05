@@ -1,3 +1,8 @@
+"""A random agent that samples actions uniformly at random from the action space.
+
+Useful as a baseline agent.
+"""
+
 from typing import Any, Tuple
 
 from flax import struct

@@ -8,7 +8,7 @@ The Myriad API is organized around four core concepts:
 
 **[Environments](envs/index.md)** - Pure JAX environment dynamics and task definitions
 
-**[Agents](agent.md)** - RL and control algorithms for decision-making
+**[Agents](agents/index.md)** - RL and control algorithms for decision-making
 
 **[Platform](platform.md)** - Training infrastructure, evaluation, and configuration
 

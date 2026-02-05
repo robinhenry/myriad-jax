@@ -1,7 +1,6 @@
 """Environment wrappers for compatibility with different frameworks.
 
-This module provides wrappers to adapt Myriad environments to different interfaces,
-particularly for compatibility with standard RL frameworks that expect array observations.
+This module provides wrappers to adapt Myriad environments to different interfaces.
 """
 
 from typing import Any, Callable, TypeVar

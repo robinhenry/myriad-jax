@@ -4,8 +4,9 @@
 :maxdepth: 1
 :hidden:
 
-classic/cartpole
-bio/ccas_ccar
+classic/index
+bio/index
+wrappers
 ```
 
 ## Overview
@@ -20,10 +21,10 @@ obs, state, reward, done, info = env.step(key, state, action, env.params, env.co
 
 ## Available Environments
 
-| ID | Category | Description |
-|----|----------|-------------|
-| `cartpole-control` | [Classic](classic/cartpole.md) | Inverted pendulum balancing |
-| `ccas-ccar-control` | [Bio](bio/ccas_ccar.md) | Bacterial gene circuit control |
+| ID | Category | Environment | Description |
+|----|----------|-------------|-------------|
+| `cartpole-control` | [Classic](classic/index.md) | [CartPole](classic/cartpole.md) | Inverted pendulum balancing |
+| `ccas-ccar-control` | [Biology](bio/index.md) | [CcaS-CcaR](bio/ccas_ccar.md) | Bacterial gene circuit control |
 
 ## Factory Function
 
@@ -35,15 +36,6 @@ obs, state, reward, done, info = env.step(key, state, action, env.params, env.co
 
 ```{eval-rst}
 .. automodule:: myriad.envs.environment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-## Wrappers
-
-```{eval-rst}
-.. automodule:: myriad.envs.wrappers
    :members:
    :undoc-members:
    :show-inheritance:

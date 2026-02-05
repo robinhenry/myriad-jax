@@ -33,7 +33,7 @@
 
 03_api/overview
 03_api/envs/index
-03_api/agent
+03_api/agents/index
 03_api/platform
 03_api/core
 ```

@@ -6,7 +6,7 @@ PQN is an on-policy value-based RL algorithm that uses:
 - Multi-epoch training on collected rollouts
 - Epsilon-greedy exploration
 
-Reference: https://github.com/mttga/purejaxql
+Reference: [PureJaxQL](https://github.com/mttga/purejaxql)
 """
 
 from typing import Tuple

@@ -1,7 +1,7 @@
-# Agent
+# DQN
 
 ```{eval-rst}
-.. automodule:: myriad.agents
+.. automodule:: myriad.agents.rl.dqn
    :members:
    :undoc-members:
    :show-inheritance:

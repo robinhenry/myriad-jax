@@ -24,13 +24,6 @@ def make_agent(agent_id: str, **kwargs) -> Agent:
     """
     A general factory function to create any registered agent.
 
-    Available agents:
-    - `dqn`: Deep Q-Network for discrete action spaces.
-    - `pqn`: Parametric Q-Network for continuous action spaces.
-    - `random`: Uniform random action selection.
-    - `bangbang`: Simple threshold-based controller.
-    - `pid`: Proportional-Integral-Derivative controller.
-
     Args:
         agent_id: The string identifier of the agent to create.
         **kwargs: Keyword arguments that will be passed to the specific agent's make_agent function.
@@ -39,7 +32,7 @@ def make_agent(agent_id: str, **kwargs) -> Agent:
         An instance of the requested Agent.
 
     Raises:
-        ValueError: If the agent_id is not found in the registry.
+        ValueError: If the ``agent_id`` is not found in the registry.
     """
     if agent_id not in AGENT_REGISTRY:
         raise ValueError(
