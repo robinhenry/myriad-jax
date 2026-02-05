@@ -134,7 +134,7 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 autodoc_type_aliases = {
-    "PRNGKey": "myriad.core.types.PRNGKey",
+    "PRNGKey": "jax.Array",
     "Array": "jax.Array",
     "ArrayTree": "chex.ArrayTree",
 }

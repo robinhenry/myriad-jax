@@ -140,11 +140,11 @@ class GetObsShapeFn(Protocol[C_contra]):
 
     Returns
     -------
-    tuple[int, ...]
+    shape: tuple[int, ...]
         Shape tuple for observations (e.g., ``(4,)`` for CartPole).
     """
 
-    def __call__(self, config: C_contra) -> tuple: ...
+    def __call__(self, config: C_contra) -> tuple[int, ...]: ...
 
 
 class ResetFn(Protocol[S_co, P_contra, C_contra, Obs_co]):
@@ -161,7 +161,7 @@ class ResetFn(Protocol[S_co, P_contra, C_contra, Obs_co]):
 
     Returns
     -------
-    tuple[Observation, EnvironmentState]
+    tuple[:class:`~myriad.core.types.Observation`, EnvironmentState]
         Initial observation and initial environment state.
     """
 
@@ -189,7 +189,7 @@ class StepFn(Protocol[S_inv, P_contra, C_contra, Obs_co]):
     tuple[Observation, EnvironmentState, Array, Array, dict[str, Any]]
         A 5-tuple containing:
 
-        - **next_obs** -- Observation after the transition.
+        - **next_obs** -- :class:`~myriad.core.types.Observation` after the transition.
         - **next_state** -- Updated environment state.
         - **reward** -- Scalar reward signal.
         - **done** -- Boolean termination flag.
