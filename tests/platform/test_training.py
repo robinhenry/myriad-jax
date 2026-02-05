@@ -244,7 +244,6 @@ def wandb_stub(monkeypatch):
     stub = _WandbStub()
     monkeypatch.setattr(logging_utils, "wandb", stub)
     monkeypatch.setattr(logging_utils, "_wandb_import_error", None, raising=False)
-    monkeypatch.setattr(training, "wandb", stub)
     monkeypatch.setattr(remote_logger, "wandb", stub)
     return stub
 

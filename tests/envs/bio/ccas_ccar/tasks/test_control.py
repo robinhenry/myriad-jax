@@ -18,8 +18,9 @@ import pytest
 
 from myriad.core import spaces
 from myriad.envs import make_env as make_env_from_registry
-from myriad.envs.ccas_ccar.physics import PhysicsState
-from myriad.envs.ccas_ccar.tasks.control import (
+from myriad.envs.bio.ccas_ccar.physics import PhysicsState
+from myriad.envs.bio.ccas_ccar.tasks.base import CcasCcarControlObs, TaskConfig
+from myriad.envs.bio.ccas_ccar.tasks.control import (
     ControlTaskConfig,
     ControlTaskParams,
     ControlTaskState,
@@ -142,7 +143,6 @@ class TestObservations:
 
     def test_get_obs(self, state, config):
         """Test observation extraction."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         params = ControlTaskParams()
         obs = get_obs(state, params, config)
@@ -167,7 +167,6 @@ class TestObservations:
     def test_obs_normalization(self):
         """Test that observations are properly normalized."""
         # Create config with custom normalizer
-        from myriad.envs.ccas_ccar.tasks.control import TaskConfig
 
         task_config = TaskConfig(max_steps=288, F_obs_normalizer=100.0)
         config = ControlTaskConfig(n_horizon=0, task=task_config)
@@ -250,7 +249,6 @@ class TestResetFunction:
 
     def test_reset_observation_shape(self, config, params):
         """Test that reset returns correct observation shape."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         key = jax.random.PRNGKey(0)
         obs, state = _reset(key, params, config)
@@ -353,7 +351,6 @@ class TestStepFunction:
 
     def test_step_observation_shape(self, state, params, config):
         """Test that step returns correct observation shape."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         key = jax.random.PRNGKey(0)
         action = jnp.array(1)
@@ -385,7 +382,6 @@ class TestStepFunction:
     @pytest.mark.parametrize("action", [0, 1])
     def test_step_both_actions(self, state, params, config, action):
         """Test that both actions produce valid steps."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         key = jax.random.PRNGKey(0)
 
@@ -475,7 +471,6 @@ class TestFullEpisode:
 
     def test_full_episode(self, env):
         """Test running a complete episode."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         key = jax.random.PRNGKey(42)
         key, reset_key = jax.random.split(key)
@@ -513,7 +508,6 @@ class TestFullEpisode:
 
     def test_jit_compatibility(self, env):
         """Test that environment functions can be JIT compiled."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         key = jax.random.PRNGKey(0)
 
@@ -535,7 +529,6 @@ class TestFullEpisode:
 
     def test_vmap_compatibility(self, env):
         """Test that environment can be vmapped for parallel execution."""
-        from myriad.envs.ccas_ccar.tasks.base import CcasCcarControlObs
 
         batch_size = 10
         keys = jax.random.split(jax.random.PRNGKey(0), batch_size)

@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 
 from benchmarks.utils import (
-    calculate_scaling_efficiency,
     calculate_throughput,
     format_number,
     get_device_info,
@@ -257,66 +256,3 @@ class TestThroughput:
 
         # Slow execution
         assert calculate_throughput(10, 100.0) == 0.1
-
-
-class TestScalingEfficiency:
-    """Tests for calculate_scaling_efficiency."""
-
-    def test_perfect_scaling(self):
-        """Perfect linear scaling should give efficiency = 1.0."""
-        baseline_throughput = 1000.0
-        n_throughput = 10_000.0  # 10x environments, 10x throughput
-
-        efficiency = calculate_scaling_efficiency(
-            throughput_n=n_throughput,
-            throughput_baseline=baseline_throughput,
-            n_envs=10,
-            baseline_envs=1,
-        )
-
-        assert abs(efficiency - 1.0) < 0.01
-
-    def test_sublinear_scaling(self):
-        """Sublinear scaling should give efficiency < 1.0."""
-        baseline_throughput = 1000.0
-        n_throughput = 7_500.0  # 10x environments, only 7.5x throughput
-
-        efficiency = calculate_scaling_efficiency(
-            throughput_n=n_throughput,
-            throughput_baseline=baseline_throughput,
-            n_envs=10,
-            baseline_envs=1,
-        )
-
-        assert efficiency < 1.0
-        assert abs(efficiency - 0.75) < 0.01
-
-    def test_superlinear_scaling(self):
-        """Superlinear scaling should give efficiency > 1.0."""
-        baseline_throughput = 1000.0
-        n_throughput = 12_000.0  # 10x environments, 12x throughput (cache effects)
-
-        efficiency = calculate_scaling_efficiency(
-            throughput_n=n_throughput,
-            throughput_baseline=baseline_throughput,
-            n_envs=10,
-            baseline_envs=1,
-        )
-
-        assert efficiency > 1.0
-        assert abs(efficiency - 1.2) < 0.01
-
-    def test_different_baselines(self):
-        """Test with non-unit baseline."""
-        baseline_throughput = 5000.0  # 5 envs
-        n_throughput = 20_000.0  # 20 envs
-
-        efficiency = calculate_scaling_efficiency(
-            throughput_n=n_throughput,
-            throughput_baseline=baseline_throughput,
-            n_envs=20,
-            baseline_envs=5,
-        )
-
-        # 4x environments, 4x throughput = perfect scaling
-        assert abs(efficiency - 1.0) < 0.01

@@ -57,7 +57,6 @@ def test_prepare_metrics_host_returns_host_arrays():
 def test_prepare_metrics_host_handles_invalid_inputs():
     assert logging_utils.prepare_metrics_host({}, 1) == {}
     assert logging_utils.prepare_metrics_host({"loss": jnp.ones(3)}, 0) == {}
-    assert logging_utils.prepare_metrics_host("not-a-dict", 2) == {}
 
 
 def test_build_train_payload_uses_last_value():

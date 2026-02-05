@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples"
+EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples" / "original"
 
 
 def run_example(script_name: str, timeout: int = 60) -> subprocess.CompletedProcess:

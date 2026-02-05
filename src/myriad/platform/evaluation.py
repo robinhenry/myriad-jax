@@ -91,7 +91,7 @@ def evaluate(
 
         # Convert episodes if present
         episodes_data = None
-        if return_episodes and "episodes" in eval_results_jax:
+        if "episodes" in eval_results_jax:
             episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
 
         # Compute summary statistics
@@ -113,6 +113,10 @@ def evaluate(
 
         # TODO: why do we check the type of `Config`? HOpefully if we address the previous todo, this should
         # no longer be required.
+        # TODO: if `return_episodes == False`, then we have no episodes data and `episodes_data is None`. This
+        # means, with the current implementation, we won't save any episodes data to disk. I'm not sure this is
+        # the behaviour we want: it might make more sense to still allow to save the episodes to disk, but not
+        # keep episodes_data in memory if `return_episodes == False`? I'm not sure.
         # Save episodes to disk if configured (for eval-only runs)
         if isinstance(config, EvalConfig) and episodes_data is not None:
             # Prepare episode data for saving
