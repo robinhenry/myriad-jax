@@ -85,7 +85,7 @@ class PhysicsConfig:
     """
 
     # Production and dilution rates
-    eta: float = 1.0  # CcaSR activation rate (1/min)
+    eta: float = 1.0  # CcaSR (H) production rate (1/min)
     nu: float = 0.01  # Protein dilution rate (1/min)
 
     # Promoter dynamics for H-induced F production
@@ -98,10 +98,10 @@ class PhysicsConfig:
     nf: float = 3.6  # Hill coefficient for F cooperativity
 
     # Time discretization
-    timestep_minutes: float = 5.0  # Physical timestep for RL (minutes)
+    timestep_minutes: float = 5.0  # Physical timestep (minutes)
 
     # Gillespie algorithm parameters
-    max_gillespie_steps: int = 10000  # Safety limit for Gillespie loop per RL step
+    max_gillespie_steps: int = 10000  # Safety limit for Gillespie loop per step
 
 
 @struct.dataclass
@@ -200,8 +200,7 @@ def step_physics(
 ) -> PhysicsState:
     """Pure physics step using Gillespie algorithm.
 
-    Runs Gillespie simulation from current time until time + timestep_minutes.
-    This function contains NO task logic: no rewards, terminations, or observations.
+    Runs Gillespie simulation from current time until ``time + timestep_minutes``.
 
     The Gillespie algorithm provides exact stochastic simulation of the chemical
     reaction network by sampling reaction times and events from the master equation.

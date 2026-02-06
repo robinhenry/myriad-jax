@@ -21,28 +21,26 @@ class CcasCcarControlObs(NamedTuple):
 
     Attributes:
         F_normalized: GFP fluorescence normalized by F_obs_normalizer
-        U_obs: Light input observation (always 0.0 - not directly observable)
         F_target: Target trajectory [current, t+1, ..., t+n_horizon]
     """
 
     F_normalized: Array
-    U_obs: Array
     F_target: Array
 
     def to_array(self) -> Array:
         """Convert to flat array for NN-based agents.
 
         Returns:
-            Array of shape (2 + n_horizon + 1,) with [F, U, F_target...]
+            Array of shape (1 + n_horizon + 1,) with [F, F_target...]
         """
-        return jnp.concatenate([jnp.array([self.F_normalized, self.U_obs]), self.F_target])
+        return jnp.concatenate([jnp.array([self.F_normalized]), self.F_target])
 
     @classmethod
     def from_array(cls, arr: Array) -> "CcasCcarControlObs":
         """Create observation from flat array.
 
         Args:
-            arr: Array of shape (2 + n_horizon + 1,) with [F, U, F_target...]
+            arr: Array of shape (1 + n_horizon + 1,) with [F, F_target...]
 
         Returns:
             CcasCcarControlObs instance
@@ -50,7 +48,6 @@ class CcasCcarControlObs(NamedTuple):
         chex.assert_rank(arr, 1)
         return cls(
             F_normalized=arr[0],  # type: ignore
-            U_obs=arr[1],  # type: ignore
             F_target=arr[2:],  # type: ignore
         )
 

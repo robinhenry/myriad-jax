@@ -207,9 +207,6 @@ def get_obs(
     Returns a structured observation with named fields for semantic access
     by classical controllers. Neural network agents can call `.to_array()`.
 
-    Note: U is not directly observable (it's the action), so we set it to 0.
-    The agent must infer system state from F measurements and its own action history.
-
     Args:
         state: Current task state
         params: Task parameters (unused)
@@ -221,16 +218,11 @@ def get_obs(
     # Normalize F by observation normalizer
     F_normalized = state.physics.F / config.task.F_obs_normalizer
 
-    # U is set to 0 in observation (agent doesn't directly observe light input)
-    # Agent must remember its own actions
-    U_obs = jnp.array(0.0)
-
     # Normalize F_target
     F_target_normalized = state.F_target / config.task.F_obs_normalizer
 
     return CcasCcarControlObs(
         F_normalized=F_normalized,
-        U_obs=U_obs,
         F_target=F_target_normalized,
     )
 
@@ -238,8 +230,8 @@ def get_obs(
 def get_obs_shape(config: ControlTaskConfig) -> Tuple[int, ...]:
     """Get the shape of the observation space.
 
-    Observation: [F, U, F_target[0:n_horizon+1]]
-    Shape: (2 + n_horizon + 1,)
+    Observation: [F, F_target[0:n_horizon+1]]
+    Shape: (1 + n_horizon + 1,)
 
     Args:
         config: Task configuration
@@ -247,7 +239,7 @@ def get_obs_shape(config: ControlTaskConfig) -> Tuple[int, ...]:
     Returns:
         Observation shape tuple
     """
-    return (2 + config.n_horizon + 1,)
+    return (1 + config.n_horizon + 1,)
 
 
 def get_action_space(config: ControlTaskConfig) -> Discrete:

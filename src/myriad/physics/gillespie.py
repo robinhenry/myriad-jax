@@ -24,22 +24,24 @@ Reference:
 
 from typing import Any, Callable
 
-import chex
 import jax
 import jax.numpy as jnp
+from jax import Array
+
+from myriad.core.types import PRNGKey
 
 
 def run_gillespie_loop(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     initial_state: Any,
-    action: chex.Array,
+    action: Array,
     config: Any,
-    target_time: float,
+    target_time: float | Array,
     max_steps: int,
-    compute_propensities_fn: Callable[[Any, chex.Array, Any], chex.Array],
-    apply_reaction_fn: Callable[[Any, chex.Array], Any],
-    get_time_fn: Callable[[Any], chex.Array],
-    update_time_fn: Callable[[Any, float], Any],
+    compute_propensities_fn: Callable[[Any, Array, Any], Array],
+    apply_reaction_fn: Callable[[Any, Array], Any],
+    get_time_fn: Callable[[Any], Array],
+    update_time_fn: Callable[[Any, float | Array], Any],
 ) -> Any:
     """Execute Gillespie algorithm simulation loop.
 
@@ -136,13 +138,13 @@ def run_gillespie_loop(
 
 
 def gillespie_step(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     state: Any,
-    action: chex.Array,
+    action: Array,
     config: Any,
-    compute_propensities_fn: Callable[[Any, chex.Array, Any], chex.Array],
-    apply_reaction_fn: Callable[[Any, chex.Array], Any],
-) -> tuple[Any, chex.Array]:
+    compute_propensities_fn: Callable[[Any, Array, Any], Array],
+    apply_reaction_fn: Callable[[Any, Array], Any],
+) -> tuple[Any, Array]:
     """Execute a single Gillespie step (one reaction).
 
     This is a lower-level utility for cases where you want manual control

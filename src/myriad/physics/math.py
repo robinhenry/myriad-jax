@@ -1,24 +1,20 @@
-"""Mathematical functions for physics models.
+"""Reusable mathematical functions for physics models."""
 
-This module provides reusable mathematical building blocks commonly used
-in biological and chemical physics simulations.
-"""
-
-import chex
 import jax.numpy as jnp
+from jax import Array
 
 
 def hill_function(
-    x: chex.Array,
+    x: Array,
     K: float,
     n: float,
-) -> chex.Array:
+) -> Array:
     """Compute the Hill function for cooperative binding/regulation.
 
     The Hill equation models sigmoidal responses in biological systems,
     commonly used for gene regulation, enzyme kinetics, and receptor binding.
 
-    Formula: x^n / (K^n + x^n)
+    Formula: ``x^n / (K^n + x^n)``
 
     Args:
         x: Input concentration (molecules, arbitrary units, etc.)
@@ -40,10 +36,6 @@ def hill_function(
         >>> concentrations = jnp.array([50.0, 100.0, 150.0])
         >>> hill_function(x=concentrations, K=100.0, n=2.0)
         Array([0.2, 0.5, 0.692], dtype=float32)
-
-    References:
-        Hill, A. V. (1910). The possible effects of the aggregation of the
-        molecules of haemoglobin on its dissociation curves. J. Physiol.
     """
     x_powered = jnp.power(x, n)
     K_powered = jnp.power(K, n)
