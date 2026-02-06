@@ -8,27 +8,37 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from myriad.envs.classic.cartpole.tasks.control import ControlTaskConfig, ControlTaskState
+
 
 def render_cartpole_frame(
-    state: np.ndarray,
+    state: ControlTaskState,
+    config: ControlTaskConfig,
+    action: int | None = None,
     pole_length: float = 1.0,
     cart_width: float = 0.5,
     cart_height: float = 0.3,
-    x_limit: float = 2.4,
     figsize: tuple[float, float] = (6, 4),
     dpi: int = 100,
 ) -> np.ndarray:
-    """Render a single CartPole frame from a state.
+    """Render a single CartPole frame from task state.
 
     Pure rendering function that converts CartPole state to RGB pixel array.
     Follows the standard CartPole visualization: cart on a track with pole attached.
 
     Args:
-        state: CartPole state array with shape (4,) containing [x, x_dot, theta, theta_dot]
+        state: CartPole task state containing physics state.
+            - state.physics.x: Cart position (m)
+            - state.physics.x_dot: Cart velocity (m/s)
+            - state.physics.theta: Pole angle from vertical (rad, 0 = upright)
+            - state.physics.theta_dot: Pole angular velocity (rad/s)
+            - state.t: Current timestep
+        config: Task configuration containing physics parameters.
+            - config.task.x_threshold: Position limit for track
+        action: Current action being taken (0 or 1). Optional, unused in rendering.
         pole_length: Full length of the pole in meters (default: 1.0, which is 2 * physics.pole_length)
         cart_width: Width of the cart rectangle in meters
         cart_height: Height of the cart rectangle in meters
-        x_limit: Position limits of the track (cart can move in [-x_limit, +x_limit])
         figsize: Figure size in inches (width, height)
         dpi: Dots per inch for rendering resolution
 
@@ -36,13 +46,19 @@ def render_cartpole_frame(
         RGB image array with shape (height, width, 3) and dtype uint8
 
     Example:
-        >>> obs = np.array([0.1, 0.0, 0.05, 0.0])  # Slight tilt
-        >>> frame = render_cartpole_frame(obs)
+        >>> from myriad.envs.classic.cartpole.tasks.control import make_env
+        >>> import jax
+        >>> env = make_env()
+        >>> key = jax.random.PRNGKey(0)
+        >>> obs, state = env.reset(key)
+        >>> frame = render_cartpole_frame(state, env.config)
         >>> frame.shape
         (400, 600, 3)
     """
-    # Extract state components (only x and theta are needed for rendering)
-    x, _x_dot, theta, _theta_dot = state
+    # Extract state components from physics state
+    x = float(state.physics.x)
+    theta = float(state.physics.theta)
+    x_limit = config.task.x_threshold
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)

@@ -8,7 +8,7 @@ Task variants:
 - Sinewave target: Time-varying sinusoidal trajectory
 """
 
-from typing import Any, Dict, NamedTuple, Tuple
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -88,7 +88,7 @@ def _step(
     action: Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[CcasCcarControlObs, ControlTaskState, Array, Array, Dict[str, Any]]:
+) -> tuple[CcasCcarControlObs, ControlTaskState, Array, Array, dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -164,7 +164,7 @@ def _reset(
     key: PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> Tuple[CcasCcarControlObs, ControlTaskState]:
+) -> tuple[CcasCcarControlObs, ControlTaskState]:
     """Reset the control task to initial state.
 
     Initializes the system at zero protein concentrations and generates initial target.
@@ -240,7 +240,7 @@ def get_obs(
     )
 
 
-def get_obs_shape(config: ControlTaskConfig) -> Tuple[int, ...]:
+def get_obs_shape(config: ControlTaskConfig) -> tuple[int, ...]:
     """Get the shape of the observation space.
 
     Observation: [F, F_target[0:n_horizon+1]]

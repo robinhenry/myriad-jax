@@ -98,6 +98,20 @@ class TestObservations:
         assert jnp.isclose(obs.F_normalized, 0.5)  # 50/100
         assert jnp.isclose(obs.F_target[0], 0.75)  # 75/100
 
+    def test_obs_to_array_from_array_roundtrip(self):
+        """Test that observation round-trips through array conversion."""
+        config = ControlTaskConfig(n_horizon=2)
+        physics = PhysicsState.create(time=jnp.array(5.0), H=jnp.array(30.0), F=jnp.array(40.0))
+        F_target = jnp.array([25.0, 26.0, 27.0])
+        state = ControlTaskState(physics=physics, t=jnp.array(1), U=jnp.array(1), F_target=F_target)
+
+        obs = get_obs(state, ControlTaskParams(), config)
+        arr = obs.to_array()
+        obs_restored = CcasCcarControlObs.from_array(arr)
+
+        assert jnp.isclose(obs.F_normalized, obs_restored.F_normalized)
+        assert jnp.allclose(obs.F_target, obs_restored.F_target)
+
 
 class TestActionSpace:
     """Test action space definition."""

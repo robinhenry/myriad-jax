@@ -48,7 +48,7 @@ class CcasCcarControlObs(NamedTuple):
         chex.assert_rank(arr, 1)
         return cls(
             F_normalized=arr[0],  # type: ignore
-            F_target=arr[2:],  # type: ignore
+            F_target=arr[1:],  # type: ignore
         )
 
 

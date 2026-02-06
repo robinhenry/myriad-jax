@@ -8,14 +8,18 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from myriad.envs.classic.pendulum.tasks.control import ControlTaskConfig, ControlTaskState
+
 
 def render_pendulum_frame(
-    state: np.ndarray,
+    state: ControlTaskState,
+    config: ControlTaskConfig,
+    action: float | None = None,
     length: float = 1.0,
     figsize: tuple[float, float] = (4, 4),
     dpi: int = 100,
 ) -> np.ndarray:
-    """Render a single Pendulum frame from a state.
+    """Render a single Pendulum frame from task state.
 
     Pure rendering function that converts Pendulum state to RGB pixel array.
     Follows the standard Pendulum visualization: bob hanging from pivot point.
@@ -24,8 +28,12 @@ def render_pendulum_frame(
     theta increases counter-clockwise.
 
     Args:
-        state: Pendulum state array with shape (2,) containing [theta, theta_dot]
-               or shape (3,) containing [cos_theta, sin_theta, theta_dot]
+        state: Pendulum task state containing physics state.
+            - state.physics.theta: Angle from vertical down (rad, 0 = hanging down, pi = upright)
+            - state.physics.theta_dot: Angular velocity (rad/s)
+            - state.t: Current timestep
+        config: Task configuration (currently unused, included for interface consistency).
+        action: Current action (torque) being applied. Optional, unused in rendering.
         length: Length of the pendulum rod in meters
         figsize: Figure size in inches (width, height)
         dpi: Dots per inch for rendering resolution
@@ -34,18 +42,19 @@ def render_pendulum_frame(
         RGB image array with shape (height, width, 3) and dtype uint8
 
     Example:
-        >>> state = np.array([0.0, 0.0])  # Hanging down
-        >>> frame = render_pendulum_frame(state)
+        >>> from myriad.envs.classic.pendulum.tasks.control import make_env
+        >>> import jax
+        >>> env = make_env()
+        >>> key = jax.random.PRNGKey(0)
+        >>> obs, state = env.reset(key)
+        >>> frame = render_pendulum_frame(state, env.config)
         >>> frame.shape
         (400, 400, 3)
     """
-    # Handle both (theta, theta_dot) and (cos_theta, sin_theta, theta_dot) formats
-    if len(state) == 2:
-        theta = state[0]
-        cos_theta = np.cos(theta)
-        sin_theta = np.sin(theta)
-    else:
-        cos_theta, sin_theta = state[0], state[1]
+    # Extract theta from physics state
+    theta = float(state.physics.theta)
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)

@@ -12,38 +12,41 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 
+from myriad.envs.bio.ccas_ccar.tasks.control import ControlTaskConfig, ControlTaskState
+
 
 def render_ccas_ccar_frame(
-    state: np.ndarray,
-    F_obs_normalizer: float = 80.0,
-    trajectory_history: np.ndarray | None = None,
-    action_history: np.ndarray | None = None,
-    current_timestep: int = 0,
+    state: ControlTaskState,
+    config: ControlTaskConfig,
+    action: int | None = None,
+    trajectory_history: list[ControlTaskState] | None = None,
+    action_history: list[int] | None = None,
     figsize: tuple[float, float] = (10, 6),
     dpi: int = 100,
 ) -> np.ndarray:
-    """Render a single CcaS-CcaR frame from an observation.
+    """Render a single CcaS-CcaR frame from task state.
 
     Creates a visualization showing:
     - Fluorescence trajectory over time (if trajectory_history provided)
     - Current fluorescence level (F) vs target
-    - Future target trajectory (if available in observation)
+    - Future target trajectory (if available in state)
     - Light input status (on/off)
 
     Args:
-        state: CcaS-CcaR observation array with shape (obs_dim,)
-            Format: [F_normalized, U_obs, F_target[0], F_target[1], ..., F_target[n_horizon]]
-            - F_normalized: Current GFP fluorescence (normalized by F_obs_normalizer)
-            - U_obs: Light input observation (always 0.0 - not directly observable)
-            - F_target: Target trajectory [current, t+1, ..., t+n_horizon]
-        F_obs_normalizer: Normalization constant for F (default: 80.0)
-            Used to convert normalized values back to molecule counts for display
-        trajectory_history: Optional array of shape (timesteps, obs_dim) containing
-            full observation history up to current timestep. If provided, shows
+        state: CcaS-CcaR task state containing physics state and target trajectory.
+            - state.physics.F: Current GFP fluorescence (molecules)
+            - state.physics.H: CcaS-CcaR protein concentration (molecules)
+            - state.U: Previous light action (0 or 1)
+            - state.F_target: Target trajectory [current, t+1, ..., t+n_horizon]
+            - state.t: Current timestep
+        config: Task configuration containing normalization constants.
+            - config.task.F_obs_normalizer: Normalization constant for F
+        action: Current action being taken (0=light off, 1=light on). Optional.
+        trajectory_history: Optional list of ControlTaskState containing
+            full state history up to current timestep. If provided, shows
             trajectory over time. If None, only shows current state.
-        action_history: Optional array of shape (timesteps,) containing action history
-            (light on/off: 0 or 1). If provided, shows light control pattern over time.
-        current_timestep: Current timestep index (used when trajectory_history is provided)
+        action_history: Optional list of actions (light on/off: 0 or 1).
+            If provided, shows light control pattern over time.
         figsize: Figure size in inches (width, height)
         dpi: Dots per inch for rendering resolution
 
@@ -51,25 +54,23 @@ def render_ccas_ccar_frame(
         RGB image array with shape (height, width, 3) and dtype uint8
 
     Example:
-        >>> # Single frame without history
-        >>> obs = np.array([0.3, 0.0, 0.31, 0.32])
-        >>> frame = render_ccas_ccar_frame(obs)
+        >>> from myriad.envs.bio.ccas_ccar.tasks.control import make_env
+        >>> import jax
+        >>> env = make_env()
+        >>> key = jax.random.PRNGKey(0)
+        >>> obs, state = env.reset(key)
+        >>> frame = render_ccas_ccar_frame(state, env.config)
         >>> frame.shape
         (600, 1000, 3)
-        >>>
-        >>> # Frame with trajectory history
-        >>> history = np.array([[0.1, 0.0, 0.3, 0.3], [0.2, 0.0, 0.3, 0.3]])
-        >>> frame = render_ccas_ccar_frame(obs, trajectory_history=history, current_timestep=2)
     """
-    # Parse observation
-    # Observation format: [F_normalized, U_obs, F_target[0], ..., F_target[n_horizon]]
-    F_normalized = state[0]
-    _U_obs = state[1]  # Not used (always 0.0, light not directly observable)
-    F_target = state[2:]  # Target trajectory
+    # Extract values directly from state
+    F_current = float(state.physics.F)
+    F_target = np.asarray(state.F_target)
+    current_timestep = int(state.t)
+    F_obs_normalizer = config.task.F_obs_normalizer
 
-    # Denormalize for display (convert back to molecule counts)
-    F_current = F_normalized * F_obs_normalizer
-    F_target_denorm = F_target * F_obs_normalizer
+    # F_target is already in molecule counts (not normalized in state)
+    F_target_denorm = F_target
 
     # Create figure with 2 subplots: fluorescence plot (top) and light indicator (bottom)
     fig, (ax_fluor, ax_light) = plt.subplots(2, 1, figsize=figsize, dpi=dpi, gridspec_kw={"height_ratios": [4, 1]})
@@ -77,9 +78,10 @@ def render_ccas_ccar_frame(
     # --- Top plot: Fluorescence trajectory over time ---
 
     if trajectory_history is not None:
-        # Extract fluorescence history from trajectory
-        F_history = trajectory_history[: current_timestep + 1, 0] * F_obs_normalizer
-        target_history = trajectory_history[: current_timestep + 1, 2] * F_obs_normalizer
+        # Extract fluorescence history from trajectory states
+        F_history = np.array([float(s.physics.F) for s in trajectory_history[: current_timestep + 1]])
+        # Target history: use first element of F_target for each state
+        target_history = np.array([float(s.F_target[0]) for s in trajectory_history[: current_timestep + 1]])
         timesteps = np.arange(current_timestep + 1)
 
         # Plot actual fluorescence trajectory
@@ -186,7 +188,7 @@ def render_ccas_ccar_frame(
 
     if action_history is not None and trajectory_history is not None:
         # Show light on/off pattern over time
-        actions = action_history[: current_timestep + 1]
+        actions = np.array(action_history[: current_timestep + 1])
         timesteps = np.arange(current_timestep + 1)
 
         # Plot as step function
@@ -268,7 +270,7 @@ def render_population_heatmap(
 
     Args:
         observations: Array of shape (n_envs, obs_dim) containing observations for all cells
-            Format: each row is [F_normalized, U_obs, F_target[0], ...]
+            Format: each row is [F_normalized, F_target[0], F_target[1], ...]
         actions: Optional array of shape (n_envs,) containing light actions (0=OFF, 1=ON)
             If provided, shows action overlay on the heatmap
         F_obs_normalizer: Normalization constant for F (default: 80.0)
