@@ -15,11 +15,13 @@ class EnvInfo(NamedTuple):
         name: The unique identifier for the environment.
         make_fn: The factory function to create the environment.
         config_cls: The configuration class for the environment.
+        render_frame_fn: Optional function to render a single frame of the environment.
     """
 
     name: str
     make_fn: Callable
     config_cls: type
+    render_frame_fn: Callable | None = None
 
 
 # The global registry of environments
@@ -30,6 +32,7 @@ def register_env(
     name: str,
     make_fn: Callable,
     config_cls: type,
+    render_frame_fn: Callable | None = None,
 ) -> None:
     """Register an environment with metadata.
 
@@ -37,11 +40,13 @@ def register_env(
         name: Unique identifier for the environment.
         make_fn: Factory function to create the environment.
         config_cls: Configuration class for the environment.
+        render_frame_fn: Optional function to render a single frame.
     """
     _ENV_REGISTRY[name] = EnvInfo(
         name=name,
         make_fn=make_fn,
         config_cls=config_cls,
+        render_frame_fn=render_frame_fn,
     )
 
 

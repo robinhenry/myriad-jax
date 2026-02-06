@@ -10,8 +10,7 @@ This script is useful during development for:
 """
 
 from myriad.platform.hydra_runners import evaluate_main
-from myriad.platform.hydra_setup import setup_hydra
+from myriad.platform.runner_utils import run_with_hydra
 
 if __name__ == "__main__":
-    setup_hydra()
-    evaluate_main()
+    run_with_hydra(evaluate_main)

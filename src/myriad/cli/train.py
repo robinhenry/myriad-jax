@@ -4,11 +4,7 @@ This module provides a Click wrapper around the Hydra-based training runner.
 All arguments are passed through to Hydra for configuration management.
 """
 
-import sys
-
 import click
-
-from myriad.platform.hydra_setup import setup_hydra
 
 
 @click.command(
@@ -42,15 +38,8 @@ def train(ctx: click.Context) -> None:
 
     For full Hydra documentation, see: https://hydra.cc/
     """
-    # Reconstruct sys.argv for Hydra
-    # Hydra expects sys.argv[0] to be the script name
-    sys.argv = ["myriad train"] + ctx.args
-
-    # Setup Hydra global configuration
-    setup_hydra()
-
-    # Import and run the training main function
-    # Import here to avoid issues with Hydra decorator at module level
+    # Execute the training runner with Hydra setup
     from myriad.platform.hydra_runners import train_main
+    from myriad.platform.runner_utils import run_with_hydra
 
-    train_main()
+    run_with_hydra(train_main, script_name="myriad train", args=ctx.args)

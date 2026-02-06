@@ -4,11 +4,7 @@ This module provides a Click wrapper around the Hydra-based sweep training runne
 All arguments are passed through to Hydra for configuration management.
 """
 
-import sys
-
 import click
-
-from myriad.platform.hydra_setup import setup_hydra
 
 
 @click.command(
@@ -46,13 +42,8 @@ def sweep(ctx: click.Context) -> None:
     For W&B sweep documentation, see: https://docs.wandb.ai/guides/sweeps
     For Hydra documentation, see: https://hydra.cc/
     """
-    # Reconstruct sys.argv for Hydra
-    sys.argv = ["myriad sweep"] + ctx.args
-
-    # Setup Hydra global configuration
-    setup_hydra()
-
-    # Import and run the sweep main function
+    # Execute the sweep runner with Hydra setup
     from myriad.platform.hydra_runners import sweep_main
+    from myriad.platform.runner_utils import run_with_hydra
 
-    sweep_main()
+    run_with_hydra(sweep_main, script_name="myriad sweep", args=ctx.args)
