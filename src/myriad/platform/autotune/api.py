@@ -4,13 +4,17 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
 
 from .cache import load_cache, save_cache
 from .profiling import profile_agent, profile_env, profile_hardware
 from .search import estimate_max_envs, probe_upward
 from .testing import validate_config
-from .utils import VALID_CHUNK_SIZES, get_hardware_id, make_config_key, round_to_valid_scale
+from .utils import (
+    VALID_CHUNK_SIZES,
+    floor_to_valid_scale,
+    get_hardware_id,
+    make_config_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +42,46 @@ class AutotuneResult:
         )
 
 
+def _ensure_profiled(env: str, agent: str, cache: dict, hardware_id: str) -> dict:
+    """Ensure hardware, env, and agent are profiled in the cache."""
+    changed = False
+
+    if hardware_id not in cache["hardware"]:
+        logger.info("  ⚡ Hardware... profiling")
+        cache = profile_hardware(cache)
+        hw = cache["hardware"][hardware_id]
+        logger.info(f"     {hw['device']} ({hw['available_memory_gb']:.1f}GB available)")
+        changed = True
+    else:
+        logger.debug(f"  ⚡ Hardware... cached ({hardware_id})")
+
+    if env not in cache["env_profiles"]:
+        logger.info(f"  ⚡ Environment ({env})... profiling (~10s)")
+        cache = profile_env(env, cache)
+        logger.info("     Saved to cache ✓")
+        changed = True
+    else:
+        logger.debug(f"  ⚡ Environment ({env})... cached")
+
+    if agent not in cache["agent_profiles"]:
+        logger.info(f"  ⚡ Agent ({agent})... profiling")
+        cache = profile_agent(agent, cache)
+        logger.info("     Saved to cache ✓")
+        changed = True
+    else:
+        logger.debug(f"  ⚡ Agent ({agent})... cached")
+
+    if changed:
+        save_cache(cache)
+
+    return cache
+
+
 def suggest_scan_chunk_size(
     num_envs: int,
     env: str,
     agent: str,
-    buffer_size: Optional[int] = None,
+    buffer_size: int | None = None,
     force_revalidate: bool = False,
     verbose: bool = True,
 ) -> int:
@@ -82,15 +121,8 @@ def suggest_scan_chunk_size(
 
     start_time = time.time()
 
-    logger.info("")
     logger.info("Finding optimal scan_chunk_size...")
-    logger.info("=" * 70)
-    logger.info(f"Environment: {env}")
-    logger.info(f"Agent: {agent}")
-    logger.info(f"Number of envs: {num_envs:,}")
-    if buffer_size:
-        logger.info(f"Buffer size: {buffer_size:,}")
-    logger.info("")
+    logger.debug(f"Environment: {env}, Agent: {agent}, Envs: {num_envs:,}")
 
     # Load cache
     cache = load_cache()
@@ -105,7 +137,6 @@ def suggest_scan_chunk_size(
         validated_at = datetime.fromisoformat(cached["validated_at"])
         if datetime.now() - validated_at < timedelta(days=30):
             logger.info(f"✓ Using cached scan_chunk_size: {cached['optimal_chunk_size']}")
-            logger.info("=" * 70)
 
             if not verbose:
                 logger.setLevel(previous_level)
@@ -113,51 +144,27 @@ def suggest_scan_chunk_size(
             return cached["optimal_chunk_size"]
 
     # Profile components if needed (for memory estimation)
-    logger.info("[1/2] Profiling components (if needed)...")
-
-    if hardware_id not in cache["hardware"]:
-        logger.info("  ⚡ Hardware... profiling")
-        cache = profile_hardware(cache)
-        logger.debug(f"     Profiled: {cache['hardware'][hardware_id]['device']}")
-    else:
-        logger.debug(f"  ⚡ Hardware... cached ({hardware_id})")
-
-    if env not in cache["env_profiles"]:
-        logger.info(f"  ⚡ Environment ({env})... profiling (~10s)")
-        cache = profile_env(env, cache)
-        logger.info("     Saved to cache ✓")
-    else:
-        logger.debug(f"  ⚡ Environment ({env})... cached")
-
-    if agent not in cache["agent_profiles"]:
-        logger.debug(f"  ⚡ Agent ({agent})... profiling")
-        cache = profile_agent(agent, cache)
-        logger.debug("     Saved to cache ✓")
-    else:
-        logger.debug(f"  ⚡ Agent ({agent})... cached")
-
-    save_cache(cache)
+    cache = _ensure_profiled(env, agent, cache, hardware_id)
 
     # Test chunk sizes to find optimal
-    logger.info("")
-    logger.info("[2/2] Testing chunk sizes...")
+    logger.info("Testing chunk sizes...")
 
     best_chunk_size = None
     best_throughput = 0.0
 
     # Try chunk sizes from large to small (prefer larger for efficiency)
     for chunk_size in reversed(VALID_CHUNK_SIZES):
-        logger.info(f"  Testing chunk_size={chunk_size}... ")
+        logger.debug(f"  Testing chunk_size={chunk_size}... ")
 
-        success, throughput, memory = validate_config(env, agent, num_envs, chunk_size)
+        success, throughput, memory = validate_config(env, num_envs)
 
         if success and throughput is not None:
-            logger.info(f"    ✓ ({throughput/1e6:.0f}M steps/s, {memory:.1f if memory else 0}GB)")
+            logger.debug(f"    ✓ ({throughput/1e6:.1f}M steps/s, {memory:.1f}GB)")
             if throughput > best_throughput:
                 best_chunk_size = chunk_size
                 best_throughput = throughput
         else:
-            logger.info("    ✗ (OOM or timeout)")
+            logger.debug("    ✗ (OOM or timeout)")
 
         # If we found a working chunk size and smaller ones won't improve throughput much,
         # we can stop early
@@ -181,16 +188,8 @@ def suggest_scan_chunk_size(
 
     profiling_time = time.time() - start_time
 
-    logger.info("")
-    logger.info("=" * 70)
-    logger.info("✅ Optimal scan_chunk_size Found:")
-    logger.info("")
-    logger.info(f"  scan_chunk_size: {best_chunk_size}")
-    logger.info(f"  expected_throughput: {best_throughput/1e6:.0f}M steps/s")
-    logger.info("")
-    logger.info(f"Search took {profiling_time:.1f}s")
-    logger.info("Saved to cache for future use.")
-    logger.info("=" * 70)
+    logger.info(f"✅ Found optimal scan_chunk_size: {best_chunk_size} ({best_throughput/1e6:.1f}M steps/s)")
+    logger.debug(f"Search took {profiling_time:.1f}s")
 
     if not verbose:
         logger.setLevel(previous_level)
@@ -201,7 +200,7 @@ def suggest_scan_chunk_size(
 def suggest_config(
     env: str,
     agent: str,
-    buffer_size: Optional[int] = None,
+    buffer_size: int | None = None,
     force_revalidate: bool = False,
     verbose: bool = True,
 ) -> AutotuneResult:
@@ -237,14 +236,8 @@ def suggest_config(
 
     start_time = time.time()
 
-    logger.info("")
     logger.info("Auto-tuning configuration...")
-    logger.info("=" * 70)
-    logger.info(f"Environment: {env}")
-    logger.info(f"Agent: {agent}")
-    if buffer_size:
-        logger.info(f"Buffer size: {buffer_size:,}")
-    logger.info("")
+    logger.debug(f"Environment: {env}, Agent: {agent}")
 
     # Load cache
     cache = load_cache()
@@ -260,7 +253,6 @@ def suggest_config(
         validated_at = datetime.fromisoformat(cached["validated_at"])
         if datetime.now() - validated_at < timedelta(days=30):
             logger.info("✓ Using cached configuration (validated recently)")
-            logger.info("=" * 70)
 
             if not verbose:
                 logger.setLevel(previous_level)
@@ -275,53 +267,25 @@ def suggest_config(
             )
 
     # Profile components as needed
-    logger.info("[1/3] Profiling components...")
-
-    if hardware_id not in cache["hardware"]:
-        logger.info("  ⚡ Hardware... profiling")
-        cache = profile_hardware(cache)
-        hw = cache["hardware"][hardware_id]
-        logger.info(f"     {hw['device']} ({hw['available_memory_gb']:.1f}GB available)")
-    else:
-        logger.info(f"  ⚡ Hardware... cached ({hardware_id})")
-
-    if env not in cache["env_profiles"]:
-        logger.info(f"  ⚡ Environment ({env})... profiling (~10s)")
-        cache = profile_env(env, cache)
-        logger.info("     Saved to cache ✓")
-    else:
-        logger.info(f"  ⚡ Environment ({env})... cached")
-
-    if agent not in cache["agent_profiles"]:
-        logger.info(f"  ⚡ Agent ({agent})... profiling")
-        cache = profile_agent(agent, cache)
-        logger.info("     Saved to cache ✓")
-    else:
-        logger.info(f"  ⚡ Agent ({agent})... cached")
-
-    # Save cache after profiling
-    save_cache(cache)
+    logger.info("Profiling components...")
+    cache = _ensure_profiled(env, agent, cache, hardware_id)
 
     # Estimate configuration
-    logger.info("")
-    logger.info("[2/3] Estimating configuration...")
+    logger.info("Estimating maximum environments...")
 
     estimated_max, suggested_chunk = estimate_max_envs(env, agent, buffer_size, cache)
 
-    logger.info(f"  Conservative estimate: {estimated_max:,} envs")
-    logger.info(f"  Suggested chunk_size: {suggested_chunk}")
-    logger.info("  Validating...")
+    logger.debug(f"  Conservative estimate: {estimated_max:,} envs, chunk_size: {suggested_chunk}")
 
     # Validate estimate works
-    success, throughput, memory = validate_config(env, agent, estimated_max, suggested_chunk)
+    success, throughput, memory = validate_config(env, estimated_max)
 
     if not success:
-        logger.info("  ✗ (Failed - estimate too high)")
-        logger.info("  Reducing and retrying...")
+        logger.debug("  ✗ (Failed - estimate too high), retrying half...")
         # Estimate was too high, reduce
         estimated_max = estimated_max // 2
-        estimated_max = round_to_valid_scale(estimated_max)
-        success, throughput, memory = validate_config(env, agent, estimated_max, suggested_chunk)
+        estimated_max = floor_to_valid_scale(estimated_max)
+        success, throughput, memory = validate_config(env, estimated_max)
         if not success:
             raise RuntimeError(
                 f"Failed to validate configuration even at {estimated_max:,} envs. "
@@ -329,7 +293,7 @@ def suggest_config(
             )
 
     if throughput is not None:
-        logger.info(f"  ✓ (works at {throughput/1e6:.0f}M steps/s)")
+        logger.debug(f"  ✓ (Works at {throughput/1e6:.1f}M steps/s)")
 
     # Probe upward to find actual max
     max_envs, optimal_chunk, final_throughput, final_memory = probe_upward(env, agent, estimated_max, suggested_chunk)
@@ -347,21 +311,8 @@ def suggest_config(
     profiling_time = time.time() - start_time
 
     hw = cache["hardware"][hardware_id]
-    logger.info("")
-    logger.info("=" * 70)
-    logger.info("✅ Optimal Configuration Found:")
-    logger.info("")
-    logger.info(f"  max_envs: {max_envs:,}")
-    logger.info(f"  scan_chunk_size: {optimal_chunk}")
-    logger.info(f"  expected_throughput: {final_throughput/1e6:.0f}M steps/s")
-    logger.info(
-        f"  memory_usage: {final_memory:.1f} GB / {hw['total_memory_gb']:.1f} GB "
-        f"({100*final_memory/hw['total_memory_gb']:.0f}%)"
-    )
-    logger.info("")
-    logger.info(f"Profiling took {profiling_time:.1f}s")
-    logger.info("Saved to cache for future use.")
-    logger.info("=" * 70)
+    logger.info(f"✅ Auto-tune complete: {max_envs:,} envs @ {final_throughput/1e6:.1f}M steps/s")
+    logger.debug(f"Memory: {final_memory:.1f}GB / {hw['total_memory_gb']:.1f}GB")
 
     if not verbose:
         logger.setLevel(previous_level)

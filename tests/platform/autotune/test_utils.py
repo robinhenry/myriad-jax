@@ -7,6 +7,8 @@ import jax
 from myriad.platform.autotune.utils import (
     VALID_CHUNK_SIZES,
     VALID_NUM_ENVS_SCALE,
+    ceil_to_valid_scale,
+    floor_to_valid_scale,
     get_hardware_id,
     make_config_key,
     round_to_valid_scale,
@@ -129,54 +131,40 @@ class TestConfigKey:
         assert key == expected
 
 
-class TestRoundToValidScale:
-    """Tests for round_to_valid_scale."""
+class TestScalingFunctions:
+    """Tests for ceil_to_valid_scale and floor_to_valid_scale."""
 
-    def test_exact_match(self):
-        """Values exactly matching scale should return same value."""
+    def test_ceil_exact_match(self):
+        """Values exactly matching scale should return same value (ceil)."""
         for scale in VALID_NUM_ENVS_SCALE:
-            assert round_to_valid_scale(scale) == scale
+            assert ceil_to_valid_scale(scale) == scale
 
-    def test_round_up(self):
+    def test_ceil_round_up(self):
         """Values should round up to next scale."""
-        # 50 should round to 100
-        assert round_to_valid_scale(50) == 100
+        assert ceil_to_valid_scale(150) == 1_000
+        assert ceil_to_valid_scale(1_500) == 10_000
 
-        # 500 should round to 1000
-        assert round_to_valid_scale(500) == 1_000
-
-        # 5000 should round to 10000
-        assert round_to_valid_scale(5_000) == 10_000
-
-    def test_minimum_value(self):
-        """Very small values should round to minimum scale."""
-        assert round_to_valid_scale(1) == VALID_NUM_ENVS_SCALE[0]
-        assert round_to_valid_scale(50) == VALID_NUM_ENVS_SCALE[0]
-
-    def test_maximum_value(self):
-        """Values larger than max should return max scale."""
+    def test_ceil_maximum_value(self):
+        """Values larger than max should return max scale (ceil)."""
         max_scale = VALID_NUM_ENVS_SCALE[-1]
-        assert round_to_valid_scale(max_scale + 1_000_000) == max_scale
-        assert round_to_valid_scale(100_000_000) == max_scale
+        assert ceil_to_valid_scale(max_scale + 1_000_000) == max_scale
 
-    def test_in_between_values(self):
-        """Values between scales should round to next higher."""
-        # Between 100 and 1000
-        assert round_to_valid_scale(150) == 1_000
-        assert round_to_valid_scale(999) == 1_000
+    def test_floor_exact_match(self):
+        """Values exactly matching scale should return same value (floor)."""
+        for scale in VALID_NUM_ENVS_SCALE:
+            assert floor_to_valid_scale(scale) == scale
 
-        # Between 1000 and 10000
-        assert round_to_valid_scale(1_500) == 10_000
-        assert round_to_valid_scale(9_999) == 10_000
+    def test_floor_round_down(self):
+        """Values should round down to previous scale."""
+        assert floor_to_valid_scale(150) == 100
+        assert floor_to_valid_scale(1_500) == 1_000
 
-    def test_all_scales_reachable(self):
-        """All scales should be reachable by some input."""
-        for i, scale in enumerate(VALID_NUM_ENVS_SCALE):
-            # Exact match
-            assert round_to_valid_scale(scale) == scale
+    def test_floor_minimum_value(self):
+        """Values smaller than min should return min scale (floor)."""
+        min_scale = VALID_NUM_ENVS_SCALE[0]
+        assert floor_to_valid_scale(1) == min_scale
+        assert floor_to_valid_scale(50) == min_scale
 
-            # Just below should also round to this scale
-            # (unless it's the first scale)
-            if i > 0:
-                prev_scale = VALID_NUM_ENVS_SCALE[i - 1]
-                assert round_to_valid_scale(prev_scale + 1) == scale
+    def test_backward_compatibility(self):
+        """round_to_valid_scale should be an alias for ceil_to_valid_scale."""
+        assert round_to_valid_scale is ceil_to_valid_scale

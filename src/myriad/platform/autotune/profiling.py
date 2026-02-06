@@ -1,10 +1,39 @@
 """Hardware, environment, and agent profiling for auto-tuning."""
 
+import logging
 from datetime import datetime
 
 import jax
 
+from myriad.agents import get_agent_info
+
+from .testing import validate_config
 from .utils import get_hardware_id
+
+logger = logging.getLogger(__name__)
+
+# Constants for memory estimation
+DEFAULT_CPU_MEMORY_GB = 4.0
+AVAILABLE_MEMORY_FRACTION = 0.9
+
+# Agent overhead heuristics
+OVERHEAD_HEURISTICS = {
+    "off_policy": 5.0,
+    "on_policy": 2.0,
+    "classical": 0.5,
+    "unknown": 10.0,
+}
+
+
+def _get_cpu_memory_gb() -> float:
+    """Attempt to get total CPU memory in GB."""
+    try:
+        import psutil
+
+        return psutil.virtual_memory().total / (1024**3)
+    except (ImportError, Exception):
+        # Fallback to conservative default
+        return DEFAULT_CPU_MEMORY_GB
 
 
 def profile_hardware(cache: dict) -> dict:
@@ -26,14 +55,14 @@ def profile_hardware(cache: dict) -> dict:
         stats = device.memory_stats()
         total_memory_gb = stats.get("bytes_limit", 0) / (1024**3)
     else:
-        # CPU - use conservative estimate
-        total_memory_gb = 8.0
+        # CPU - use psutil or conservative estimate
+        total_memory_gb = _get_cpu_memory_gb()
 
     cache["hardware"][hardware_id] = {
         "platform": platform,
         "device": str(device),
         "total_memory_gb": total_memory_gb,
-        "available_memory_gb": total_memory_gb * 0.9,  # 90% available
+        "available_memory_gb": total_memory_gb * AVAILABLE_MEMORY_FRACTION,
         "profiled_at": datetime.now().isoformat(),
     }
 
@@ -50,11 +79,10 @@ def profile_env(env_name: str, cache: dict) -> dict:
     Returns:
         Updated cache with environment profile
     """
-    from .testing import validate_config
 
     # Test with small num_envs to measure per-env memory
     test_num_envs = 1000
-    success, _, memory_gb = validate_config(env_name, "random", test_num_envs, 64)
+    success, _, memory_gb = validate_config(env_name, test_num_envs)
 
     if not success or memory_gb is None:
         raise RuntimeError(f"Failed to profile environment {env_name}")
@@ -74,9 +102,6 @@ def profile_env(env_name: str, cache: dict) -> dict:
 def profile_agent(agent_name: str, cache: dict) -> dict:
     """Profile an agent and add to cache.
 
-    For now, uses conservative defaults based on agent type.
-    Future: Could actually instantiate and measure agent.
-
     Args:
         agent_name: Agent name
         cache: Autotune cache dict
@@ -84,24 +109,24 @@ def profile_agent(agent_name: str, cache: dict) -> dict:
     Returns:
         Updated cache with agent profile
     """
-    # Conservative defaults by agent type
-    agent_defaults = {
-        "random": {"overhead_mb": 0.1},
-        "pid": {"overhead_mb": 0.1},
-        "bangbang": {"overhead_mb": 0.1},
-        "dqn": {"overhead_mb": 2.0},
-        "pqn": {"overhead_mb": 2.0},
-        "ppo": {"overhead_mb": 5.0},
-        "sac": {"overhead_mb": 5.0},
-        "td3": {"overhead_mb": 5.0},
-    }
+    info = get_agent_info(agent_name)
 
-    overhead_mb = agent_defaults.get(agent_name, {"overhead_mb": 10.0})["overhead_mb"]
+    if info:
+        # Heuristic based on agent properties
+        if info.is_off_policy:
+            overhead_mb = OVERHEAD_HEURISTICS["off_policy"]
+        elif info.is_on_policy:
+            overhead_mb = OVERHEAD_HEURISTICS["on_policy"]
+        else:
+            overhead_mb = OVERHEAD_HEURISTICS["classical"]
+    else:
+        # Fallback for unregistered agents
+        overhead_mb = OVERHEAD_HEURISTICS["unknown"]
 
     cache["agent_profiles"][agent_name] = {
         "overhead_mb": overhead_mb,
         "profiled_at": datetime.now().isoformat(),
-        "method": "default",  # Could be "measured" in future
+        "method": "registry_heuristic",
     }
 
     return cache

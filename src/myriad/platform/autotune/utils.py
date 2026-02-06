@@ -1,7 +1,6 @@
 """Utility functions for auto-tuning."""
 
 import hashlib
-from typing import Optional
 
 import jax
 
@@ -30,7 +29,7 @@ def get_hardware_id() -> str:
         return f"CPU_{platform}"
 
 
-def make_config_key(env: str, agent: str, buffer_size: Optional[int], hardware_id: str) -> str:
+def make_config_key(env: str, agent: str, buffer_size: int | None, hardware_id: str) -> str:
     """Create cache key for a specific configuration.
 
     Args:
@@ -48,16 +47,38 @@ def make_config_key(env: str, agent: str, buffer_size: Optional[int], hardware_i
     return hashlib.md5(key.encode()).hexdigest()[:16]
 
 
-def round_to_valid_scale(num_envs: int) -> int:
-    """Round num_envs to nearest valid scale.
+def ceil_to_valid_scale(num_envs: int) -> int:
+    """Round num_envs up to nearest valid scale.
 
     Args:
         num_envs: Number of environments
 
     Returns:
-        Rounded value from VALID_NUM_ENVS_SCALE
+        Smallest value from VALID_NUM_ENVS_SCALE >= num_envs
     """
     for scale in VALID_NUM_ENVS_SCALE:
         if num_envs <= scale:
             return scale
     return VALID_NUM_ENVS_SCALE[-1]
+
+
+def floor_to_valid_scale(num_envs: int) -> int:
+    """Round num_envs down to nearest valid scale.
+
+    Args:
+        num_envs: Number of environments
+
+    Returns:
+        Largest value from VALID_NUM_ENVS_SCALE <= num_envs
+    """
+    best_scale = VALID_NUM_ENVS_SCALE[0]
+    for scale in VALID_NUM_ENVS_SCALE:
+        if scale <= num_envs:
+            best_scale = scale
+        else:
+            break
+    return best_scale
+
+
+# Alias for backward compatibility
+round_to_valid_scale = ceil_to_valid_scale

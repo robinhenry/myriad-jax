@@ -15,9 +15,7 @@ class TestConfigValidation:
         """test_config should succeed for reasonable configs."""
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=10,  # Small for fast testing
-            chunk_size=5,
             timeout_s=15.0,  # Shorter timeout
         )
 
@@ -31,9 +29,7 @@ class TestConfigValidation:
         """test_config should return throughput and memory metrics."""
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=10,  # Small for fast testing
-            chunk_size=5,
             timeout_s=15.0,  # Shorter timeout
         )
 
@@ -44,34 +40,13 @@ class TestConfigValidation:
             # Even very small configs can be < 1MB
             assert 0.0000001 < memory < 1000  # Sanity bounds (0.1KB to 1TB)
 
-    def test_different_chunk_sizes(self):
-        """test_config should work with different chunk sizes."""
-        chunk_sizes = [4, 8]  # Reduced for speed
-        num_envs = 10  # Small for fast testing
-
-        for chunk_size in chunk_sizes:
-            success, throughput, memory = validate_config(
-                env_name="cartpole-control",
-                agent_name="random",
-                num_envs=num_envs,
-                chunk_size=chunk_size,
-                timeout_s=15.0,  # Shorter timeout
-            )
-
-            # All valid configs should succeed
-            assert success is True
-            assert throughput is not None
-            assert memory is not None
-
     @pytest.mark.skip(reason="Too slow - requires OOM which takes time")
     def test_failure_returns_none(self):
         """test_config should return None metrics on failure."""
         # Use unreasonably large config that should fail
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=100_000_000,  # Unreasonably large
-            chunk_size=1000,
             timeout_s=2.0,  # Very short timeout
         )
 
@@ -88,9 +63,7 @@ class TestConfigValidation:
         start = time.time()
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=1_000_000,  # Large config
-            chunk_size=512,
             timeout_s=2.0,  # Very short timeout
         )
         elapsed = time.time() - start
@@ -104,18 +77,14 @@ class TestConfigValidation:
         # Test with small number of envs
         success1, throughput1, memory1 = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=5,  # Very small
-            chunk_size=5,
             timeout_s=15.0,
         )
 
         # Test with larger number of envs
         success2, throughput2, memory2 = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=20,  # Small but 4x larger
-            chunk_size=5,
             timeout_s=15.0,
         )
 
@@ -130,9 +99,7 @@ class TestConfigValidation:
         for env_name in envs:
             success, throughput, memory = validate_config(
                 env_name=env_name,
-                agent_name="random",
                 num_envs=10,  # Small for fast testing
-                chunk_size=5,
                 timeout_s=15.0,
             )
 
@@ -145,9 +112,7 @@ class TestConfigValidation:
         """test_config should give consistent results for same config."""
         config = {
             "env_name": "cartpole-control",
-            "agent_name": "random",
             "num_envs": 10,  # Small for fast testing
-            "chunk_size": 5,
             "timeout_s": 15.0,
         }
 
@@ -174,9 +139,7 @@ class TestConfigValidationEdgeCases:
         """test_config should work with single environment."""
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=1,
-            chunk_size=1,
             timeout_s=30.0,
         )
 
@@ -184,26 +147,21 @@ class TestConfigValidationEdgeCases:
         assert throughput is not None
         assert memory is not None
 
-    def test_small_chunk_size(self):
-        """test_config should work with small chunk sizes."""
+    def test_minimum_envs_alias(self):  # Renamed from test_small_chunk_size
+        """test_config should work with small number of environments."""
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=10,  # Small for fast testing
-            chunk_size=1,
             timeout_s=15.0,
         )
 
-        # Small chunk size may be inefficient but should work
         assert success is True
 
-    def test_large_chunk_size(self):
-        """test_config should work with large chunk sizes."""
+    def test_large_envs(self):  # Renamed from test_large_chunk_size
+        """test_config should work with large number of environments."""
         success, throughput, memory = validate_config(
             env_name="cartpole-control",
-            agent_name="random",
             num_envs=100,  # Reduced for speed
-            chunk_size=50,  # Proportionally reduced
             timeout_s=15.0,
         )
 
