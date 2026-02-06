@@ -6,22 +6,86 @@ configs without requiring detailed knowledge of Pydantic models.
 
 from typing import Any
 
-from myriad.configs.default import AgentConfig, Config, EnvConfig, EvalConfig, EvalRunConfig, RunConfig, WandbConfig
+from myriad.agents import get_agent_info
+from myriad.core.types import BaseModel
+from myriad.envs import EnvInfo, get_env_info
 
-# Default eval_max_steps for each environment
-# These match the typical episode lengths for each environment
-_ENV_DEFAULTS = {
-    "cartpole-control": {"eval_max_steps": 500},
-    "cartpole-sysid": {"eval_max_steps": 500},
-    "ccas-ccar-control": {"eval_max_steps": 1000},
-    "ccas-ccar-sysid": {"eval_max_steps": 1000},
-}
+from .default import AgentConfig, Config, EnvConfig, EvalConfig, EvalRunConfig, RunConfig, WandbConfig
 
-# Off-policy agents that require a replay buffer
-_OFF_POLICY_AGENTS = {"dqn"}
+# Default rollout steps for on-policy agents if not specified
+DEFAULT_ON_POLICY_ROLLOUT_STEPS = 2
 
-# On-policy agents that use rollout_steps
-_ON_POLICY_AGENTS = {"pqn", "ppo", "a2c"}
+
+def _distribute_kwargs(
+    kwargs: dict[str, Any],
+    run_cls: type[BaseModel],
+) -> tuple[dict, dict, dict, dict]:
+    """Distributes flattened kwargs into nested sections based on Pydantic models.
+
+    Args:
+        kwargs: The dictionary of keyword arguments to distribute.
+        run_cls: The specific RunConfig class to use for inference (:class:`RunConfig` or :class:`EvalRunConfig`).
+
+    Returns:
+        A tuple of (env_kwargs, agent_kwargs, run_kwargs, wandb_kwargs).
+    """
+    sections: dict[str, dict[str, Any]] = {
+        "env": {},
+        "agent": {},
+        "run": {},
+        "wandb": {},
+    }
+
+    # Model classes for automated parameter inference
+    inference_models: dict[str, type[BaseModel]] = {
+        "run": run_cls,
+        "wandb": WandbConfig,
+        "agent": AgentConfig,
+    }
+
+    for key, value in kwargs.items():
+        # 1. Explicit dot notation (e.g., "agent.learning_rate")
+        if "." in key:
+            prefix, attr = key.split(".", 1)
+            if prefix in sections:
+                sections[prefix][attr] = value
+                continue
+
+        # 2. Nested dicts (e.g., wandb={"project": "myriad"})
+        if isinstance(value, dict) and key in sections:
+            sections[key].update(value)
+            continue
+
+        # 3. Inference based on model fields
+        # We check Run and Wandb first since they have fixed schemas.
+        # AgentConfig has extra="allow", so we only check its explicit fields.
+        found = False
+        for name, cls in inference_models.items():
+            if key in cls.model_fields:
+                sections[name][key] = value
+                found = True
+                break
+
+        if not found:
+            # Default to agent config
+            sections["agent"][key] = value
+
+    return sections["env"], sections["agent"], sections["run"], sections["wandb"]
+
+
+def _resolve_eval_max_steps(eval_max_steps: int | None, env_info: EnvInfo | None) -> int | None:
+    """Resolves eval_max_steps from explicit > registry config_cls > model defaults."""
+    if eval_max_steps is not None:
+        return eval_max_steps
+
+    if env_info:
+        # Instantiate environment config with defaults to get its max_steps property
+        try:
+            default_env_config = env_info.config_cls()
+            return getattr(default_env_config, "max_steps", None)
+        except (TypeError, AttributeError):
+            pass
+    return None
 
 
 def create_config(
@@ -29,6 +93,7 @@ def create_config(
     agent: str,
     num_envs: int = 1,
     steps_per_env: int = 1000,
+    rollout_steps: int | None = None,
     eval_max_steps: int | None = None,
     eval_frequency: int = 100,
     eval_rollouts: int = 10,
@@ -41,53 +106,47 @@ def create_config(
     """Create a training config with sensible defaults.
 
     This is the recommended way to create configs programmatically.
-    Provides a simpler interface than constructing nested Pydantic models.
+    It provides a simpler interface than constructing nested Pydantic models.
 
     Args:
         env: Environment name (e.g., "cartpole-control", "ccas-ccar-control")
         agent: Agent name (e.g., "dqn", "pqn", "random")
-        num_envs: Number of parallel environments to run (ignored if auto_tune=True)
+        num_envs: Number of parallel environments to run (ignored if ``auto_tune=True``)
         steps_per_env: Number of steps to run per environment
+        rollout_steps: Number of steps to collect per environment before updating
+            (for on-policy agents like PQN). If None, defaults to 2 for on-policy agents.
         eval_max_steps: Maximum steps per evaluation episode.
-            If None, uses environment-specific default.
+            If None, uses environment-specific default from registry or Config models.
         eval_frequency: Evaluate every N steps (0 to disable)
         eval_rollouts: Number of episodes to run during evaluation
         log_frequency: Log training metrics every N steps
         seed: Random seed for reproducibility
         wandb_enabled: Enable Weights & Biases logging
-        auto_tune: If True, automatically find optimal scan_chunk_size for the given
-            num_envs on your hardware. First run profiles your system (~30-60s),
-            subsequent runs use cached values (<1s). Overrides scan_chunk_size parameter.
+        auto_tune: If True, automatically find optimal ``scan_chunk_size`` for the given
+            ``num_envs`` on your hardware. First run profiles your system (~30-60s),
+            subsequent runs use cached values (<1s). Overrides ``scan_chunk_size parameter.
         **kwargs: Additional config overrides. Can specify nested parameters using
-            dot notation (e.g., agent.learning_rate=1e-3) or pass dicts for
-            nested configs (e.g., wandb={"project": "my-project"}).
+            dot notation (e.g., ``agent.learning_rate=1e-3``) or pass dicts for
+            nested configs (e.g., ``wandb={"project": "my-project"}``).
 
     Returns:
-        Fully configured Config object ready for train_and_evaluate()
-
-    Examples:
-        Basic usage:
-            >>> config = create_config(
-            ...     env="cartpole-control",
-            ...     agent="dqn",
-            ...     num_envs=1000,
-            ...     steps_per_env=100,
-            ... )
-
-        Auto-tuning (recommended for optimal scan_chunk_size):
-            >>> config = create_config(
-            ...     env="cartpole-control",
-            ...     agent="dqn",
-            ...     num_envs=100_000,
-            ...     auto_tune=True,  # Automatically finds optimal scan_chunk_size
-            ... )
+        Fully configured Config object ready for :func:`~myriad.platform.train_and_evaluate`
     """
+    # Look up agent and environment info
+    agent_info = get_agent_info(agent)
+    env_info = get_env_info(env)
+
+    # Distribute nested overrides
+    env_kwargs, agent_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, RunConfig)
+
     # Auto-tune if requested
     if auto_tune:
         from myriad.platform.autotune import suggest_scan_chunk_size
 
         # Determine buffer_size for off-policy agents
-        buffer_size = kwargs.get("buffer_size") if agent in _OFF_POLICY_AGENTS else None
+        buffer_size = kwargs.get("buffer_size") or run_kwargs.get("buffer_size")
+        if buffer_size is None and agent_info and agent_info.is_off_policy:
+            buffer_size = RunConfig.model_fields["buffer_size"].default
 
         # Run auto-tuning to find optimal scan_chunk_size for the given num_envs
         optimal_chunk_size = suggest_scan_chunk_size(
@@ -100,98 +159,39 @@ def create_config(
         )
 
         # Override scan_chunk_size with auto-tuned value
-        kwargs["scan_chunk_size"] = optimal_chunk_size
-
-    # Auto-detect eval_max_steps if not provided
-    if eval_max_steps is None:
-        env_defaults = _ENV_DEFAULTS.get(env)
-        if env_defaults and "eval_max_steps" in env_defaults:
-            eval_max_steps = env_defaults["eval_max_steps"]
-        else:
-            # Fallback default
-            eval_max_steps = 1000
-
-    # Extract nested overrides
-    env_kwargs = {}
-    agent_kwargs = {}
-    run_kwargs = {}
-    wandb_kwargs = {}
-
-    for key, value in kwargs.items():
-        if key.startswith("env."):
-            env_kwargs[key.replace("env.", "")] = value
-        elif key.startswith("agent."):
-            agent_kwargs[key.replace("agent.", "")] = value
-        elif key.startswith("run."):
-            run_kwargs[key.replace("run.", "")] = value
-        elif key.startswith("wandb."):
-            wandb_kwargs[key.replace("wandb.", "")] = value
-        elif isinstance(value, dict):
-            # Handle dict-based nested configs
-            if key == "env":
-                env_kwargs.update(value)
-            elif key == "agent":
-                agent_kwargs.update(value)
-            elif key == "run":
-                run_kwargs.update(value)
-            elif key == "wandb":
-                wandb_kwargs.update(value)
-        else:
-            # Try to infer which section it belongs to
-            # Common agent params
-            if key in ["learning_rate", "batch_size", "gamma", "epsilon"]:
-                agent_kwargs[key] = value
-            # Common run params (evaluation and training)
-            elif key in [
-                "buffer_size",  # Off-policy training parameter
-                "rollout_steps",
-                "scan_chunk_size",
-                "eval_episode_save_frequency",
-                "eval_episode_save_count",
-                "eval_render_videos",
-                "eval_video_fps",
-            ]:
-                run_kwargs[key] = value
-            # Common wandb params
-            elif key in ["project", "entity", "group", "tags", "run_name"]:
-                wandb_kwargs[key] = value
-            else:
-                # Default to agent config (most flexible with extra="allow")
-                agent_kwargs[key] = value
+        run_kwargs["scan_chunk_size"] = optimal_chunk_size
 
     # Auto-configure training mode based on agent type
-    # Only set defaults if user hasn't explicitly provided them
-    if agent in _OFF_POLICY_AGENTS:
-        # Off-policy agents need buffer_size (run param) and batch_size (agent param)
-        if "buffer_size" not in run_kwargs:
-            run_kwargs["buffer_size"] = 10000  # Sensible default
-        if "batch_size" not in agent_kwargs:
-            agent_kwargs["batch_size"] = 32  # Sensible default
-    elif agent in _ON_POLICY_AGENTS:
-        # On-policy agents need rollout_steps
-        if "rollout_steps" not in run_kwargs:
-            run_kwargs["rollout_steps"] = 2  # Sensible default
+    if rollout_steps is None:
+        # Check if specified in run_kwargs via dot notation or dict
+        rollout_steps = run_kwargs.get("rollout_steps")
 
-    # Build configs
-    env_config = EnvConfig(name=env, **env_kwargs)
-    agent_config = AgentConfig(name=agent, **agent_kwargs)
-    run_config = RunConfig(
-        seed=seed,
-        num_envs=num_envs,
-        steps_per_env=steps_per_env,
-        eval_max_steps=eval_max_steps,
-        eval_frequency=eval_frequency,
-        eval_rollouts=eval_rollouts,
-        log_frequency=log_frequency,
+    if rollout_steps is None and agent_info and agent_info.is_on_policy:
+        rollout_steps = DEFAULT_ON_POLICY_ROLLOUT_STEPS
+
+    # Build run config with merged params: explicit > model defaults
+    run_params: dict[str, Any] = {
+        "seed": seed,
+        "num_envs": num_envs,
+        "steps_per_env": steps_per_env,
+        "rollout_steps": rollout_steps,
+        "eval_frequency": eval_frequency,
+        "eval_rollouts": eval_rollouts,
+        "log_frequency": log_frequency,
+        "eval_max_steps": _resolve_eval_max_steps(eval_max_steps, env_info),
         **run_kwargs,
-    )
-    wandb_config = WandbConfig(enabled=wandb_enabled, **wandb_kwargs)
+    }
+    # Clean up Nones so Pydantic uses its own field defaults where applicable
+    run_params = {k: v for k, v in run_params.items() if v is not None}
+    run_config = RunConfig(**run_params)
 
+    # Build other configs
+    wandb_params: dict[str, Any] = {"enabled": wandb_enabled, **wandb_kwargs}
     return Config(
-        env=env_config,
-        agent=agent_config,
+        env=EnvConfig(name=env, **env_kwargs),
+        agent=AgentConfig(name=agent, **agent_kwargs),
         run=run_config,
-        wandb=wandb_config,
+        wandb=WandbConfig(**wandb_params),
     )
 
 
@@ -214,85 +214,36 @@ def create_eval_config(
         agent: Agent name (e.g., "random", "dqn")
         eval_rollouts: Number of episodes to evaluate
         eval_max_steps: Maximum steps per episode.
-            If None, uses environment-specific default.
+            If None, uses environment-specific default from registry or Config models.
         seed: Random seed for reproducibility
         wandb_enabled: Enable Weights & Biases logging
         **kwargs: Additional config overrides (same as create_config)
 
     Returns:
-        Fully configured EvalConfig object ready for evaluate()
-
-    Example:
-        >>> from myriad import create_eval_config, evaluate
-        >>> config = create_eval_config(
-        ...     env="cartpole-control",
-        ...     agent="random",
-        ...     eval_rollouts=100,
-        ... )
-        >>> results = evaluate(config)
+        Fully configured EvalConfig object ready for :func:`~myriad.platform.evaluate`
     """
-    # Auto-detect eval_max_steps if not provided
-    if eval_max_steps is None:
-        env_defaults = _ENV_DEFAULTS.get(env)
-        if env_defaults and "eval_max_steps" in env_defaults:
-            eval_max_steps = env_defaults["eval_max_steps"]
-        else:
-            eval_max_steps = 1000
+    # Look up environment info
+    env_info = get_env_info(env)
 
-    # Extract nested overrides (same logic as create_config)
-    env_kwargs = {}
-    agent_kwargs = {}
-    run_kwargs = {}
-    wandb_kwargs = {}
+    # Distribute nested overrides
+    env_kwargs, agent_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, EvalRunConfig)
 
-    for key, value in kwargs.items():
-        if key.startswith("env."):
-            env_kwargs[key.replace("env.", "")] = value
-        elif key.startswith("agent."):
-            agent_kwargs[key.replace("agent.", "")] = value
-        elif key.startswith("run."):
-            run_kwargs[key.replace("run.", "")] = value
-        elif key.startswith("wandb."):
-            wandb_kwargs[key.replace("wandb.", "")] = value
-        elif isinstance(value, dict):
-            if key == "env":
-                env_kwargs.update(value)
-            elif key == "agent":
-                agent_kwargs.update(value)
-            elif key == "run":
-                run_kwargs.update(value)
-            elif key == "wandb":
-                wandb_kwargs.update(value)
-        else:
-            # Same inference logic
-            if key in ["learning_rate", "batch_size", "buffer_size", "gamma", "epsilon"]:
-                agent_kwargs[key] = value
-            elif key in [
-                "eval_episode_save_frequency",
-                "eval_episode_save_count",
-                "eval_render_videos",
-                "eval_video_fps",
-            ]:
-                run_kwargs[key] = value
-            elif key in ["project", "entity", "group", "tags", "run_name"]:
-                wandb_kwargs[key] = value
-            else:
-                agent_kwargs[key] = value
-
-    # Build configs
-    env_config = EnvConfig(name=env, **env_kwargs)
-    agent_config = AgentConfig(name=agent, **agent_kwargs)
-    eval_run_config = EvalRunConfig(
-        seed=seed,
-        eval_rollouts=eval_rollouts,
-        eval_max_steps=eval_max_steps,
+    # Build run config with merged params: explicit > model defaults
+    run_params: dict[str, Any] = {
+        "seed": seed,
+        "eval_rollouts": eval_rollouts,
+        "eval_max_steps": _resolve_eval_max_steps(eval_max_steps, env_info),
         **run_kwargs,
-    )
-    wandb_config = WandbConfig(enabled=wandb_enabled, **wandb_kwargs)
+    }
+    # Clean up Nones so Pydantic uses its own field defaults where applicable
+    run_params = {k: v for k, v in run_params.items() if v is not None}
+    eval_run_config = EvalRunConfig(**run_params)
 
+    # Build other configs
+    wandb_params: dict[str, Any] = {"enabled": wandb_enabled, **wandb_kwargs}
     return EvalConfig(
-        env=env_config,
-        agent=agent_config,
+        env=EnvConfig(name=env, **env_kwargs),
+        agent=AgentConfig(name=agent, **agent_kwargs),
         run=eval_run_config,
-        wandb=wandb_config,
+        wandb=WandbConfig(**wandb_params),
     )

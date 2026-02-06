@@ -7,16 +7,34 @@ from .environment import (
     EnvironmentParams,
     EnvironmentState,
 )
+from .registration import EnvInfo, get_env_info, list_envs, make_env, register_env
 
-# The registry mapping environment IDs to their factory functions
-ENV_REGISTRY = {
-    # Modular CartPole tasks
-    "cartpole-control": cartpole_control.make_env,
-    # Modular Pendulum tasks
-    "pendulum-control": pendulum_control.make_env,
-    # Modular CcaS-CcaR tasks
-    "ccas-ccar-control": ccas_ccar_control.make_env,
-}
+# Register built-in environments
+register_env(
+    "cartpole-control",
+    cartpole_control.make_env,
+    cartpole_control.ControlTaskConfig,
+)
+register_env(
+    "cartpole-sysid",
+    cartpole_control.make_env,
+    cartpole_control.ControlTaskConfig,
+)
+register_env(
+    "pendulum-control",
+    pendulum_control.make_env,
+    pendulum_control.ControlTaskConfig,
+)
+register_env(
+    "ccas-ccar-control",
+    ccas_ccar_control.make_env,
+    ccas_ccar_control.ControlTaskConfig,
+)
+register_env(
+    "ccas-ccar-sysid",
+    ccas_ccar_control.make_env,
+    ccas_ccar_control.ControlTaskConfig,
+)
 
 __all__ = [
     "make_env",
@@ -24,30 +42,8 @@ __all__ = [
     "EnvironmentConfig",
     "EnvironmentParams",
     "EnvironmentState",
-    "ENV_REGISTRY",
+    "EnvInfo",
+    "register_env",
+    "get_env_info",
+    "list_envs",
 ]
-
-
-def make_env(env_id: str, **kwargs) -> Environment:
-    """
-    A general factory function to create any registered environment.
-
-    Args:
-        env_id: The string identifier of the environment to create.
-        **kwargs: Keyword arguments that will be passed to the specific
-                  environment's ``make_env()`` function.
-
-    Returns:
-        An instance of the requested Environment.
-
-    Raises:
-        ValueError: If the env_id is not found in the registry.
-    """
-    if env_id not in ENV_REGISTRY:
-        raise ValueError(
-            f"Environment '{env_id}' not found in the registry. Available environments: {list(ENV_REGISTRY.keys())}"
-        )
-
-    # Look up the factory function and call it with the provided arguments
-    make_fn = ENV_REGISTRY[env_id]
-    return make_fn(**kwargs)  # type: ignore[operator]

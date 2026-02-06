@@ -1,6 +1,6 @@
 import pytest
 
-from myriad.agents import AGENT_REGISTRY, make_agent
+from myriad.agents import list_agents, make_agent
 from myriad.agents.agent import Agent
 from myriad.core.spaces import Box, Discrete
 
@@ -27,7 +27,7 @@ def test_error_message_lists_available_agents():
         make_agent("bad_agent")
 
     error_msg = str(exc_info.value)
-    for agent_id in AGENT_REGISTRY:
+    for agent_id in list_agents():
         assert agent_id in error_msg
 
 
@@ -36,7 +36,7 @@ def test_registry_completeness():
     action_space = Box(low=-1.0, high=1.0, shape=(1,))
     discrete_space = Discrete(n=2)
 
-    for agent_id in AGENT_REGISTRY:
+    for agent_id in list_agents():
         # RL agents need discrete spaces
         if agent_id in ("dqn", "pqn"):
             agent = make_agent(agent_id, action_space=discrete_space)

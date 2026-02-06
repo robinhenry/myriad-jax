@@ -44,7 +44,7 @@ class AgentConfig(BaseModel):
     model_config = {"extra": "allow"}
 
     name: str
-    batch_size: PositiveInt | None = None  # for off-policy agents: size of batches sampled from replay buffer
+    batch_size: PositiveInt = 32  # for off-policy agents: size of batches sampled from replay buffer
 
 
 class EnvConfig(BaseModel):
@@ -75,7 +75,7 @@ class EvalConfigBase(BaseModel):
 
     # --- Evaluation Parameters ---
     eval_rollouts: PositiveInt = 10  # number of episodes to average over
-    eval_max_steps: PositiveInt  # REQUIRED: environment-specific, max steps per episode
+    eval_max_steps: PositiveInt = 1000  # max steps per episode
 
     # --- Episode Saving (optional) ---
     # Episodes saved to: outputs/DATE/TIME/episodes/ (hard-coded, relative to Hydra run dir)
@@ -111,7 +111,7 @@ class RunConfig(EvalConfigBase):
     steps_per_env: PositiveInt  # REQUIRED: experiment-specific, defines run length
     num_envs: PositiveInt = 1  # default to single environment
     scan_chunk_size: PositiveInt = 256  # reasonable default for most cases
-    buffer_size: PositiveInt | None = None  # for off-policy algorithms: replay buffer capacity
+    buffer_size: PositiveInt = 10000  # for off-policy algorithms: replay buffer capacity
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation (training-specific) ---
@@ -242,16 +242,11 @@ def config_to_eval_config(config: Config) -> EvalConfig:
     Returns:
         EvalConfig with evaluation-relevant fields extracted
     """
+    # RunConfig inherits from EvalConfigBase, so we can initialize
+    # EvalRunConfig with its parameters. Pydantic will ignore the
+    # training-specific fields that aren't in EvalRunConfig.
     return EvalConfig(
-        run=EvalRunConfig(
-            seed=config.run.seed,
-            eval_rollouts=config.run.eval_rollouts,
-            eval_max_steps=config.run.eval_max_steps,
-            eval_episode_save_frequency=config.run.eval_episode_save_frequency,
-            eval_episode_save_count=config.run.eval_episode_save_count,
-            eval_render_videos=config.run.eval_render_videos,
-            eval_video_fps=config.run.eval_video_fps,
-        ),
+        run=EvalRunConfig(**config.run.model_dump()),
         agent=config.agent,
         env=config.env,
         wandb=config.wandb,
