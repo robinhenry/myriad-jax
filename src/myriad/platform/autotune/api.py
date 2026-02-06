@@ -296,7 +296,7 @@ def suggest_config(
         logger.debug(f"  ✓ (Works at {throughput/1e6:.1f}M steps/s)")
 
     # Probe upward to find actual max
-    max_envs, optimal_chunk, final_throughput, final_memory = probe_upward(env, agent, estimated_max, suggested_chunk)
+    max_envs, optimal_chunk, final_throughput, final_memory = probe_upward(env, estimated_max, suggested_chunk)
 
     # Cache the validated result
     cache["validated_configs"][config_key] = {

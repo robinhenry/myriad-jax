@@ -69,7 +69,6 @@ def estimate_max_envs(
 
 def probe_upward(
     env_name: str,
-    agent_name: str,
     start_envs: int,
     chunk_size: int,
 ) -> tuple[int, int, float, float]:
@@ -77,7 +76,6 @@ def probe_upward(
 
     Args:
         env_name: Environment name
-        agent_name: Agent name
         start_envs: Starting number of environments (conservative)
         chunk_size: Scan chunk size
 
