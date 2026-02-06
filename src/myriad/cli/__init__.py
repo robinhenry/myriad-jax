@@ -21,15 +21,15 @@ Examples:
     myriad sweep
 
     # Render saved episodes to video
-    myriad render episodes/ --fps 60
+    myriad render episodes/ --env cartpole-control --fps 60
 """
 
 import click
 
-from myriad.cli.evaluate import evaluate
-from myriad.cli.render import render
-from myriad.cli.sweep import sweep
-from myriad.cli.train import train
+from .evaluate import evaluate
+from .render import render
+from .sweep import sweep
+from .train import train
 
 
 @click.group()

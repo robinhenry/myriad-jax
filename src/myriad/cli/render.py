@@ -7,29 +7,18 @@ import logging
 from pathlib import Path
 
 import click
-import numpy as np
-
-from myriad.envs.bio.ccas_ccar.rendering import render_ccas_ccar_frame
-from myriad.envs.classic.cartpole.rendering import render_cartpole_frame
-from myriad.utils.rendering import render_episode_to_video
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-
-ENV_RENDERERS = {
-    "cartpole": render_cartpole_frame,
-    "ccas_ccar": render_ccas_ccar_frame,
-}
 
 
 @click.command()
 @click.argument("input_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--env",
-    type=click.Choice(list(ENV_RENDERERS.keys())),
-    default="cartpole",
-    help="Environment type (determines rendering function)",
+    type=str,
+    required=True,
+    help="Environment type (e.g., 'cartpole-control', 'ccas-ccar-control')",
 )
 @click.option(
     "--output-dir",
@@ -76,8 +65,20 @@ def render(
     - A single .npz episode file
     - A directory containing .npz episode files
     """
-    # Get the appropriate renderer for this environment
-    render_frame_fn = ENV_RENDERERS[env]
+    import numpy as np
+
+    from myriad.envs import get_env_info, list_envs
+    from myriad.utils.rendering import render_episode_to_video
+
+    # Get the appropriate renderer for this environment from the registry
+    env_info = get_env_info(env)
+    if not env_info or not env_info.render_frame_fn:
+        available = ", ".join(list_envs())
+        logger.error(f"No renderer available for environment '{env}'.")
+        logger.info(f"Available environments: {available}")
+        return
+
+    render_frame_fn = env_info.render_frame_fn
 
     # Find all episode files to render
     if input_path.is_file():
