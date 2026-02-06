@@ -42,14 +42,20 @@ class PhysicsState(NamedTuple):
         time: Current simulation time (minutes)
         H: CcaS-CcaR protein concentration (molecules)
         F: GFP reporter protein concentration (molecules)
+        next_reaction_time: Scheduled time of next reaction (minutes).
+            Set to inf when no reaction is pending (sample fresh).
+            Preserved across RL step boundaries for physical accuracy.
     """
 
     time: Array
     H: Array
     F: Array
+    next_reaction_time: Array
 
     def to_array(self) -> Array:
         """Convert to flat array for NN-based agents.
+
+        Note: next_reaction_time is excluded as it's internal bookkeeping.
 
         Returns:
             Array of shape (3,) with [time, H, F]
@@ -64,14 +70,38 @@ class PhysicsState(NamedTuple):
             arr: Array of shape (3,) with [time, H, F]
 
         Returns:
-            PhysicsState instance
+            PhysicsState instance (next_reaction_time defaults to inf)
         """
         chex.assert_shape(arr, (3,))
         return cls(
             time=arr[0],  # type: ignore
             H=arr[1],  # type: ignore
             F=arr[2],  # type: ignore
+            next_reaction_time=jnp.array(jnp.inf),
         )
+
+    @classmethod
+    def create(
+        cls,
+        time: Array,
+        H: Array,
+        F: Array,
+        next_reaction_time: Array | None = None,
+    ) -> "PhysicsState":
+        """Factory method to create PhysicsState with default next_reaction_time.
+
+        Args:
+            time: Current simulation time
+            H: CcaS-CcaR protein concentration
+            F: GFP reporter protein concentration
+            next_reaction_time: Optional pending reaction time (defaults to inf)
+
+        Returns:
+            PhysicsState instance
+        """
+        if next_reaction_time is None:
+            next_reaction_time = jnp.array(jnp.inf)
+        return cls(time=time, H=H, F=F, next_reaction_time=next_reaction_time)
 
 
 @struct.dataclass
@@ -197,36 +227,48 @@ def step_physics(
     action: Array,
     params: PhysicsParams,
     config: PhysicsConfig,
+    previous_action: Array,
+    interval_start: Array,
 ) -> PhysicsState:
-    """Pure physics step using Gillespie algorithm.
+    """Pure physics step using a discrete Gillespie algorithm.
 
-    Runs Gillespie simulation from current time until ``time + timestep_minutes``.
-
-    The Gillespie algorithm provides exact stochastic simulation of the chemical
-    reaction network by sampling reaction times and events from the master equation.
+    Runs Gillespie simulation from current time until the end of the current
+    interval (``interval_start + timestep_minutes``). Intervals are at fixed absolute
+    times (0, 5, 10, 15...), matching the physical setup where observations and
+    actions occur at regular intervals.
 
     Args:
         key: RNG key for stochastic simulation
-        state: Current physical state (time, H, F)
-        action: Discrete action {0, 1} representing light input
-        params: Dynamic parameters (unused, reserved for future randomization)
+        state: Current physical state (``time``, ``H``, ``F``, ``next_reaction_time``)
+        action: Discrete action ``{0, 1}`` representing light input
+        params: Dynamic parameters
         config: Static physics constants
+        previous_action: Action from previous timestep. If different from action,
+            the pending reaction time is invalidated (propensities changed).
+        interval_start: Start time of current interval (``t * timestep_minutes``).
 
     Returns:
-        Next physical state after one timestep_minutes duration
+        Next physical state after simulating until interval end
     """
-    return run_gillespie_loop(
+    target_time = interval_start + config.timestep_minutes
+
+    final_state, next_reaction_time = run_gillespie_loop(
         key=key,
         initial_state=state,
         action=action,
         config=config,
-        target_time=state.time + config.timestep_minutes,
+        target_time=target_time,
         max_steps=config.max_gillespie_steps,
         compute_propensities_fn=compute_propensities,
         apply_reaction_fn=apply_reaction,
         get_time_fn=lambda s: s.time,
         update_time_fn=lambda s, t: s._replace(time=t),
+        pending_reaction_time=state.next_reaction_time,
+        previous_action=previous_action,
     )
+
+    # Store the pending reaction time for the next step
+    return final_state._replace(next_reaction_time=next_reaction_time)
 
 
 def create_physics_params(**kwargs) -> PhysicsParams:

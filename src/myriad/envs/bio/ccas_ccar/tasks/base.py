@@ -99,7 +99,7 @@ def sample_initial_physics(key: PRNGKey) -> PhysicsState:
     Returns:
         PhysicsState initialized to zero concentrations
     """
-    return PhysicsState(
+    return PhysicsState.create(
         time=jnp.array(0.0),
         H=jnp.array(0.0),
         F=jnp.array(0.0),

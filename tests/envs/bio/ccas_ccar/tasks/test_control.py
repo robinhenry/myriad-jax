@@ -60,42 +60,43 @@ class TestObservations:
 
     def test_obs_shape(self):
         """Test observation shape calculation."""
-        # Obs: [F, U, F_target[0:n_horizon+1]]
+        # Obs: [F, F_target[0:n_horizon+1]]
         config = ControlTaskConfig(n_horizon=1)
-        assert get_obs_shape(config) == (4,)  # [F, U, F_target[0], F_target[1]]
+        assert get_obs_shape(config) == (3,)  # [F, F_target[0], F_target[1]]
 
         config = ControlTaskConfig(n_horizon=0)
-        assert get_obs_shape(config) == (3,)  # [F, U, F_target[0]]
+        assert get_obs_shape(config) == (2,)  # [F, F_target[0]]
 
         config = ControlTaskConfig(n_horizon=3)
-        assert get_obs_shape(config) == (6,)  # [F, U, F_target[0:4]]
+        assert get_obs_shape(config) == (5,)  # [F, F_target[0:4]]
 
     def test_get_obs(self):
         """Test observation extraction."""
         config = ControlTaskConfig(n_horizon=1)
-        physics = PhysicsState(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(25.0))
+        physics = PhysicsState.create(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(25.0))
         F_target = jnp.array([30.0, 30.0])
-        state = ControlTaskState(physics=physics, t=jnp.array(2), F_target=F_target)
+        state = ControlTaskState(physics=physics, t=jnp.array(2), U=jnp.array(0), F_target=F_target)
 
         obs = get_obs(state, ControlTaskParams(), config)
 
         assert isinstance(obs, CcasCcarControlObs)
         assert jnp.isclose(obs.F_normalized, 25.0 / config.task.F_obs_normalizer)
-        assert obs.U_obs == 0.0
-        assert obs.to_array().shape == (4,)
+        # Obs: [F, F_target[0], F_target[1]]
+        assert obs.to_array().shape == (3,)
 
     def test_obs_normalization(self):
         """Test that observations are properly normalized."""
         task_config = TaskConfig(max_steps=288, F_obs_normalizer=100.0)
         config = ControlTaskConfig(n_horizon=0, task=task_config)
 
-        physics = PhysicsState(time=jnp.array(0.0), H=jnp.array(0.0), F=jnp.array(50.0))
-        state = ControlTaskState(physics=physics, t=jnp.array(0), F_target=jnp.array([75.0]))
+        physics = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(0.0), F=jnp.array(50.0))
+        state = ControlTaskState(physics=physics, t=jnp.array(0), U=jnp.array(0), F_target=jnp.array([75.0]))
 
         obs = get_obs(state, ControlTaskParams(), config)
 
-        assert jnp.isclose(obs[0], 0.5)  # 50/100
-        assert jnp.isclose(obs[2], 0.75)  # 75/100
+        # Obs: [F_normalized, F_target_normalized]
+        assert jnp.isclose(obs.F_normalized, 0.5)  # 50/100
+        assert jnp.isclose(obs.F_target[0], 0.75)  # 75/100
 
 
 class TestActionSpace:
@@ -179,17 +180,23 @@ class TestStepFunction:
 
     @pytest.fixture
     def state(self):
-        physics = PhysicsState(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(20.0))
+        physics = PhysicsState.create(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(20.0))
         F_target = jnp.array([25.0, 25.0])
-        return ControlTaskState(physics=physics, t=jnp.array(2), F_target=F_target)
+        return ControlTaskState(physics=physics, t=jnp.array(2), U=jnp.array(0), F_target=F_target)
 
     def test_step_advances_time(self, state, params, config):
-        """Test that step advances physics time."""
+        """Test that step advances physics time within the timestep interval.
+
+        Time stays at the last reaction time, preserving Gillespie semantics.
+        """
         key = jax.random.PRNGKey(0)
         obs, next_state, reward, done, info = _step(key, state, jnp.array(1), params, config)
 
-        expected_time = state.physics.time + config.physics.timestep_minutes
-        assert jnp.isclose(next_state.physics.time, expected_time)
+        target_time = state.physics.time + config.physics.timestep_minutes
+        # Time should be within the interval
+        assert next_state.physics.time >= state.physics.time
+        assert next_state.physics.time <= target_time
+        # Timestep counter should always increment
         assert next_state.t == state.t + 1
 
     def test_step_reward_computation(self, state, params, config):

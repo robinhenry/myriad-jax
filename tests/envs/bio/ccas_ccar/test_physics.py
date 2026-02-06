@@ -48,7 +48,7 @@ def test_physics_config_defaults(config: PhysicsConfig):
 
 def test_propensities_all_positive(config: PhysicsConfig):
     """Test that propensities are always non-negative."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     for action in [0, 1]:
         propensities = compute_propensities(state, jnp.array(action), config)
@@ -58,7 +58,7 @@ def test_propensities_all_positive(config: PhysicsConfig):
 
 def test_propensities_light_dependence(config: PhysicsConfig):
     """Test that CcaSR activation depends on light input (action)."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     prop_dark = compute_propensities(state, jnp.array(0), config)
     prop_light = compute_propensities(state, jnp.array(1), config)
@@ -73,8 +73,8 @@ def test_propensities_concentration_dependence(config: PhysicsConfig):
     """Test that propensities depend on protein concentrations."""
     action = jnp.array(1)
 
-    state_low = PhysicsState(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
-    state_high = PhysicsState(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
+    state_low = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
+    state_high = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
 
     prop_low = compute_propensities(state_low, action, config)
     prop_high = compute_propensities(state_high, action, config)
@@ -97,7 +97,7 @@ def test_propensities_concentration_dependence(config: PhysicsConfig):
 )
 def test_reaction_effects(reaction_idx: int, H_delta: int, F_delta: int):
     """Test that each reaction modifies state correctly."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
     next_state = apply_reaction(state, jnp.array(reaction_idx))
 
     expected_H = state.H + H_delta
@@ -108,7 +108,7 @@ def test_reaction_effects(reaction_idx: int, H_delta: int, F_delta: int):
 
 def test_reactions_dont_go_negative():
     """Test that reactions cannot produce negative concentrations."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(0.0), F=jnp.array(0.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(0.0), F=jnp.array(0.0))
 
     next_state_H = apply_reaction(state, jnp.array(1))  # H deactivation
     next_state_F = apply_reaction(state, jnp.array(4))  # F dilution
@@ -118,44 +118,61 @@ def test_reactions_dont_go_negative():
 
 
 def test_step_physics_advances_time(params: PhysicsParams, config: PhysicsConfig):
-    """Test that physics step advances time by timestep_minutes."""
+    """Test that physics step advances time within the timestep interval.
+
+    Time stays at the last reaction time within the interval, not at the exact
+    target time. This preserves proper Gillespie semantics where only reaction
+    events advance time.
+    """
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    action = jnp.array(1)
+    previous_action = jnp.array(0)
+    interval_start = jnp.array(0.0)
 
-    next_state = step_physics(key, state, jnp.array(1), params, config)
+    next_state = step_physics(key, state, action, params, config, previous_action, interval_start)
 
-    expected_time = state.time + config.timestep_minutes
-    assert jnp.allclose(next_state.time, expected_time)
+    target_time = interval_start + config.timestep_minutes
+    # Time should be within the interval [initial_time, target_time]
+    assert next_state.time >= state.time, "Time should not go backwards"
+    assert next_state.time <= target_time, "Time should not exceed target"
 
 
 def test_step_physics_light_effects(params: PhysicsParams, config: PhysicsConfig):
     """Test that light on/off affects H dynamics over multiple steps."""
     # Light on should increase H
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
-    for _ in range(20):
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
+    action = jnp.array(1)
+    for t in range(20):
         key, subkey = jax.random.split(key)
-        state = step_physics(subkey, state, jnp.array(1), params, config)
+        interval_start = jnp.array(t * config.timestep_minutes)
+        state = step_physics(subkey, state, action, params, config, action, interval_start)
     assert state.H > 10.0, "Light on should increase H over time"
 
     # Light off should decrease H
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
-    for _ in range(50):
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
+    action = jnp.array(0)
+    for t in range(50):
         key, subkey = jax.random.split(key)
-        state = step_physics(subkey, state, jnp.array(0), params, config)
+        interval_start = jnp.array(t * config.timestep_minutes)
+        state = step_physics(subkey, state, action, params, config, action, interval_start)
     assert state.H < 100.0, "Light off should decrease H over time"
 
 
 def test_step_physics_produces_finite_values(params: PhysicsParams, config: PhysicsConfig):
     """Test that physics step always produces finite protein concentrations."""
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    previous_action = jnp.array(0)
 
-    for _ in range(50):
+    for t in range(50):
         key, subkey1, subkey2 = jax.random.split(key, 3)
         action = jax.random.choice(subkey1, jnp.array([0, 1]))
-        state = step_physics(subkey2, state, action, params, config)
+        interval_start = jnp.array(t * config.timestep_minutes)
+        state = step_physics(subkey2, state, action, params, config, previous_action, interval_start)
+        previous_action = action
 
         assert jnp.isfinite(state.time)
         assert jnp.isfinite(state.H) and state.H >= 0
@@ -164,7 +181,7 @@ def test_step_physics_produces_finite_values(params: PhysicsParams, config: Phys
 
 def test_physics_is_stochastic(params: PhysicsParams, config: PhysicsConfig):
     """Test that physics produces different results with different random seeds."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
     action = jnp.array(1)
 
     # Run with different seeds for multiple steps
@@ -179,17 +196,20 @@ def test_physics_is_stochastic(params: PhysicsParams, config: PhysicsConfig):
         state1 = step_physics(subkey1, state1, action, params, config)
         state2 = step_physics(subkey2, state2, action, params, config)
 
-    # Time advances deterministically
-    assert jnp.allclose(state1.time, state2.time)
-    # Concentrations should diverge
-    concentrations_differ = not jnp.allclose(state1.H, state2.H) or not jnp.allclose(state1.F, state2.F)
-    assert concentrations_differ, "Stochastic simulation should produce different trajectories"
+    # Trajectories should diverge (time and/or concentrations)
+    # With preserved reaction times, even time is stochastic
+    trajectories_differ = (
+        not jnp.allclose(state1.H, state2.H)
+        or not jnp.allclose(state1.F, state2.F)
+        or not jnp.allclose(state1.time, state2.time)
+    )
+    assert trajectories_differ, "Stochastic simulation should produce different trajectories"
 
 
 def test_physics_jit_compilation(params: PhysicsParams, config: PhysicsConfig):
     """Test that physics step can be JIT compiled."""
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     jitted_step = jax.jit(step_physics, static_argnames=["config"])
     next_state = jitted_step(key, state, jnp.array(1), params, config)
@@ -206,6 +226,7 @@ def test_physics_vmap_compatibility(params: PhysicsParams, config: PhysicsConfig
         time=jnp.zeros(batch_size),
         H=jnp.linspace(10.0, 100.0, batch_size),
         F=jnp.full(batch_size, 30.0),
+        next_reaction_time=jnp.full(batch_size, jnp.inf),
     )
 
     keys = jax.random.split(jax.random.PRNGKey(0), batch_size)
@@ -217,6 +238,7 @@ def test_physics_vmap_compatibility(params: PhysicsParams, config: PhysicsConfig
     assert next_states.time.shape == (batch_size,)
     assert next_states.H.shape == (batch_size,)
     assert next_states.F.shape == (batch_size,)
+    assert next_states.next_reaction_time.shape == (batch_size,)
     assert jnp.all(jnp.isfinite(next_states.time))
     assert jnp.all(jnp.isfinite(next_states.H))
     assert jnp.all(jnp.isfinite(next_states.F))
@@ -233,7 +255,7 @@ def test_parameter_sensitivity(
     param: str, value_low: float, value_high: float, reaction_idx: int, expected_higher: str
 ):
     """Test that changing parameters affects reaction propensities as expected."""
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(90.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(90.0), F=jnp.array(30.0))
     action = jnp.array(1)
 
     config_low = PhysicsConfig(**{param: value_low})
@@ -252,7 +274,7 @@ def test_parameter_sensitivity(
 def test_both_actions_produce_valid_physics(action: int, params: PhysicsParams, config: PhysicsConfig):
     """Test that both actions produce valid physics updates."""
     key = jax.random.PRNGKey(0)
-    state = PhysicsState(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     next_state = step_physics(key, state, jnp.array(action), params, config)
 
@@ -263,7 +285,7 @@ def test_both_actions_produce_valid_physics(action: int, params: PhysicsParams, 
 
 def test_state_to_array_from_array():
     """Test PhysicsState array conversion methods."""
-    state = PhysicsState(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    state = PhysicsState.create(time=jnp.array(10.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     arr = state.to_array()
     assert arr.shape == (3,)

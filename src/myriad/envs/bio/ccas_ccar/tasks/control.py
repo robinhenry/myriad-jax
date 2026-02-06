@@ -37,11 +37,13 @@ class ControlTaskState(NamedTuple):
     Attributes:
         physics: The underlying physics state (time, H, F)
         t: Current timestep counter (RL timesteps, not Gillespie time)
+        U: Previous action (light input from last timestep, for action-toggle detection)
         F_target: Target trajectory for GFP expression [current, t+1, ..., t+n_horizon]
     """
 
     physics: PhysicsState
     t: Array
+    U: Array
     F_target: Array
 
 
@@ -104,8 +106,18 @@ def _step(
         info: Dict with current protein levels for logging
     """
     # Step the pure physics using Gillespie algorithm
+    # Pass previous action and interval start for action-toggle handling
     key_physics, key_target = jax.random.split(key)
-    next_physics = step_physics(key_physics, state.physics, action, params.physics, config.physics)
+    interval_start = state.t * config.physics.timestep_minutes
+    next_physics = step_physics(
+        key_physics,
+        state.physics,
+        action,
+        params.physics,
+        config.physics,
+        previous_action=state.U,
+        interval_start=interval_start,
+    )
 
     # Increment timestep
     t_next = state.t + 1
@@ -132,8 +144,8 @@ def _step(
     # Use the current target (first element of F_target array)
     reward = -jnp.abs(next_physics.F - state.F_target[0])
 
-    # Create next state
-    next_state = ControlTaskState(physics=next_physics, t=t_next, F_target=F_target_next)
+    # Create next state (store current action as U for next step's toggle detection)
+    next_state = ControlTaskState(physics=next_physics, t=t_next, U=action, F_target=F_target_next)
 
     # Extract observation
     obs_next = get_obs(next_state, params, config)
@@ -186,7 +198,8 @@ def _reset(
         lambda: generate_constant_target(config.n_horizon, config.F_target_constant),
     )
 
-    state = ControlTaskState(physics=physics, t=jnp.array(0), F_target=F_target)
+    # Initialize U=0 (no light). First action toggle (if any) will reset time to 0.
+    state = ControlTaskState(physics=physics, t=jnp.array(0), U=jnp.array(0), F_target=F_target)
     obs = get_obs(state, params, config)
 
     return obs, state
