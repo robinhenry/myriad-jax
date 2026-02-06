@@ -47,7 +47,7 @@ def main() -> None:
 main.add_command(train)
 main.add_command(evaluate)
 main.add_command(sweep)
-main.add_command(render, name="render")
+main.add_command(render)
 
 
 __all__ = ["main", "train", "evaluate", "sweep", "render"]
