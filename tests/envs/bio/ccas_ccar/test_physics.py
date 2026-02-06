@@ -190,11 +190,12 @@ def test_physics_is_stochastic(params: PhysicsParams, config: PhysicsConfig):
     state1 = state
     state2 = state
 
-    for _ in range(10):
+    for t in range(10):
         key1, subkey1 = jax.random.split(key1)
         key2, subkey2 = jax.random.split(key2)
-        state1 = step_physics(subkey1, state1, action, params, config)
-        state2 = step_physics(subkey2, state2, action, params, config)
+        interval_start = jnp.array(t * config.timestep_minutes)
+        state1 = step_physics(subkey1, state1, action, params, config, action, interval_start)
+        state2 = step_physics(subkey2, state2, action, params, config, action, interval_start)
 
     # Trajectories should diverge (time and/or concentrations)
     # With preserved reaction times, even time is stochastic
@@ -210,9 +211,11 @@ def test_physics_jit_compilation(params: PhysicsParams, config: PhysicsConfig):
     """Test that physics step can be JIT compiled."""
     key = jax.random.PRNGKey(0)
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    action = jnp.array(1)
+    interval_start = jnp.array(0.0)
 
     jitted_step = jax.jit(step_physics, static_argnames=["config"])
-    next_state = jitted_step(key, state, jnp.array(1), params, config)
+    next_state = jitted_step(key, state, action, params, config, action, interval_start)
 
     assert jnp.isfinite(next_state.time)
     assert jnp.isfinite(next_state.H)
@@ -231,9 +234,11 @@ def test_physics_vmap_compatibility(params: PhysicsParams, config: PhysicsConfig
 
     keys = jax.random.split(jax.random.PRNGKey(0), batch_size)
     actions = jnp.ones(batch_size, dtype=jnp.int32)
+    previous_actions = jnp.zeros(batch_size, dtype=jnp.int32)
+    interval_starts = jnp.zeros(batch_size)
 
-    vmap_step = jax.vmap(step_physics, in_axes=(0, 0, 0, None, None))
-    next_states = vmap_step(keys, states, actions, params, config)
+    vmap_step = jax.vmap(step_physics, in_axes=(0, 0, 0, None, None, 0, 0))
+    next_states = vmap_step(keys, states, actions, params, config, previous_actions, interval_starts)
 
     assert next_states.time.shape == (batch_size,)
     assert next_states.H.shape == (batch_size,)
@@ -275,8 +280,9 @@ def test_both_actions_produce_valid_physics(action: int, params: PhysicsParams, 
     """Test that both actions produce valid physics updates."""
     key = jax.random.PRNGKey(0)
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
+    interval_start = jnp.array(0.0)
 
-    next_state = step_physics(key, state, jnp.array(action), params, config)
+    next_state = step_physics(key, state, jnp.array(action), params, config, jnp.array(action), interval_start)
 
     assert jnp.isfinite(next_state.time)
     assert jnp.isfinite(next_state.H) and next_state.H >= 0

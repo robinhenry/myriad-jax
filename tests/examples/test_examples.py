@@ -16,12 +16,13 @@ import pytest
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples" / "original"
 
 
-def run_example(script_name: str, timeout: int = 60) -> subprocess.CompletedProcess:
+def run_example(script_name: str, timeout: int = 60, cwd: Path | None = None) -> subprocess.CompletedProcess:
     """Run an example script and return the result.
 
     Args:
         script_name: Name of the script in examples/ directory
         timeout: Maximum time to allow script to run (seconds)
+        cwd: Working directory for the script (defaults to examples/ parent)
 
     Returns:
         CompletedProcess with returncode, stdout, stderr
@@ -32,7 +33,7 @@ def run_example(script_name: str, timeout: int = 60) -> subprocess.CompletedProc
         capture_output=True,
         text=True,
         timeout=timeout,
-        cwd=EXAMPLES_DIR.parent,  # Run from repo root
+        cwd=cwd or EXAMPLES_DIR.parent,  # Default to repo root or provided dir
     )
     return result
 
@@ -40,23 +41,23 @@ def run_example(script_name: str, timeout: int = 60) -> subprocess.CompletedProc
 class TestQuickStartExamples:
     """Test quick start examples that should run fast."""
 
-    def test_07_quickstart_simple(self):
+    def test_07_quickstart_simple(self, tmp_path):
         """Test the main quickstart example from docs/index.md."""
-        result = run_example("07_quickstart_simple.py", timeout=120)
+        result = run_example("07_quickstart_simple.py", timeout=120, cwd=tmp_path)
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Training complete!" in result.stdout
         assert "TrainingResults" in result.stdout
 
-    def test_05_random_baseline(self):
+    def test_05_random_baseline(self, tmp_path):
         """Test random baseline evaluation (no training needed)."""
-        result = run_example("05_random_baseline.py", timeout=60)
+        result = run_example("05_random_baseline.py", timeout=60, cwd=tmp_path)
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Evaluation completed!" in result.stdout
         assert "EvaluationResults" in result.stdout
 
-    def test_08_episode_collection(self):
+    def test_08_episode_collection(self, tmp_path):
         """Test episode collection example."""
-        result = run_example("08_episode_collection.py", timeout=60)
+        result = run_example("08_episode_collection.py", timeout=60, cwd=tmp_path)
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Collected" in result.stdout
         assert "episodes" in result.stdout
@@ -66,22 +67,22 @@ class TestQuickStartExamples:
 class TestTrainingExamples:
     """Test training examples (slower, may skip in CI)."""
 
-    def test_02_basic_training(self):
+    def test_02_basic_training(self, tmp_path):
         """Test basic training example."""
-        result = run_example("02_basic_training.py", timeout=120)
+        result = run_example("02_basic_training.py", timeout=120, cwd=tmp_path)
         # Accept exit code 0 even if serialization warning occurs
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Training completed!" in result.stdout
 
-    def test_03_advanced_training(self):
+    def test_03_advanced_training(self, tmp_path):
         """Test advanced training with custom hyperparameters."""
-        result = run_example("03_advanced_training.py", timeout=120)
+        result = run_example("03_advanced_training.py", timeout=120, cwd=tmp_path)
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Training completed!" in result.stdout
 
-    def test_09_periodic_episode_saving(self):
+    def test_09_periodic_episode_saving(self, tmp_path):
         """Test periodic episode saving during training."""
-        result = run_example("09_periodic_episode_saving.py", timeout=120)
+        result = run_example("09_periodic_episode_saving.py", timeout=120, cwd=tmp_path)
         assert result.returncode == 0, f"Script failed with stderr: {result.stderr}"
         assert "Training complete" in result.stdout
         assert "Episodes saved" in result.stdout
@@ -90,9 +91,9 @@ class TestTrainingExamples:
 class TestLegacyExamples:
     """Test backward compatibility examples."""
 
-    def test_01_classical_control(self):
+    def test_01_classical_control(self, tmp_path):
         """Test YAML-based example (should run with existing YAML)."""
-        result = run_example("01_classical_control.py", timeout=60)
+        result = run_example("01_classical_control.py", timeout=60, cwd=tmp_path)
         # Accept both success and graceful failure (file not found is OK)
         if result.returncode != 0:
             # Should fail gracefully if YAML doesn't exist
@@ -100,17 +101,17 @@ class TestLegacyExamples:
         else:
             assert "Results summary" in result.stdout
 
-    def test_04_evaluate_pretrained(self):
+    def test_04_evaluate_pretrained(self, tmp_path):
         """Test pre-trained agent evaluation (gracefully skips if no file)."""
-        result = run_example("04_evaluate_pretrained.py", timeout=60)
+        result = run_example("04_evaluate_pretrained.py", timeout=60, cwd=tmp_path)
         # This should exit gracefully (exit code 0) even if file doesn't exist
         assert result.returncode == 0, f"Script should exit gracefully, got stderr: {result.stderr}"
         # Should either evaluate or skip
         assert ("Evaluation completed" in result.stdout) or ("Skipping" in result.stdout)
 
-    def test_06_yaml_config(self):
+    def test_06_yaml_config(self, tmp_path):
         """Test YAML config loading (gracefully handles missing file)."""
-        result = run_example("06_yaml_config.py", timeout=60)
+        result = run_example("06_yaml_config.py", timeout=60, cwd=tmp_path)
         # Should exit gracefully with exit code 0 or 1
         assert result.returncode in [0, 1], f"Unexpected failure: {result.stderr}"
         # Should handle missing file gracefully
@@ -122,19 +123,19 @@ class TestLegacyExamples:
 class TestExamplesEndToEnd:
     """Integration tests that run multiple examples in sequence."""
 
-    def test_train_and_evaluate_workflow(self):
+    def test_train_and_evaluate_workflow(self, tmp_path):
         """Test complete workflow: train, save (attempt), evaluate.
 
         Note: This test expects save_agent to fail due to JAX/Flax serialization
         limitations, but the scripts should handle this gracefully.
         """
         # 1. Train an agent (will attempt to save but likely fail)
-        train_result = run_example("02_basic_training.py", timeout=120)
+        train_result = run_example("02_basic_training.py", timeout=120, cwd=tmp_path)
         assert train_result.returncode == 0
         assert "Training completed!" in train_result.stdout
 
         # 2. Try to evaluate pre-trained (will skip if save failed, which is expected)
-        eval_result = run_example("04_evaluate_pretrained.py", timeout=60)
+        eval_result = run_example("04_evaluate_pretrained.py", timeout=60, cwd=tmp_path)
         assert eval_result.returncode == 0, f"Eval script should exit gracefully: {eval_result.stderr}"
         # Should gracefully skip (save likely failed due to pickle limitations)
         assert ("Evaluation completed" in eval_result.stdout) or ("Skipping" in eval_result.stdout)
