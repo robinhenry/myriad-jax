@@ -24,6 +24,7 @@ Reference:
 
 from typing import NamedTuple
 
+import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -46,6 +47,31 @@ class PhysicsState(NamedTuple):
     time: Array
     H: Array
     F: Array
+
+    def to_array(self) -> Array:
+        """Convert to flat array for NN-based agents.
+
+        Returns:
+            Array of shape (3,) with [time, H, F]
+        """
+        return jnp.stack([self.time, self.H, self.F])
+
+    @classmethod
+    def from_array(cls, arr: Array) -> "PhysicsState":
+        """Create state from flat array.
+
+        Args:
+            arr: Array of shape (3,) with [time, H, F]
+
+        Returns:
+            PhysicsState instance
+        """
+        chex.assert_shape(arr, (3,))
+        return cls(
+            time=arr[0],  # type: ignore
+            H=arr[1],  # type: ignore
+            F=arr[2],  # type: ignore
+        )
 
 
 @struct.dataclass
@@ -190,9 +216,7 @@ def step_physics(
     Returns:
         Next physical state after one timestep_minutes duration
     """
-    # Use shared Gillespie loop implementation
-    # This eliminates code duplication across environments
-    final_state = run_gillespie_loop(
+    return run_gillespie_loop(
         key=key,
         initial_state=state,
         action=action,
@@ -204,8 +228,6 @@ def step_physics(
         get_time_fn=lambda s: s.time,
         update_time_fn=lambda s, t: s._replace(time=t),
     )
-
-    return final_state
 
 
 def create_physics_params(**kwargs) -> PhysicsParams:

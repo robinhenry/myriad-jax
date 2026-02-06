@@ -16,9 +16,6 @@ from ..physics import PhysicsState
 class CcasCcarControlObs(NamedTuple):
     """CcaS-CcaR control task observation with named fields.
 
-    Provides semantic access to observation components for classical controllers
-    while supporting efficient conversion to arrays for neural networks.
-
     Note: This is a partially observable system. The agent does not directly
     observe the light input (U) or the CcaSR concentration (H).
 
@@ -58,47 +55,6 @@ class CcasCcarControlObs(NamedTuple):
         )
 
 
-class CcasCcarSysIDObs(NamedTuple):
-    """CcaS-CcaR SysID task observation with named fields.
-
-    Simpler observation for system identification without target tracking.
-
-    Attributes:
-        F_normalized: GFP fluorescence normalized by F_obs_normalizer
-        U_obs: Light input observation (always 0.0 - not directly observable)
-        padding: Zero padding for consistent observation shape
-    """
-
-    F_normalized: Array
-    U_obs: Array
-    padding: Array
-
-    def to_array(self) -> Array:
-        """Convert to flat array for NN-based agents.
-
-        Returns:
-            Array of shape (3,) with [F, U, 0]
-        """
-        return jnp.array([self.F_normalized, self.U_obs, self.padding])
-
-    @classmethod
-    def from_array(cls, arr: Array) -> "CcasCcarSysIDObs":
-        """Create observation from flat array.
-
-        Args:
-            arr: Array of shape (3,) with [F, U, 0]
-
-        Returns:
-            CcasCcarSysIDObs instance
-        """
-        chex.assert_shape(arr, (3,))
-        return cls(
-            F_normalized=arr[0],  # type: ignore
-            U_obs=arr[1],  # type: ignore
-            padding=arr[2],  # type: ignore
-        )
-
-
 @struct.dataclass
 class TaskConfig:
     """Base configuration shared by all CcaS-CcaR tasks.
@@ -114,7 +70,6 @@ def check_termination(t: Array, task_config: TaskConfig) -> Array:
     """Common termination check for CcaS-CcaR tasks.
 
     The episode terminates when maximum timesteps is reached.
-    Unlike CartPole, there are no early termination conditions based on state.
 
     Args:
         t: Current timestep counter
@@ -123,15 +78,14 @@ def check_termination(t: Array, task_config: TaskConfig) -> Array:
     Returns:
         done: 1.0 if terminated, 0.0 otherwise (as float for JAX compatibility)
     """
-    done = (t >= task_config.max_steps).astype(jnp.float32)
-    return done
+    return (t >= task_config.max_steps).astype(jnp.float32)
 
 
 def get_ccas_ccar_action_space() -> Discrete:
     """Get the discrete action space for CcaS-CcaR.
 
     Returns:
-        Discrete space with 2 actions: 0 (light off) and 1 (light on)
+        Discrete space with 2 actions: 0 (red light) and 1 (green light)
     """
     return Discrete(n=2)
 
@@ -139,11 +93,11 @@ def get_ccas_ccar_action_space() -> Discrete:
 def sample_initial_physics(key: PRNGKey) -> PhysicsState:
     """Sample initial physics state.
 
-    For the gene circuit, we start from zero proteins at time 0.
-    This represents the initial state before any light input.
+    We start from zero proteins at time 0. This represents the initial state before
+    any light input.
 
     Args:
-        key: RNG key for random initialization (unused currently)
+        key: RNG key for random initialization (unused)
 
     Returns:
         PhysicsState initialized to zero concentrations

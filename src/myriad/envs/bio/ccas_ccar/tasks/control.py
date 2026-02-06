@@ -97,11 +97,11 @@ def _step(
         config: Task configuration (static)
 
     Returns:
-        obs_next: Next observation (CcasCcarControlObs with named fields)
+        obs_next: Next observation
         next_state: Next task state
         reward: Reward (negative absolute error)
         done: Termination flag (1.0 if done, 0.0 otherwise)
-        info: Dict with current F value for logging
+        info: Dict with current protein levels for logging
     """
     # Step the pure physics using Gillespie algorithm
     key_physics, key_target = jax.random.split(key)
