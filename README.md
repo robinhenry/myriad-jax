@@ -19,8 +19,6 @@
 
 **Documentation:** [docs](https://myriad-jax.readthedocs.io)
 
-> *TODO*: add 2 videos here: (a) learned agent on ccas-ccar, (b) real-time system ID via active learning.
-
 ## At a Glance
 
 Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where uncertainty, stochasticity, and rare discrete dynamics play a big role and force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor*). 🛝
