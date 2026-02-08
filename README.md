@@ -1,7 +1,7 @@
 # Myriad
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/pypi/v/myriad-jax)](https://pypi.org/project/myriad-jax/)
+[![PyPI version](https://badge.fury.io/py/myriad-jax.svg)](https://pypi.org/project/myriad-jax/)
 [![CI](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml/badge.svg)](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/robinhenry/myriad-jax/branch/main/graph/badge.svg)](https://codecov.io/gh/robinhenry/myriad-jax)
 [![Documentation](https://github.com/robinhenry/myriad-jax/actions/workflows/docs.yml/badge.svg)](https://github.com/robinhenry/myriad-jax/actions/workflows/docs.yml)
