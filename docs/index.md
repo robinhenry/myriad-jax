@@ -8,34 +8,43 @@
 :hidden:
 :caption: Introduction
 
-01_getting-started/01_philosophy
-01_getting-started/02_installation
-01_getting-started/03_quickstart
+introduction/motivation_philosophy
+introduction/installation
+introduction/quickstart
 ```
 
 ```{toctree}
 :maxdepth: 2
 :hidden:
-:caption: Core Concepts
+:caption: User Guide
 
-02_user-guide/01_concepts
-02_user-guide/02_custom_env
-02_user-guide/03_custom_agent
-02_user-guide/04_running_experiments
-02_user-guide/05_auto_tuning
-02_user-guide/06_benchmarking
+user_guide/core_concepts
+user_guide/basic_usage
+user_guide/running_experiments
+user_guide/tips
 ```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+:caption: Advanced
+
+advanced/custom_task
+advanced/auto_tuning
+advanced/benchmarking
+```
+
 
 ```{toctree}
 :maxdepth: 2
 :hidden:
 :caption: API Reference
 
-03_api/overview
-03_api/envs/index
-03_api/agents/index
-03_api/platform
-03_api/core
+api/overview
+api/envs/index
+api/agents/index
+api/platform
+api/core
 ```
 
 ```{toctree}
@@ -49,9 +58,8 @@ tutorials/quickstart.ipynb
 ```{toctree}
 :maxdepth: 2
 :hidden:
-:caption: Contributing
+:caption: Development
 
-04_contributing/01_setup
-04_contributing/02_configuration
-04_contributing/03_architecture
+Github <https://github.com/robinhenry/myriad-jax>
+development/guidelines
 ```
