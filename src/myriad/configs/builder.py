@@ -124,7 +124,7 @@ def create_config(
         wandb_enabled: Enable Weights & Biases logging
         auto_tune: If True, automatically find optimal ``scan_chunk_size`` for the given
             ``num_envs`` on your hardware. First run profiles your system (~30-60s),
-            subsequent runs use cached values (<1s). Overrides ``scan_chunk_size parameter.
+            subsequent runs use cached values (<1s). Overrides ``scan_chunk_size`` parameter.
         **kwargs: Additional config overrides. Can specify nested parameters using
             dot notation (e.g., ``agent.learning_rate=1e-3``) or pass dicts for
             nested configs (e.g., ``wandb={"project": "my-project"}``).
