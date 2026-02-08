@@ -1,7 +1,7 @@
 [project]
 name = "myriad-jax"
 version = "0.1.0"
-description = "Platform for large-scale high-throughput control & decision-making experiments"
+description = "JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems."
 authors = [
     { name = "Robin Henry", email = "robin.henry012@gmail.com" },
 ]

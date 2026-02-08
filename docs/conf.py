@@ -50,6 +50,11 @@ myst_enable_extensions = [
 
 myst_heading_anchors = 3  # Auto-generate anchors for headings up to level 3
 
+# -- Notebook execution (myst-nb) -------------------------------------------
+nb_execution_mode = "force"  # Always re-execute so docs reflect current code
+nb_execution_timeout = 120  # Per-cell timeout in seconds
+nb_execution_raise_on_error = True  # Fail the build on notebook errors
+
 # Templates path
 templates_path = ["_templates"]
 
