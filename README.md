@@ -17,19 +17,19 @@
 > [!WARNING]
 > **Myriad is in early active development — we're building in public.** APIs will change, documentation has gaps, and some features are still taking shape. Things will improve over time. Contributions, feedback, and ideas are very welcome — [open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk).
 
-**Documentation:** [docs](TO ADD)
+**Documentation:** [docs](https://myriad-jax.readthedocs.io)
 
 > *TODO*: add 2 videos here: (a) learned agent on ccas-ccar, (b) real-time system ID via active learning.
 
 ## At a Glance
 
-Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where uncertainty, stochasticity, and rare discrete dynamics play a big role and force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor, THIRD EXAMPLE?*). 🛝
+Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where uncertainty, stochasticity, and rare discrete dynamics play a big role and force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor*). 🛝
 
 It's a **ready-to-go experimental platform**. You can use one of the already-implemented tasks/problems, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
 
 Last but not least, it yields results that are 100% reproducible. 🌟
 
-> *Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](TODO: LINK_TO_DOCS_HERE).*
+> *Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](https://myriad-jax.readthedocs.io/en/latest/introduction/motivation_philosophy.html).*
 
 
 ### Key Features
@@ -85,7 +85,7 @@ pip install "myriad-jax[gpu]"
 ### From source (for development)
 
 ```bash
-git clone https://github.com/robinhenry/myriad-jax.git
+git clone git@github.com:robinhenry/myriad-jax.git
 cd myriad-jax
 poetry install --with dev,gpu
 ```
