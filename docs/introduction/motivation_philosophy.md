@@ -41,7 +41,7 @@ One way to tackle this time bottleneck is to do more experiments (and therefore 
 
 #### 2. Don't get stuck on toy problems
 
-Toy problems play a very important role in the development of new methods and algorithms, and they should always be our first port of call in such cases (the first Myriad task we implemented was the classic RL Cartpole problem!).
+Toy problems play a very important role in the development of new methods and algorithms, and they should always be our first port of call in such cases (the first Myriad tasks we implemented were the classic RL Cartpole and Pendulum problems!).
 
 However, we try to remember that the real world is often much more complex than our toy problems. And if we stop at toy problems, our methods and algorithms are unlikely to get used in the lab.
 

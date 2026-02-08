@@ -1,336 +1,88 @@
-# Core Concepts
+# Core concepts
 
-## The Three-Layer Architecture
+## Three-layer design
 
-Myriad separates your experiment into three independent layers. This architecture isn't just an implementation detail—it's designed to match how you actually think about scientific problems.
-
-### Why this matters for your work
-
-Traditional RL platforms force you to bundle physics, task objectives, and learning algorithms into a single monolithic environment. This creates friction:
-
-**Scenario: You want to run two experiments on the same physical system**
-
-- **Experiment A**: Control the system to a target state (classic RL)
-- **Experiment B**: Learn the unknown parameters of the system (active learning)
-
-In Gym or Gymnax, you'd duplicate the entire physics implementation twice. In Myriad, you write the physics once and wrap it with different task definitions.
-
-**Scenario: You want to use model-based planning**
-
-Your MPC controller needs direct access to the dynamics function to simulate trajectories. Traditional environments hide this inside `step()`, forcing you to either hack around the API or rewrite the physics.
-
-In Myriad, the physics layer is directly callable—no environment wrapper needed.
-
-## The layers
+Every experiment has three layers:
 
 ```
 ┌─────────────────────────────────────┐
-│   Layer C: Learner                  │
-│   (DQN, PQN, Random)                │
-│   - Agnostic to physics/tasks       │
+│  Learner  (DQN, PQN, PID, Random)  │  Picks actions from observations
 └──────────────┬──────────────────────┘
-               │ Standard interface
                │ obs, reward, done
 ┌──────────────▼──────────────────────┐
-│   Layer B: Task Wrapper             │
-│   (Control, SysID)                  │
-│   - Observation function            │
-│   - Reward function                 │
-│   - Termination logic               │
+│  Task  (Control)                    │  Defines obs, reward, termination
 └──────────────┬──────────────────────┘
-               │ Direct function call
                │ state, action → next_state
 ┌──────────────▼──────────────────────┐
-│   Layer A: Pure Physics             │
-│   (step_physics)                    │
-│   - Stateless dynamics              │
-│   - No RL concepts                  │
+│  Physics  (step_physics)            │  Pure dynamics, no RL concepts
 └─────────────────────────────────────┘
 ```
 
-## Layer A: Pure physics
+**Physics** is a stateless pure function: `(state, action, params, config) → next_state`. No rewards, no termination. You can call it directly for MPC planning or test it against analytical solutions.
 
-**Responsibility:** Implement ground truth dynamics without any RL concepts.
+**Task** wraps physics with what the agent observes (`get_obs`), what it optimizes (reward), and when episodes end. Multiple tasks can share the same physics — you write the dynamics once.
 
-**Requirements:**
+**Learner** only sees `(obs, reward, done)`. It doesn't know or care what system it's controlling.
 
-- Stateless pure function
-- All parameters passed as arguments (no class attributes)
-- Works with `jax.vmap` and `jax.jit`
-- No rewards, observations, or termination logic
+Layers talk to each other through Python Protocols (structural typing), not inheritance.
 
-**Example from `cartpole/physics.py`:**
+## JAX-native
+
+Environment and agent functions are pure. They work with `jax.jit`, `jax.vmap`, and `jax.lax.scan`.
+
+- **State is data.** Environment state is a NamedTuple PyTree, not a mutable object.
+- **No Python control flow in JIT paths.** Use `jax.lax.cond` / `jax.lax.select`, not `if/else`.
+- **Observations are NamedTuples.** Classical controllers access fields by name (`obs.theta`). Neural networks call `obs.to_array()`. Both work with `vmap`.
+
+One `vmap` call gets you 100,000 parallel environments on a single GPU.
+
+## Evaluation vs. training
+
+Two execution paths.
+
+**Evaluation** runs a fixed agent (no learning):
 
 ```python
-def step_physics(
-    state: PhysicsState,
-    action: chex.Array,
-    params: PhysicsParams,
-    config: PhysicsConfig,
-) -> PhysicsState:
-    """Pure physics step. No task logic."""
-    x, x_dot, theta, theta_dot = state
-
-    # Convert action to force
-    force = (2 * action - 1) * config.force_magnitude
-
-    # Cart-pole dynamics (equations of motion)
-    cos_theta = jnp.cos(theta)
-    sin_theta = jnp.sin(theta)
-    temp = (force + config.pole_mass * config.pole_length * theta_dot**2 * sin_theta) / total_mass
-    theta_acc = (config.gravity * sin_theta - cos_theta * temp) / denominator
-    x_acc = temp - config.pole_mass * config.pole_length * theta_acc * cos_theta / total_mass
-
-    # Euler integration
-    return PhysicsState(
-        x + config.dt * x_dot,
-        x_dot + config.dt * x_acc,
-        theta + config.dt * theta_dot,
-        theta_dot + config.dt * theta_acc
-    )
+config = create_eval_config("cartpole-control", "pid", kp=1.0)
+results = evaluate(config)
 ```
 
-**Benefits:**
-
-- MPC planners can call `step_physics()` directly for trajectory optimization
-- Test physics against analytical solutions
-- Reuse across multiple tasks
-
-## Layer B: Task wrapper
-
-**Responsibility:** Wrap physics with task-specific logic.
-
-**Defines:**
-
-- What the agent observes (`get_obs()`)
-- What the agent optimizes (reward function)
-- When episodes end (termination conditions)
-
-**Example: Control task from `cartpole/tasks/control.py`:**
+**Training** trains an RL agent, then evaluates:
 
 ```python
-def _step(
-    key: chex.PRNGKey,
-    state: ControlTaskState,
-    action: chex.Array,
-    params: ControlTaskParams,
-    config: ControlTaskConfig,
-) -> Tuple[obs, next_state, reward, done, info]:
-    # 1. Apply pure physics (Layer A)
-    next_physics = step_physics(
-        state.physics, action, params.physics, config.physics
-    )
-
-    # 2. Compute reward (task-specific)
-    reward = jnp.float32(1.0)  # +1 per step
-
-    # 3. Check termination (task-specific)
-    done = check_termination(next_physics, t_next, config.task)
-
-    # 4. Get observation (task-specific)
-    obs = get_cartpole_obs(next_physics)
-
-    return obs, next_state, reward, done, {}
+config = create_config("cartpole-control", "dqn", num_envs=64, steps_per_env=2000)
+results = train_and_evaluate(config)
 ```
 
-**Same physics, different tasks:**
+Both return a `Results` object with metrics. Pass `return_episodes=True` to `evaluate()` to get per-step trajectory data.
 
-The CartPole physics is reused by two task wrappers:
+## What's in the box
 
-| Task | File | Observation | Reward | Purpose |
-|------|------|-------------|--------|---------|
-| Control | `tasks/control.py` | `PhysicsState` (fully observable) | +1 per step | Standard balancing |
-| SysID | `tasks/sysid.py` | `PhysicsState` (fully observable) | State change magnitude | Parameter learning |
+### Environments
 
-Both wrappers call the same `step_physics()` function from Layer A.
+Environments are registered as `{system}-{task}`:
 
-### Observations: NamedTuples for Semantic Access
-
-Myriad uses **NamedTuples for observations** instead of raw arrays. This provides semantic access for classical controllers while maintaining JAX compatibility.
-
-**Fully Observable Systems** (observation = state):
-
-For systems where the agent observes the complete state, we directly reuse the physics state type. This eliminates duplication and makes observability explicit.
+| Environment | System | Task |
+|---|---|---|
+| `cartpole-control` | Classic cart-pole | Balance the pole |
+| `pendulum-control` | Classic pendulum | Swing up and balance |
+| `ccas-ccar-control` | Gene circuit (CcaS/CcaR) | Track target protein expression |
 
 ```python
-# CartPole: Fully observable
-class PhysicsState(NamedTuple):
-    x: chex.Array         # Cart position
-    x_dot: chex.Array     # Cart velocity
-    theta: chex.Array     # Pole angle
-    theta_dot: chex.Array # Pole angular velocity
+from myriad.envs import make_env, list_envs
 
-    def to_array(self) -> chex.Array:
-        """Convert to array for neural networks."""
-        return jnp.stack([self.x, self.x_dot, self.theta, self.theta_dot])
-
-# Observation IS PhysicsState
-def get_obs(state: ControlTaskState) -> PhysicsState:
-    return state.physics  # Direct passthrough!
-```
-
-**Partially Observable Systems** (observation ≠ state):
-
-For systems with limited observability, we create dedicated observation types:
-
-```python
-# CCAS-CCAR: Partially observable gene circuit
-class CcasCcarControlObs(NamedTuple):
-    F_normalized: chex.Array   # Observable: GFP fluorescence
-    U_obs: chex.Array         # Not observable: light input (set to 0)
-    F_target: chex.Array      # External reference
-
-    def to_array(self) -> chex.Array:
-        return jnp.concatenate([
-            jnp.array([self.F_normalized, self.U_obs]),
-            self.F_target
-        ])
-
-# PhysicsState has more information (time, H, F) than observation
-```
-
-**Benefits:**
-
-- **Classical controllers**: Access by name (`obs.theta > threshold`)
-- **Neural networks**: Call `.to_array()` for flat input
-- **Type safety**: IDE autocomplete and static checking
-- **Self-documenting**: Field names explain semantics
-- **JAX native**: Works with `vmap`, `scan`, etc.
-
-**Example usage:**
-
-```python
-# Classical PID controller
-obs, state = env.reset(key, params, config)
-error = obs.theta - target_theta  # Named access!
-action = kp * error + kd * obs.theta_dot
-
-# Neural network agent
-obs_array = obs.to_array()  # Convert once
-action = policy_network(obs_array)
-
-# Batch processing (JAX handles NamedTuples automatically)
-obs_batch, states = jax.vmap(env.reset)(keys, params_batch, config)
-# obs_batch.theta.shape == (batch_size,) ✓
-```
-
-## Layer C: Learner
-
-**Responsibility:** Standard RL algorithms that interact via the environment protocol.
-
-**Key point:** The agent doesn't know whether it's solving control or system ID. It just sees:
-
-```python
-obs, state, reward, done, info = env.step(state, action, key)
-```
-
-**Implemented agents:**
-
-- `dqn.py`: Deep Q-Network (discrete actions)
-- `pqn.py`: Parametric Q-Network (continuous actions)
-- `random.py`: Baseline
-
-All agents work with all tasks automatically.
-
-## The benefit: Modularity
-
-```python
-from myriad.envs.cartpole import physics
-
-# Task 1: Balancing (control)
-control_env = make_env("cartpole-control")
-dqn_agent = make_agent("dqn", ...)
-metrics = train(control_env, dqn_agent)
-
-# Task 2: Parameter learning (SysID)
-sysid_env = make_env("cartpole-sysid")
-pqn_agent = make_agent("pqn", ...)
-metrics = train(sysid_env, pqn_agent)
-
-# Task 3: Model-based planning (direct physics access)
-def mpc_planner(state, horizon=10):
-    """Use physics directly for trajectory optimization."""
-    best_actions = optimize_trajectory(
-        physics_fn=physics.step_physics,
-        initial_state=state,
-        horizon=horizon
-    )
-    return best_actions[0]
-```
-
-### Compatibility wrappers
-
-For compatibility with frameworks expecting array observations (Gym, Gymnasium), use the wrapper utilities:
-
-```python
-from myriad.envs.wrappers import make_array_obs_env
-
-# Create environment with NamedTuple observations
+list_envs()           # all registered names
 env = make_env("cartpole-control")
-
-# Wrap to convert observations to arrays automatically
-array_env = make_array_obs_env(env)
-
-# Now observations are arrays
-obs, state = array_env.reset(key, params, config)
-assert obs.shape == (4,)  # Array instead of PhysicsState
-
-# The wrapper calls .to_array() internally
-# Original env still has NamedTuple observations
 ```
 
-This is useful when integrating with libraries that expect the Gym API.
+### Agents
 
-## File organization
+| Agent | Type | Actions |
+|---|---|---|
+| `random` | Classical | Any |
+| `bangbang` | Classical | Discrete |
+| `pid` | Classical | Continuous |
+| `dqn` | RL | Discrete |
+| `pqn` | RL | Continuous |
 
-```
-src/myriad/envs/cartpole/
-├── physics.py          # Layer A: Pure dynamics
-└── tasks/
-    ├── control.py      # Layer B: Control wrapper
-    └── sysid.py        # Layer B: SysID wrapper
-
-src/myriad/agents/
-├── dqn.py              # Layer C: DQN agent
-├── pqn.py              # Layer C: PQN agent
-└── random.py           # Layer C: Random agent
-```
-
-## Protocol-based design
-
-Layers communicate via Python Protocols (structural typing), not inheritance:
-
-```python
-# Layer B must implement this protocol
-class Environment(Protocol):
-    def reset(self, state, key, config): ...
-    def step(self, key, state, action, params, config): ...
-    def get_obs(self, state, config): ...
-
-# Layer C must implement this protocol
-class Agent(Protocol):
-    def select_action(self, params, obs, key): ...
-    def update(self, params, transition): ...
-```
-
-This allows maximum implementation flexibility while maintaining type safety.
-
-## A concrete example: Gene circuit control
-
-The gene circuit environment (`ccas_ccar_v1`) demonstrates why this separation is valuable for messy real-world systems.
-
-**The physics layer** implements:
-
-- Protein expression dynamics (ODEs)
-- Cell growth mechanics
-- Stochastic division events
-
-**Multiple task wrappers** reuse this physics:
-
-- **Control task**: Keep protein expression at a target level
-- **SysID task**: Infer unknown reaction rates from observations
-- **Active learning task**: Design experiments to maximize information gain
-
-**Any agent** works with any task automatically. The gene circuit uses the same DQN and PQN agents as CartPole—no special modifications required.
-
-If you can cleanly separate these concerns for a system with multi-timescale dynamics, stochastic behavior, and 10+ unknown parameters, you can handle your system too.
+Classical agents don't learn — use `create_eval_config` + `evaluate`. RL agents need `create_config` + `train_and_evaluate`.

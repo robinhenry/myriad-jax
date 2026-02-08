@@ -8,6 +8,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from myriad.envs.classic.cartpole.physics import PhysicsState
 from myriad.envs.classic.cartpole.tasks.control import ControlTaskConfig, ControlTaskState
 
 
@@ -115,3 +116,22 @@ def render_cartpole_frame(
     plt.close(fig)
 
     return frame
+
+
+def render_cartpole_frame_from_obs(obs: np.ndarray) -> np.ndarray:
+    """Render a cartpole frame from a flat observation array.
+
+    Convenience wrapper that reconstructs structured state from the observation
+    vector and delegates to ``render_cartpole_frame``.
+
+    Args:
+        obs: Observation array of shape (4,) with [x, x_dot, theta, theta_dot].
+
+    Returns:
+        RGB image array with shape (height, width, 3) and dtype uint8.
+    """
+    state = ControlTaskState(
+        physics=PhysicsState.from_array(obs),
+        t=np.int32(0),
+    )
+    return render_cartpole_frame(state, ControlTaskConfig())

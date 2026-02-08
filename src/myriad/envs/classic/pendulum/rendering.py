@@ -8,6 +8,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from myriad.envs.classic.pendulum.physics import PhysicsState
 from myriad.envs.classic.pendulum.tasks.control import ControlTaskConfig, ControlTaskState
 
 
@@ -109,3 +110,23 @@ def render_pendulum_frame(
     plt.close(fig)
 
     return frame
+
+
+def render_pendulum_frame_from_obs(obs: np.ndarray) -> np.ndarray:
+    """Render a pendulum frame from a flat observation array.
+
+    Convenience wrapper that reconstructs structured state from the observation
+    vector and delegates to ``render_pendulum_frame``.
+
+    Args:
+        obs: Observation array of shape (3,) with [cos_theta, sin_theta, theta_dot].
+
+    Returns:
+        RGB image array with shape (height, width, 3) and dtype uint8.
+    """
+    theta = np.arctan2(float(obs[1]), float(obs[0]))
+    state = ControlTaskState(
+        physics=PhysicsState(theta=theta, theta_dot=float(obs[2])),
+        t=np.int32(0),
+    )
+    return render_pendulum_frame(state, ControlTaskConfig())
