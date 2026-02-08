@@ -52,15 +52,15 @@ Many amazing RL x JAX tools already exist! Here's how we believe Myriad compleme
 | :--- | :--- | :--- | :--- |
 | **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
 | **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
-| **Differentiable?** | No | Yes | **Yes** |
+<!-- | **Differentiable?** | No | Yes | **Yes** | -->
 | **System ID** | Low support | Low support | **Key focus** |
 | **Primary Goal** | Agent Performance | Fast Physical Control | **Active Learning & Stochastic Control** |
 
-* **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
+* **Use [Gymnasium](https://gymnasium.farama.org/), [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAIROx/JaxMARL) if:** you need standard baselines, classic RL environments, or multi-agent RL.
 
 * **Use [Brax](https://github.com/google/brax) if:** you need massive-scale robotics or contact dynamics.
 
-* **Use [Gymnasium](https://gymnasium.farama.org/), [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAI/JaxMARL) if:** you need standard baselines or multi-agent RL.
+* **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
 
 
 ## Installation
