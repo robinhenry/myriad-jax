@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -10,28 +9,25 @@ from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
 
-from .episode_manager import save_episodes_to_disk
 from .initialization import initialize_environment_and_agent
-from .logging_utils import maybe_init_wandb, wandb
-from .metrics_logger import MetricsLogger
-from .scan_utils import (
+from .logging import SessionLogger
+from .runners import (
     make_chunk_runner,
     make_chunked_collector,
     make_on_policy_chunk_runner,
 )
-from .shared import TrainingEnvState
-from .step_functions import (
+from .steps import (
     make_collection_step_fn,
     make_eval_rollout_fn,
     make_sample_transition,
     make_train_step_fn,
 )
-from .types import TrainingResults
+from .types import TrainingEnvState, TrainingResults
 
 logger = logging.getLogger(__name__)
 
 
-def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
+def _run_training_loop(config: Config, session_logger: SessionLogger) -> TrainingResults:
     """Executes the training loop and returns metrics + trained agent.
 
     Returns:
@@ -49,7 +45,8 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     # Initialize parallel environments
     env_keys = jax.random.split(env_key, config.run.num_envs)
     obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
-    # Convert observations to arrays for platform (lean approach: single conversion point)
+
+    # Convert observations to arrays
     obs_array = jax.vmap(to_array)(obs)
     training_env_states = TrainingEnvState(env_state=env_states, obs=obs_array)
 
@@ -59,6 +56,10 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     sample_obs = jax.tree.map(lambda x: x[0], obs)
     agent_state = agent.init(agent_key, sample_obs, agent.params)
 
+    # Build shared jitted primitives first
+    eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
+    chunk_size = max(1, config.run.scan_chunk_size)
+
     # Determine training mode and initialize accordingly
     use_rollout_training = config.run.rollout_steps is not None
 
@@ -66,15 +67,15 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         # On-policy training (e.g., PPO, A2C, PQN): no replay buffer needed
         replay_buffer = None
         buffer_state = None
-        assert config.run.rollout_steps is not None  # should always be true if use_rollout_training is true
+        assert config.run.rollout_steps is not None  # type narrowing for mypy
 
         # Create chunked collector for efficient rollout collection
         collection_step_fn = make_collection_step_fn(agent, env, config.run.num_envs)
-        rollout_fn = make_chunked_collector(
-            collection_step_fn=collection_step_fn,
-            num_envs=config.run.num_envs,
-            chunk_size=config.run.scan_chunk_size,
-            total_steps=config.run.rollout_steps,
+        rollout_fn = make_chunked_collector(collection_step_fn=collection_step_fn, total_steps=config.run.rollout_steps)
+        # Create chunk runner that batches multiple rollout-update cycles
+        run_chunk_fn = make_on_policy_chunk_runner(
+            rollout_fn=rollout_fn,
+            agent=agent,
         )
     else:
         # Off-policy training (e.g., DQN): use replay buffer
@@ -85,32 +86,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         sample_obs_array = to_array(sample_obs)
         sample_transition = make_sample_transition(buffer_key, sample_obs_array, action_space)
         buffer_state = replay_buffer.init(sample_transition)
-        rollout_fn = None
-
-    # Build jitted execution primitives
-    eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
-
-    # Chunking configuration:
-    # - scan_chunk_size controls how many rollout-update cycles (on-policy) or training steps (off-policy)
-    #   are batched into a single jax.lax.scan
-    # - Larger chunks reduce Python overhead but increase XLA compile time
-    # - chunk_size is ensured to be at least 1 to prevent errors
-    chunk_size = max(1, config.run.scan_chunk_size)
-
-    if use_rollout_training:
-        # On-policy: create chunk runner that batches multiple rollout-update cycles
-        # This avoids returning to Python after each rollout, addressing the regression
-        # from the previous platform where everything was in a single jitted scan
-        assert rollout_fn is not None  # Guaranteed by use_rollout_training logic
-        assert config.run.rollout_steps is not None  # Guaranteed by use_rollout_training logic
-        run_chunk_fn = make_on_policy_chunk_runner(
-            rollout_fn=rollout_fn,
-            agent=agent,
-            chunk_size=chunk_size,
-            rollout_steps=config.run.rollout_steps,
-        )
-    else:
-        # Off-policy: create chunk runner that batches multiple step-update cycles
+        # Create chunk runner that batches multiple step-update cycles
         train_step_fn = make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
         batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
         run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
@@ -119,9 +95,6 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
     steps_per_env = config.run.steps_per_env
     log_frequency = config.run.log_frequency
     eval_frequency = config.run.eval_frequency
-
-    # Initialize unified metrics logger
-    metrics_logger = MetricsLogger(wandb_run=wandb_run)
 
     # Initialize progress bar for training loop
     steps_completed = 0
@@ -229,7 +202,7 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
         # Log training metrics (handles both local capture and W&B)
         should_log = steps_completed % log_frequency == 0
         if should_log:
-            metrics_logger.log_training_step(
+            session_logger.log_training_step(
                 global_step=global_step,
                 steps_per_env=steps_completed,
                 metrics_history=metrics_history,
@@ -258,9 +231,14 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
                 else:
                     eval_results_host[name] = jax.device_get(value)
 
-            # Log metrics (always)
-            metrics_logger.log_evaluation(
-                global_step=global_step, steps_per_env=steps_completed, eval_results=eval_results_host
+            # Log evaluation (handles metrics + episode saving + W&B in one call)
+            save_count = config.run.eval_episode_save_count or config.run.eval_rollouts
+            session_logger.log_evaluation(
+                global_step=global_step,
+                steps_per_env=steps_completed,
+                eval_results=eval_results_host,
+                save_episodes=should_save_episodes,
+                episode_save_count=save_count,
             )
 
             # Update progress bar with evaluation results
@@ -269,32 +247,24 @@ def _run_training_loop(config: Config, wandb_run: Any) -> TrainingResults:
                 pbar_metrics["eval_return"] = f"{mean_return:.2f}"
                 pbar.set_postfix(pbar_metrics, refresh=False)
 
-            # Save episodes to disk and log to W&B if collected
-            if should_save_episodes and "episodes" in eval_results_host:
-                save_count = config.run.eval_episode_save_count or config.run.eval_rollouts
-                episode_dir = save_episodes_to_disk(eval_results_host, global_step, save_count, config)
-                # Log to W&B if successful
-                if episode_dir is not None:
-                    metrics_logger.log_episodes(episode_dir, global_step)
-
     # Always log the final step if it wasn't just logged
     # This ensures training_metrics.global_steps[-1] reflects actual completion
     total_env_steps = steps_completed * config.run.num_envs
     if steps_completed % log_frequency != 0:
-        metrics_logger.log_training_step(
+        session_logger.log_training_step(
             global_step=total_env_steps,
             steps_per_env=steps_completed,
             metrics_history=metrics_history,
             steps_this_chunk=steps_this_chunk,
         )
 
-    metrics_logger.log_final(total_env_steps)
+    session_logger.log_final(total_env_steps)
 
     # Close progress bar
     pbar.close()
 
     # Get captured metrics and return complete results
-    training_metrics, eval_metrics = metrics_logger.get_results()
+    training_metrics, eval_metrics = session_logger.finalize()
 
     return TrainingResults(
         agent_state=agent_state,
@@ -321,11 +291,12 @@ def train_and_evaluate(config: Config) -> TrainingResults:
         - config: Configuration used (for reproducibility)
         - final_env_state: Final environment states (can be used to resume training)
     """
-    wandb_run = maybe_init_wandb(config)
+    session_logger = SessionLogger.for_training(config)
 
     try:
-        results = _run_training_loop(config, wandb_run)
+        results = _run_training_loop(config, session_logger)
         return results
-    finally:
-        if wandb_run is not None and wandb is not None:
-            wandb.finish()
+    except Exception:
+        # Ensure W&B is closed on error
+        session_logger.finalize()
+        raise

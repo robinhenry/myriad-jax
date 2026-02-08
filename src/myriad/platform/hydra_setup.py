@@ -14,6 +14,8 @@ def setup_hydra() -> None:
     - Always change to output directory (chdir=true) for clean artifact organization
     - Can still be overridden from command line if needed
     """
-    # Ensure Hydra always changes to output directory
+    # Ensure Hydra always changes to output directory by default.
+    # We inject this into sys.argv if not already present to ensure it applies
+    # even if the loaded config file doesn't explicitly include it.
     if "hydra.job.chdir" not in " ".join(sys.argv):
         sys.argv.append("hydra.job.chdir=true")

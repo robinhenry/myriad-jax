@@ -1,37 +1,22 @@
-from .agent import Agent
+from .agent import Agent, AgentParams, AgentState
 from .classical import bangbang, pid, random
+from .registration import AgentInfo, get_agent_info, list_agents, make_agent, register_agent
 from .rl import dqn, pqn
 
-# The registry mapping environment IDs to their factory functions
-AGENT_REGISTRY = {
-    "random": random.make_agent,
-    "bangbang": bangbang.make_agent,
-    "pid": pid.make_agent,
-    "dqn": dqn.make_agent,
-    "pqn": pqn.make_agent,
-}
+# Register built-in agents
+register_agent("random", random.make_agent)
+register_agent("bangbang", bangbang.make_agent)
+register_agent("pid", pid.make_agent)
+register_agent("dqn", dqn.make_agent, is_off_policy=True)
+register_agent("pqn", pqn.make_agent, is_on_policy=True)
 
-
-def make_agent(agent_id: str, **kwargs) -> Agent:
-    """
-    A general factory function to create any registered agent.
-
-    Args:
-        agent_id: The string identifier of the agent to create.
-        **kwargs: Keyword arguments that will be passed to the specific
-                  agent's make_agent function.
-
-    Returns:
-        An instance of the requested Agent.
-
-    Raises:
-        ValueError: If the agent_id is not found in the registry.
-    """
-    if agent_id not in AGENT_REGISTRY:
-        raise ValueError(
-            f"Agent '{agent_id}' not found in the registry. Available agents: {list(AGENT_REGISTRY.keys())}"
-        )
-
-    # Look up the factory function and call it with the provided arguments
-    make_fn = AGENT_REGISTRY[agent_id]
-    return make_fn(**kwargs)  # type: ignore[operator]
+__all__ = [
+    "make_agent",
+    "Agent",
+    "AgentParams",
+    "AgentState",
+    "AgentInfo",
+    "register_agent",
+    "get_agent_info",
+    "list_agents",
+]

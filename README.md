@@ -12,12 +12,10 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![JAX](https://img.shields.io/badge/JAX-0.7.2-orange.svg)](https://github.com/google/jax)
 
-**JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems.** 💡 → 🤖 → 🔬
+**JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems.**
 
-<!-- > [!TIP] -->
-> **_New to Myriad?_** The library is still in early active development. We aim to build a standard toolkit for the scientific community and warmly welcome contributions!
->
-> Have an idea or just want to chat about stochastic control? [Open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk). 🤝
+> [!WARNING]
+> **Myriad is in early active development — we're building in public.** APIs will change, documentation has gaps, and some features are still taking shape. Things will improve over time. Contributions, feedback, and ideas are very welcome — [open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk).
 
 *Jump straight to [Installation](#installation) or [Quickstart](#quickstart) to see Myriad in action, or check out the [full documentation](todo: add link).* 🤸🏾
 
@@ -57,7 +55,7 @@ Many amazing RL x JAX tools already exist! Here's how we believe Myriad compleme
 | **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
 | **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
 | **Differentiable?** | No | Yes | **Yes** |
-| **System ID** | Low support | Low support | **Native** |
+| **System ID** | Low support | Low support | **Key focus** |
 | **Primary Goal** | Agent Performance | Fast Physical Control | **Active Learning & Stochastic Control** |
 
 * **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
@@ -136,20 +134,15 @@ See the [Documentation](add link) for a full list of examples and configuration 
 
 ## Flagship Environments
 
-| Environment | Type | Description |
-| --- | --- | --- |
-| `gene-circuit-v1` | **Bio / Stochastic** | **(Flagship)** Stochastic gene expression with asynchronous division. Ideal for testing noise-robust control policies (SSA). |
-| `cartpole-sysid` | **Classic / SysID** | An inverted pendulum where the agent must excite the system to infer the pole's mass and length while balancing. |
-| `chem-reactor-v0` | **Chem / ODE** | Continuous Stirred Tank Reactor (CSTR) with uncertain reaction rates. |
+To add.
 
-
-## Citation
+<!-- ## Citation
 
 If you use Myriad in your work, please cite the original paper:
 
 ```bibtex
 @article{...}
-```
+``` -->
 
 ---
 

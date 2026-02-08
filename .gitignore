@@ -26,6 +26,7 @@ multirun/
 
 # Project specific
 data/
+videos/
 
 # Sphinx documentation build
 docs/_build/

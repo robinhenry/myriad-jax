@@ -99,14 +99,25 @@ def _make_test_agent(action_space):
 @pytest.fixture(autouse=True)
 def _register_test_components(monkeypatch):
     """Register test environment and agent in registries."""
-    import myriad.agents
-    import myriad.envs
+    from myriad.agents import registration as agent_reg
+    from myriad.envs import registration as env_reg
 
-    monkeypatch.setitem(myriad.envs.ENV_REGISTRY, "test-env", lambda **_: _make_test_env())
     monkeypatch.setitem(
-        myriad.agents.AGENT_REGISTRY,
+        env_reg._ENV_REGISTRY,
+        "test-env",
+        env_reg.EnvInfo(
+            name="test-env",
+            make_fn=lambda **_: _make_test_env(),
+            config_cls=_TestEnvConfig,
+        ),
+    )
+    monkeypatch.setitem(
+        agent_reg._AGENT_REGISTRY,
         "test-agent",
-        lambda *, action_space, **__: _make_test_agent(action_space),
+        agent_reg.AgentInfo(
+            name="test-agent",
+            make_fn=lambda *, action_space, **__: _make_test_agent(action_space),
+        ),
     )
 
 

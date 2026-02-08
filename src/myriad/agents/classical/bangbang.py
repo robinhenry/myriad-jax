@@ -1,4 +1,4 @@
-"""Bang-bang controller agent for JAX-based RL environments.
+"""A classical bang-bang controller agent.
 
 A deterministic, stateless control policy that switches between two action values
 based on a threshold comparison of a selected observation field.
@@ -11,22 +11,17 @@ Action Space Behavior:
     - Discrete(n): Low=0, High=n-1 (requires n >= 2)
     - Box: Low=action_space.low, High=action_space.high
 
-This is a classical control strategy useful for:
-    - Baseline comparisons with learned policies
-    - Simple stabilization tasks
-    - System identification experiments
-    - Debugging environment dynamics
-
 Note: This is a non-learning agent (update() does nothing).
 """
 
 from typing import Any, Tuple
 
-import chex
 import jax.numpy as jnp
 from flax import struct
+from jax import Array
 
 from myriad.core.spaces import Box, Discrete, Space
+from myriad.core.types import Observation, PRNGKey
 from myriad.utils.observations import get_field_index, to_array
 
 from ..agent import Agent
@@ -42,13 +37,15 @@ class AgentParams:
         obs_field: Field name from observation NamedTuple to use for threshold comparison
         low_action: Pre-computed low action value (for JIT efficiency)
         high_action: Pre-computed high action value (for JIT efficiency)
+        invert: If True, swap action selection (high when below threshold, low when above)
     """
 
     action_space: Space = struct.field(pytree_node=False)
     threshold: float
     obs_field: str = struct.field(pytree_node=False)
-    low_action: chex.Array
-    high_action: chex.Array
+    low_action: Array
+    high_action: Array
+    invert: bool = False
 
 
 @struct.dataclass
@@ -62,72 +59,88 @@ class AgentState:
     obs_index: int
 
 
-def _init(_key: chex.PRNGKey, sample_obs: chex.Array, params: AgentParams) -> AgentState:
+def _init(key: PRNGKey, sample_obs: Observation, params: AgentParams) -> AgentState:
     """Initialize the bang-bang controller and compute observation index."""
     obs_index = get_field_index(sample_obs, params.obs_field)
     return AgentState(obs_index=obs_index)
 
 
 def _select_action(
-    _key: chex.PRNGKey,
-    obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
-    deterministic: bool = False,
-) -> Tuple[chex.Array, AgentState]:
+    deterministic: bool,
+) -> Tuple[Array, AgentState]:
     """Select bang-bang action based on observation threshold.
 
-    For Box action spaces: Returns low bound if obs[field] <= threshold, else high bound
-    For Discrete action spaces: Returns 0 if obs[field] <= threshold, else n-1
+    Normal mode (invert=False):
+        - obs[field] <= threshold: low action
+        - obs[field] > threshold: high action
+
+    Inverted mode (invert=True):
+        - obs[field] <= threshold: high action
+        - obs[field] > threshold: low action
 
     Args:
-        _key: Random key (unused, policy is deterministic)
-        obs: Current observation (NamedTuple or array)
-        agent_state: Current agent state (contains obs_index)
-        params: Agent hyperparameters (contains threshold, pre-computed actions)
+        key: Random key (unused, policy is deterministic)
+        obs: Current observation (NamedTuple-like)
+        state: Current agent state (contains obs_index)
+        params: Agent hyperparameters (contains threshold, pre-computed actions, invert flag)
         deterministic: Ignored (bang-bang is always deterministic)
 
     Returns:
-        Tuple of (action, unchanged agent_state)
+        Tuple of (action, unchanged state)
     """
     # Convert observation to array (zero overhead if already array)
     obs_array = to_array(obs)
 
     # Extract the observation value at the specified field index
-    obs_value = obs_array[agent_state.obs_index]
+    obs_value = obs_array[state.obs_index]
 
-    # Use pre-computed action values for JIT efficiency (no Python control flow)
-    action = jnp.where(obs_value > params.threshold, params.high_action, params.low_action)
+    # Select action based on threshold comparison
+    # Compute both normal and inverted actions, then select based on invert flag
+    # This avoids Python control flow for JIT compatibility
+    normal_action = jnp.where(obs_value > params.threshold, params.high_action, params.low_action)
+    inverted_action = jnp.where(obs_value > params.threshold, params.low_action, params.high_action)
 
-    return action, agent_state
+    # Select between normal and inverted based on params.invert (JAX-compatible)
+    action = jnp.where(params.invert, inverted_action, normal_action)
+
+    return action, state
 
 
-def _update(
-    _key: chex.PRNGKey, agent_state: AgentState, _transition: Any, _params: AgentParams
-) -> Tuple[AgentState, dict]:
+def _update(key: PRNGKey, state: AgentState, batch: Any, params: AgentParams) -> Tuple[AgentState, dict]:
     """Update the bang-bang controller (no learning, returns empty metrics)."""
-    return agent_state, {}
+    return state, {}
 
 
 def make_agent(
     action_space: Space,
     threshold: float = 0.0,
     obs_field: str = "theta",
-) -> Agent:
+    invert: bool = False,
+) -> Agent[AgentState, AgentParams, Observation]:
     """Factory function to create a bang-bang controller agent.
-
-    The agent will automatically detect the observation field index when initialized
-    by introspecting the sample observation's NamedTuple structure.
 
     Args:
         action_space: Action space (Box or Discrete)
-        threshold: Switching threshold. If obs[obs_field] > threshold, use "high" action.
-                  Default 0.0.
+        threshold: Bang-bang witching threshold. Default 0.0.
         obs_field: Field name from observation NamedTuple to use for threshold comparison.
-                  Default "theta" (pole angle for CartPole).
+            Default "theta" (pole angle for CartPole).
+        invert: If False (default): high action when obs > threshold. If True: low action when
+            obs > threshold (swapped polarity)
 
     Returns:
         Agent instance with bang-bang control policy
+
+    Example:
+        >>> # Example: bang-bang controller for CartPole
+        >>> # Normal: push right when pole tilts right
+        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta")
+        >>>
+        >>> # Inverted: push left when pole tilts right (opposite polarity)
+        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta", invert=True)
     """
 
     if not obs_field or not isinstance(obs_field, str):
@@ -150,6 +163,7 @@ def make_agent(
         obs_field=obs_field,
         low_action=low_action,
         high_action=high_action,
+        invert=invert,
     )
 
     return Agent(

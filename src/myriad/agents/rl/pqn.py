@@ -1,12 +1,16 @@
 """Parallelized Q-Network (PQN) agent implementation using JAX and Flax.
 
-PQN is an on-policy value-based RL algorithm that uses:
+PQN is an on-policy value-based RL algorithm designed for massively parallel training.
+
+Features:
+
 - Lambda-returns (GAE-style) instead of 1-step TD targets
 - LayerNorm for stability (no target network needed)
 - Multi-epoch training on collected rollouts
-- Epsilon-greedy exploration
+- Epsilon-greedy exploration with linear decay
+- Gradient clipping for stable training
 
-Reference: https://github.com/mttga/purejaxql
+Reference: `PureJaxQL <https://github.com/mttga/purejaxql>`_
 """
 
 from typing import Tuple
@@ -51,12 +55,28 @@ class QNetwork(nn.Module):
 
 @struct.dataclass
 class AgentParams:
-    """Static parameters for the PQN agent."""
+    """Static parameters for the PQN agent.
+
+    Attributes:
+        action_space: Action space (must be Discrete).
+        learning_rate: Learning rate for Adam optimizer.
+        gamma: Discount factor for future rewards.
+        lambda_: Lambda parameter for lambda-returns (0.0 = 1-step TD, 1.0 = Monte Carlo).
+        reward_scale: Internal scaling factor applied to rewards before computing returns.
+        epsilon_start: Initial exploration rate.
+        epsilon_end: Final exploration rate after decay.
+        epsilon_decay_steps: Number of steps to decay epsilon from start to end.
+        max_grad_norm: Maximum gradient norm for clipping.
+        num_epochs: Number of training epochs per rollout batch.
+        num_minibatches: Number of minibatches per epoch.
+        hidden_size: Hidden layer size for Q-network.
+        num_layers: Number of hidden layers in Q-network.
+    """
 
     action_space: Space
     learning_rate: float
     gamma: float
-    lambda_: float  # Lambda for lambda-returns
+    lambda_: float
     reward_scale: float
     epsilon_start: float
     epsilon_end: float
@@ -70,7 +90,12 @@ class AgentParams:
 
 @struct.dataclass
 class AgentState:
-    """State of the PQN agent."""
+    """State of the PQN agent.
+
+    Attributes:
+        train_state: Flax TrainState containing network params and optimizer state.
+        global_step: Number of update steps taken (used for epsilon decay).
+    """
 
     train_state: TrainState
     global_step: chex.Array
@@ -408,6 +433,6 @@ def make_agent(
     return Agent(
         params=params,
         init=_init,
-        select_action=_select_action,
-        update=_update,
+        select_action=_select_action,  # type: ignore[arg-type]
+        update=_update,  # type: ignore[arg-type]
     )

@@ -44,7 +44,7 @@ class AgentConfig(BaseModel):
     model_config = {"extra": "allow"}
 
     name: str
-    batch_size: PositiveInt | None = None  # for off-policy agents: size of batches sampled from replay buffer
+    batch_size: PositiveInt = 32  # for off-policy agents: size of batches sampled from replay buffer
 
 
 class EnvConfig(BaseModel):
@@ -75,7 +75,7 @@ class EvalConfigBase(BaseModel):
 
     # --- Evaluation Parameters ---
     eval_rollouts: PositiveInt = 10  # number of episodes to average over
-    eval_max_steps: PositiveInt  # REQUIRED: environment-specific, max steps per episode
+    eval_max_steps: PositiveInt = 1000  # max steps per episode
 
     # --- Episode Saving (optional) ---
     # Episodes saved to: outputs/DATE/TIME/episodes/ (hard-coded, relative to Hydra run dir)
@@ -111,7 +111,7 @@ class RunConfig(EvalConfigBase):
     steps_per_env: PositiveInt  # REQUIRED: experiment-specific, defines run length
     num_envs: PositiveInt = 1  # default to single environment
     scan_chunk_size: PositiveInt = 256  # reasonable default for most cases
-    buffer_size: PositiveInt | None = None  # for off-policy algorithms: replay buffer capacity
+    buffer_size: PositiveInt = 10000  # for off-policy algorithms: replay buffer capacity
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation (training-specific) ---
@@ -146,7 +146,7 @@ class RunConfig(EvalConfigBase):
                 f"the minimum boundary frequency ({min_boundary_frequency}). "
                 f"This may lead to wasted computation from masked iterations at logging/eval boundaries. "
                 f"Consider reducing scan_chunk_size or increasing log_frequency/eval_frequency. "
-                f"See src/myriad/platform/scan_utils.py for details on the chunking strategy.",
+                f"See src/myriad/platform/runners.py for details on the chunking strategy.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -231,3 +231,23 @@ class EvalConfig(BaseModel):
 
     # --- Logging (optional) ---
     wandb: WandbConfig | None = None  # None = disabled (provide WandbConfig to enable)
+
+
+def config_to_eval_config(config: Config) -> EvalConfig:
+    """Extract evaluation configuration from a training Config.
+
+    Args:
+        config: A training Config
+
+    Returns:
+        EvalConfig with evaluation-relevant fields extracted
+    """
+    # RunConfig inherits from EvalConfigBase, so we can initialize
+    # EvalRunConfig with its parameters. Pydantic will ignore the
+    # training-specific fields that aren't in EvalRunConfig.
+    return EvalConfig(
+        run=EvalRunConfig(**config.run.model_dump()),
+        agent=config.agent,
+        env=config.env,
+        wandb=config.wandb,
+    )

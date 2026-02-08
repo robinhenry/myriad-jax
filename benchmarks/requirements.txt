@@ -1,0 +1,6 @@
+# Visualization (required for plot_results.py)
+matplotlib>=3.7.0
+
+# Library comparisons (optional)
+gymnax>=0.0.9  # For Gymnax comparison
+gymnasium>=1.2.3  # For Gymnasium comparison

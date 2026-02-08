@@ -29,7 +29,7 @@ extensions = [
     "sphinx.ext.napoleon",  # Support for NumPy and Google style docstrings
     "sphinx.ext.viewcode",  # Add links to highlighted source code
     "sphinx.ext.intersphinx",  # Link to other projects' documentation
-    "myst_parser",  # Markdown support
+    "myst_nb",  # Notebook support for tutorials
     "sphinx_copybutton",  # Add copy button to code blocks
 ]
 
@@ -134,8 +134,8 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 autodoc_type_aliases = {
-    "PRNGKey": "chex.PRNGKey",
-    "Array": "chex.Array",
+    "PRNGKey": "jax.Array",
+    "Array": "jax.Array",
     "ArrayTree": "chex.ArrayTree",
 }
 
@@ -148,10 +148,10 @@ napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = False
-napoleon_use_ivar = False
+napoleon_use_ivar = True
 napoleon_use_param = True
 napoleon_use_rtype = True
-napoleon_preprocess_types = False
+napoleon_preprocess_types = True
 napoleon_type_aliases = autodoc_type_aliases
 napoleon_attr_annotations = True
 
@@ -162,4 +162,5 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "jax": ("https://jax.readthedocs.io/en/latest/", None),
     "flax": ("https://flax.readthedocs.io/en/latest/", None),
+    "chex": ("https://chex.readthedocs.io/en/latest/", None),
 }

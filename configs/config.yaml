@@ -13,3 +13,4 @@
 # Load default experiment
 defaults:
   - experiments/pqn_cartpole_default
+  - _self_

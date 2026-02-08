@@ -1,7 +1,6 @@
 """Shared initialization utilities for environment and agent setup.
 
 This module provides common initialization functions used by both training and evaluation.
-Extracted here to avoid circular dependencies between training.py and evaluation.py.
 """
 
 from __future__ import annotations
@@ -51,10 +50,12 @@ def get_factory_kwargs(config: BaseModel) -> dict:
         config: Pydantic config object (e.g., EnvConfig, AgentConfig)
 
     Returns:
-        Dictionary of kwargs suitable for passing to make_env() or make_agent()
+        Dictionary of kwargs suitable for passing to :func:`make_env` or :func:`make_agent`
     """
     kwargs = config.model_dump()
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
-    kwargs.pop("batch_size", None)  # batch_size is a platform parameter, not passed to factories
+    # batch_size is a platform parameter used for replay buffer sampling,
+    # not an agent construction parameter
+    kwargs.pop("batch_size", None)
     return kwargs

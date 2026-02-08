@@ -1,25 +1,23 @@
 """Environment wrappers for compatibility with different frameworks.
 
-This module provides wrappers to adapt Myriad environments to different interfaces,
-particularly for compatibility with standard RL frameworks that expect array observations.
+This module provides wrappers to adapt Myriad environments to different interfaces.
 """
 
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
-import chex
-import jax.tree_util as jtu
+from jax import Array
 
 from myriad.envs.environment import Environment, EnvironmentConfig, EnvironmentParams, EnvironmentState
 
 S = TypeVar("S", bound=EnvironmentState)
-P = TypeVar("P", bound=EnvironmentParams)
 C = TypeVar("C", bound=EnvironmentConfig)
+P = TypeVar("P", bound=EnvironmentParams)
 
 
 def make_array_obs_env(
-    env: Environment[S, P, C],
-    obs_to_array: Callable | None = None,
-) -> Environment[S, P, C]:
+    env: Environment[S, C, P, Any],
+    obs_to_array: Callable[[Any], Array] | None = None,
+) -> Environment[S, C, P, Array]:  # type: ignore[type-var]
     """Wrap an environment to convert NamedTuple observations to arrays.
 
     This wrapper is useful for compatibility with standard RL frameworks (Gym, Gymnasium)
@@ -49,59 +47,28 @@ def make_array_obs_env(
     """
 
     # Default: use the `.to_array()` method
-    if obs_to_array is None:
-
-        def obs_to_array(obs):
-            return obs.to_array()
+    converter = obs_to_array if obs_to_array is not None else lambda obs: obs.to_array()
 
     def wrapped_step(
-        key: chex.PRNGKey,
+        key: Array,
         state: S,
-        action: chex.Array,
+        action: Array,
         params: P,
         config: C,
     ):
         obs, next_state, reward, done, info = env.step(key, state, action, params, config)
-        return obs_to_array(obs), next_state, reward, done, info
+        return converter(obs), next_state, reward, done, info
 
     def wrapped_reset(
-        key: chex.PRNGKey,
+        key: Array,
         params: P,
         config: C,
     ):
         obs, state = env.reset(key, params, config)
-        return obs_to_array(obs), state
+        return converter(obs), state
 
     # Return a new Environment with wrapped functions
     return env._replace(
         step=wrapped_step,
         reset=wrapped_reset,
     )
-
-
-def vectorize_obs_conversion(
-    obs_to_array: Callable,
-) -> Callable:
-    """Vectorize an observation conversion function for batched environments.
-
-    This is useful when you have a batch of NamedTuple observations and want to
-    convert them all to arrays efficiently using jax.tree_map.
-
-    Args:
-        obs_to_array: Function that converts a single observation to an array
-
-    Returns:
-        Vectorized conversion function
-
-    Example:
-        >>> # For a batch of CartPoleObs
-        >>> obs_batch = jax.vmap(env.reset)(keys, params_batch, config_batch)[0]
-        >>> vectorized_converter = vectorize_obs_conversion(lambda obs: obs.to_array())
-        >>> array_batch = jtu.tree_map(vectorized_converter, obs_batch)
-    """
-
-    def vectorized_converter(obs_batch):
-        """Convert a batch of observations to arrays."""
-        return jtu.tree_map(obs_to_array, obs_batch)
-
-    return vectorized_converter

@@ -10,8 +10,7 @@ This script is useful during development for:
 """
 
 from myriad.platform.hydra_runners import sweep_main
-from myriad.platform.hydra_setup import setup_hydra
+from myriad.platform.runner_utils import run_with_hydra
 
 if __name__ == "__main__":
-    setup_hydra()
-    sweep_main()
+    run_with_hydra(sweep_main)

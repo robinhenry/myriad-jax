@@ -2,19 +2,21 @@
 
 from typing import Any, Tuple
 
-import chex
 import jax
 import jax.numpy as jnp
+from jax import Array
+
+from .types import PRNGKey
 
 
 class Space:
     """Base class for all spaces."""
 
-    def sample(self, key: chex.PRNGKey) -> chex.Array:
+    def sample(self, key: PRNGKey) -> Array:
         """Sample a random value from the space."""
         raise NotImplementedError
 
-    def contains(self, x: chex.Array) -> bool:
+    def contains(self, x: Array) -> bool:
         """Check if x is a valid value in this space."""
         raise NotImplementedError
 
@@ -24,8 +26,8 @@ class Box(Space):
 
     def __init__(
         self,
-        low: float | chex.Array,
-        high: float | chex.Array,
+        low: float | Array,
+        high: float | Array,
         shape: Tuple[int, ...] = (),
         dtype: Any = jnp.float32,
     ):
@@ -34,13 +36,13 @@ class Box(Space):
         self.shape = shape if shape else self.low.shape
         self.dtype = dtype
 
-    def sample(self, key: chex.PRNGKey) -> chex.Array:
+    def sample(self, key: PRNGKey) -> Array:
         """Sample uniformly from the box."""
         return jnp.asarray(
             jax.random.uniform(key, shape=self.shape, minval=self.low, maxval=self.high, dtype=self.dtype)
         )
 
-    def contains(self, x: chex.Array) -> bool:
+    def contains(self, x: Array) -> bool:
         """Check if x is within bounds."""
         return bool(jnp.all(x >= self.low) and jnp.all(x <= self.high))
 
@@ -55,11 +57,11 @@ class Discrete(Space):
         self.dtype = dtype
         self.shape: Tuple[int, ...] = ()
 
-    def sample(self, key: chex.PRNGKey) -> chex.Array:
+    def sample(self, key: PRNGKey) -> Array:
         """Sample uniformly from the discrete set."""
         return jax.random.randint(key, shape=self.shape, minval=0, maxval=self.n, dtype=self.dtype)
 
-    def contains(self, x: chex.Array) -> bool:
+    def contains(self, x: Array) -> bool:
         """Check if x is a valid discrete value."""
         value = jnp.asarray(x)
         if value.ndim != 0:

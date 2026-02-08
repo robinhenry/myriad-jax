@@ -4,11 +4,7 @@ This module provides a Click wrapper around the Hydra-based evaluation runner.
 All arguments are passed through to Hydra for configuration management.
 """
 
-import sys
-
 import click
-
-from myriad.platform.hydra_setup import setup_hydra
 
 
 @click.command(
@@ -44,13 +40,8 @@ def evaluate(ctx: click.Context) -> None:
 
     For full Hydra documentation, see: https://hydra.cc/
     """
-    # Reconstruct sys.argv for Hydra
-    sys.argv = ["myriad evaluate"] + ctx.args
-
-    # Setup Hydra global configuration
-    setup_hydra()
-
-    # Import and run the evaluation main function
+    # Execute the evaluation runner with Hydra setup
     from myriad.platform.hydra_runners import evaluate_main
+    from myriad.platform.runner_utils import run_with_hydra
 
-    evaluate_main()
+    run_with_hydra(evaluate_main, script_name="myriad evaluate", args=ctx.args)
