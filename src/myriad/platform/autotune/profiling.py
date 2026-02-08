@@ -28,7 +28,7 @@ OVERHEAD_HEURISTICS = {
 def _get_cpu_memory_gb() -> float:
     """Attempt to get total CPU memory in GB."""
     try:
-        import psutil
+        import psutil  # type: ignore[import-untyped]
 
         return psutil.virtual_memory().total / (1024**3)
     except (ImportError, Exception):

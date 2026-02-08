@@ -48,7 +48,7 @@ def validate_config(
         obs_array = to_array_batch(obs)
 
         training_state = TrainingEnvState(env_state=env_states, obs=obs_array)
-        agent_state = agent.init(key, obs_array[0], agent.params)
+        agent_state = agent.init(key, obs_array[0], agent.params)  # type: ignore[arg-type]
 
         # Measure memory
         memory_mb = estimate_pytree_memory_mb(training_state) + estimate_pytree_memory_mb(agent_state)

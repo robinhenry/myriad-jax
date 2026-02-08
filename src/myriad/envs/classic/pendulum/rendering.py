@@ -99,7 +99,7 @@ def render_pendulum_frame(
     fig.canvas.draw()
 
     # Get RGBA buffer using standard method (Matplotlib 3.x+)
-    buf = fig.canvas.buffer_rgba()
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
 
     # Convert buffer to numpy array
     frame_rgba = np.asarray(buf)
@@ -126,7 +126,7 @@ def render_pendulum_frame_from_obs(obs: np.ndarray) -> np.ndarray:
     """
     theta = np.arctan2(float(obs[1]), float(obs[0]))
     state = ControlTaskState(
-        physics=PhysicsState(theta=theta, theta_dot=float(obs[2])),
-        t=np.int32(0),
+        physics=PhysicsState(theta=theta, theta_dot=float(obs[2])),  # type: ignore[arg-type]
+        t=np.int32(0),  # type: ignore[arg-type]
     )
     return render_pendulum_frame(state, ControlTaskConfig())

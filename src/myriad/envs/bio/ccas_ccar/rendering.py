@@ -240,7 +240,7 @@ def render_ccas_ccar_frame(
 
     # Get RGBA buffer using standard method (Matplotlib 3.x+)
     # This is more robust than tostring_argb which is backend-dependent
-    buf = fig.canvas.buffer_rgba()
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
 
     # Convert buffer to numpy array
     # shape is (height, width, 4) for RGBA
@@ -384,7 +384,7 @@ def render_population_heatmap(
 
     # Get RGBA buffer using standard method (Matplotlib 3.x+)
     # This is more robust than tostring_argb which is backend-dependent
-    buf = fig.canvas.buffer_rgba()
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
 
     # Convert buffer to numpy array
     # shape is (height, width, 4) for RGBA

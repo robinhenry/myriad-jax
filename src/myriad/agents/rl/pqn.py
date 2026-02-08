@@ -433,6 +433,6 @@ def make_agent(
     return Agent(
         params=params,
         init=_init,
-        select_action=_select_action,
-        update=_update,
+        select_action=_select_action,  # type: ignore[arg-type]
+        update=_update,  # type: ignore[arg-type]
     )

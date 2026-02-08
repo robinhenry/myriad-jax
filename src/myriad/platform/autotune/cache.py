@@ -22,7 +22,7 @@ def load_cache() -> dict:
         Dictionary with cached profiles (hardware, env, agent, configs)
     """
 
-    empty_cache = {
+    empty_cache: dict[str, dict] = {
         "hardware": {},
         "env_profiles": {},
         "agent_profiles": {},

@@ -103,7 +103,7 @@ def render_cartpole_frame(
 
     # Get RGBA buffer using standard method (Matplotlib 3.x+)
     # This is more robust than tostring_argb which is backend-dependent
-    buf = fig.canvas.buffer_rgba()
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
 
     # Convert buffer to numpy array
     # shape is (height, width, 4) for RGBA
@@ -131,7 +131,7 @@ def render_cartpole_frame_from_obs(obs: np.ndarray) -> np.ndarray:
         RGB image array with shape (height, width, 3) and dtype uint8.
     """
     state = ControlTaskState(
-        physics=PhysicsState.from_array(obs),
-        t=np.int32(0),
+        physics=PhysicsState.from_array(obs),  # type: ignore[arg-type]
+        t=np.int32(0),  # type: ignore[arg-type]
     )
     return render_cartpole_frame(state, ControlTaskConfig())
