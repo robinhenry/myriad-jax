@@ -17,7 +17,7 @@
 > [!WARNING]
 > **Myriad is in early active development — we're building in public.** APIs will change, documentation has gaps, and some features are still taking shape. Things will improve over time. Contributions, feedback, and ideas are very welcome — [open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk).
 
-*Jump straight to [Installation](#installation) or [Quickstart](#quickstart) to see Myriad in action, or check out the [full documentation](todo: add link).* 🤸🏾
+**Documentation:** [docs](TO ADD)
 
 > *TODO*: add 2 videos here: (a) learned agent on ccas-ccar, (b) real-time system ID via active learning.
 
