@@ -454,6 +454,30 @@ files = [
 ]
 
 [[package]]
+name = "chex"
+version = "0.1.91"
+description = "Chex: Testing made fun, in JAX!"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "chex-0.1.91-py3-none-any.whl", hash = "sha256:6fc4cbfc22301c08d4a7ef706045668410100962eba8ba6af03fa07f4e5dcf9b"},
+    {file = "chex-0.1.91.tar.gz", hash = "sha256:65367a521415ada905b8c0222b0a41a68337fcadf79a1fb6fc992dbd95dd9f76"},
+]
+
+[package.dependencies]
+absl-py = ">=2.3.1"
+jax = ">=0.7.0"
+jaxlib = ">=0.7.0"
+numpy = ">=1.24.1"
+toolz = ">=1.0.0"
+typing_extensions = ">=4.15.0"
+
+[package.extras]
+docs = ["sphinx (>=6.0.0)", "sphinx-book-theme (>=1.0.1)", "sphinxcontrib-katex"]
+test = ["cloudpickle (==3.1.0)", "dm-tree (>=0.1.9)"]
+
+[[package]]
 name = "click"
 version = "8.3.1"
 description = "Composable command line interface toolkit"
@@ -4638,6 +4662,18 @@ ml_dtypes = ">=0.5.0"
 numpy = ">=1.22.0"
 
 [[package]]
+name = "toolz"
+version = "1.1.0"
+description = "List processing tools and functional utilities"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "toolz-1.1.0-py3-none-any.whl", hash = "sha256:15ccc861ac51c53696de0a5d6d4607f99c210739caf987b5d2054f3efed429d8"},
+    {file = "toolz-1.1.0.tar.gz", hash = "sha256:27a5c770d068c110d9ed9323f24f1543e83b2f300a687b7891c1a6d56b697b5b"},
+]
+
+[[package]]
 name = "tornado"
 version = "6.5.4"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
@@ -5091,4 +5127,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "b5595c0a51b1d06a98101dfea03f9f80ca9553c41ea92980edb9e5d1ae6c50b6"
+content-hash = "a6e8ba9b7c54029ec9f3f91f965a389561091e815aeab9f3b6b29ccfbdb82171"
