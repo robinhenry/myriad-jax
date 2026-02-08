@@ -30,19 +30,11 @@ class SessionLogger:
     2. Disk - Saves episode trajectories
     3. Remote - Logs to W&B (metrics + artifacts)
 
-    Usage:
-        # Training
-        logger = SessionLogger.for_training(config)
-        for step in training_loop:
-            logger.log_training_step(...)
-            if should_eval:
-                logger.log_evaluation(..., save_episodes=True)
-        training_metrics, eval_metrics = logger.finalize()
-
-        # Evaluation-only
-        logger = SessionLogger.for_evaluation(config)
-        logger.log_evaluation(0, 0, eval_results, save_episodes=True)
-        logger.finalize()
+    Example:
+        >>> logger = SessionLogger.for_training(config)
+        >>> logger.log_training_step(...)
+        >>> logger.log_evaluation(..., save_episodes=True)
+        >>> training_metrics, eval_metrics = logger.finalize()
     """
 
     def __init__(

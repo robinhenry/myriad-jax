@@ -283,15 +283,10 @@ def make_env(
         Environment instance for the control task
 
     Example:
-        # Constant target at F=25
-        env = make_env(F_target_constant=25.0)
-
-        # Sinewave target
-        env = make_env(
-            target_type="sinewave",
-            sinewave_period_minutes=600.0,
-            sinewave_amplitude=20.0,
-        )
+        >>> # Constant target at F=25
+        >>> env = make_env(F_target_constant=25.0)
+        >>> # Sinewave target
+        >>> env = make_env(target_type="sinewave", sinewave_period_minutes=600.0)
     """
     if config is None:
         # Parse kwargs into nested config structure
