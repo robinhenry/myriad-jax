@@ -1,29 +1,28 @@
-# Myriad
+<h1 align="center"> Myriad (<a href="https://myriad-jax.readthedocs.io">docs</a>)</h1>
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/myriad-jax.svg)](https://pypi.org/project/myriad-jax/)
-[![CI](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml/badge.svg)](https://github.com/robinhenry/myriad-jax/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/robinhenry/myriad-jax/branch/main/graph/badge.svg)](https://codecov.io/gh/robinhenry/myriad-jax)
-[![Documentation](https://github.com/robinhenry/myriad-jax/actions/workflows/docs.yml/badge.svg)](https://github.com/robinhenry/myriad-jax/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Poetry](https://img.shields.io/endpoint?url=https://python-poetry.org/badge/v0.json)](https://python-poetry.org/)
+[![Docs](https://readthedocs.org/projects/myriad-jax/badge/?version=latest)](https://myriad-jax.readthedocs.io/en/latest/)
+[![Build](https://img.shields.io/github/actions/workflow/status/robinhenry/myriad-jax/ci.yml?label=build)](https://github.com/robinhenry/myriad-jax/actions)
+[![codecov](https://codecov.io/gh/robinhenry/myriad-jax/branch/main/graph/badge.svg)](https://codecov.io/gh/robinhenry/myriad-jax)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![JAX](https://img.shields.io/badge/JAX-0.7.2-orange.svg)](https://github.com/google/jax)
 
 **JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems.**
 
 > [!WARNING]
-> **Myriad is in early active development — we're building in public.** APIs will change, documentation has gaps, and some features are still taking shape. Things will improve over time. Contributions, feedback, and ideas are very welcome — [open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk).
+> **Myriad is in early active development.** APIs will change, documentation has gaps, and some features are still taking shape. Contributions, feedback, and ideas are very welcome! [Open a discussion](https://github.com/robinhenry/myriad-jax/discussions) or reach out to Robin (robin.henry@eng.ox.ac.uk).
 
 **Documentation:** [docs](https://myriad-jax.readthedocs.io)
 
-## At a Glance
+## At a Glance 🌟
 
 Myriad is a **playground to explore RL, traditional control, system identification, and active learning** — with a focus on problems where uncertainty, stochasticity, and rare discrete dynamics play a big role and force us to study very large numbers of variants in parallel (*think: biology → system = cell, chemistry → system = reactor*). 🛝
 
-It's a **ready-to-go experimental platform**. You can use one of the already-implemented tasks/problems, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
+It's a **ready-to-go experimental platform**. You can use one of the already-implemented tasks, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
 
 Last but not least, it yields results that are 100% reproducible. 🌟
 
@@ -46,31 +45,23 @@ Last but not least, it yields results that are 100% reproducible. 🌟
 
 ### Ecosystem
 
-Many amazing RL x JAX tools already exist! Here's how we believe Myriad complements them.
+Many amazing RL x JAX tools already exist! Here's how we believe Myriad complements the most popular ones.
 
-| Feature | **Gymnasium/Gymnax** | **Brax** | **Myriad** |
-| :--- | :--- | :--- | :--- |
-| **Best For** | Standard RL benchmarks | Robotics & Locomotion | **Wet-Lab / Scientific Systems** |
-| **Physics** | Black Box / Various | Rigid Body (Contacts) | **Stochastic, ODEs, Jump Processes** |
-<!-- | **Differentiable?** | No | Yes | **Yes** | -->
-| **System ID** | Low support | Low support | **Key focus** |
-| **Primary Goal** | Agent Performance | Fast Physical Control | **Active Learning & Stochastic Control** |
+| Library | Best for | Physics | System ID | Differentiable | Primary Goals |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Gymnax** | Standard RL benchmarks | Black box / various | Low support | No | Agent Performance |
+| **Brax** | Robotics & locomotion | Rigid bodies | Low support | Yes | Fast physical control |
+| **Myriad** | Wet-lab / scientific systems | Stochastic, ODEs, jump processes | Key focus | Yes | Active learning & stochastic control |
 
-* **Use [Gymnasium](https://gymnasium.farama.org/), [Gymnax](https://github.com/RobertTLange/gymnax) or [JaxMARL](https://github.com/FLAIROx/JaxMARL) if:** you need standard baselines, classic RL environments, or multi-agent RL.
-
-* **Use [Brax](https://github.com/google/brax) if:** you need massive-scale robotics or contact dynamics.
-
-* **Use Myriad if:** you model biological/chemical systems, require Gillespie/SSA stochasticity, or need active learning for parameter uncertainty.
+For a longer lists, see the [See Also 🔎](#see-also-) section.
 
 
-## Installation
+## Installation 🌱
 
-**Requirements:** Python 3.10+, JAX 0.7+.
+**Requirements:** Python 3.11+, JAX 0.7+.
 
 > [!IMPORTANT]
 > **GPU Support:** JAX installation can be hardware-specific. We strongly recommend [installing JAX](https://github.com/google/jax#installation) according to your CUDA/cuDNN version *before* installing Myriad if you encounter issues.
-
-### With `pip`
 
 ```bash
 # Standard installation
@@ -80,15 +71,7 @@ pip install myriad-jax
 pip install "myriad-jax[gpu]"
 ```
 
-### From source (for development)
-
-```bash
-git clone git@github.com:robinhenry/myriad-jax.git
-cd myriad-jax
-poetry install --with dev,gpu
-```
-
-## Quickstart
+## Quickstart 🏁
 
 Myriad is designed to be used programmatically (for research loops) or via CLI (for massive sweeps).
 
@@ -123,24 +106,48 @@ Leverage [Hydra](https://hydra.cc/) to run massive parameter sweeps or experimen
 ```bash
 # Train a DQN agent on 50,000 parallel cartpole environments
 myriad train env=cartpole-control run.num_envs=50000 agent=dqn
-
-# Switch to System Identification mode (inferring hidden physics parameters)
-myriad train env=gene-circuit-v1 agent=pqn sysid=true
 ```
 
-See the [Documentation](add link) for a full list of examples and configuration overrides.
+See the [Documentation](https://myriad-jax.readthedocs.io) for further information, including tutorials.
 
-## Flagship Environments
+## Flagship Environments 🌍
 
 To add.
 
-<!-- ## Citation
+## Contributing 🛠️
+
+Our goal is for Myriad to become a platform that accelerates RL/control research, especially in the life sciences. As such, we'd love to have others contribute!
+
+Please take a look at the [contributing guide](CONTRIBUTING.md) for instructions on how to add new environments, algorithms, or for other ways to contribute.
+
+If in doubt, always feel free to reach out by [opening a discussion](https://github.com/robinhenry/myriad-jax/discussions).
+
+<!-- ## Citation ✍️
 
 If you use Myriad in your work, please cite the original paper:
 
 ```bibtex
 @article{...}
 ``` -->
+
+## See Also 🔎
+
+Here is a non-exhaustive list of other JAX x RL libraries, some of which inspired the development of Myriad.
+
+**Environments:**
+
+* [Gymnax](https://github.com/RobertTLange/gymnax): classic environments including classic control, bsuite, MinAtar, and meta RL tasks.
+* [Brax](https://github.com/google/brax): a differentiable physics engine for rigid body control tasks.
+* [JaxMARL](https://github.com/FLAIROx/JaxMARL): multi-agent RL tasks.
+* [Jumanji](https://github.com/instadeepai/jumanji): a diverse suite of environments, ranging from simple games to NP-hard combinatorial problems.
+* [Pgx](https://github.com/sotetsuk/pgx): classic board game environments such as Chess, Go, and Shogi.
+* [XLand-Minigrid](https://github.com/dunnolab/xland-minigrid): meta RL gridworld environments.
+* [Craftax](https://github.com/MichaelTMatthews/Craftax): Crafter + NetHack in JAX.
+
+**Algorithms:**
+
+* [PureJaxRL](https://github.com/luchris429/purejaxrl): RL algorithms in JAX, inspired by [CleanRL](https://github.com/vwxyzjn/cleanrl).
+* [Evojax](https://github.com/google/evojax): neuroevolution algorithms.
 
 ---
 
