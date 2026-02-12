@@ -7,6 +7,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import pytest
 
+from myriad.configs.builder import create_eval_config
 from myriad.platform.artifact_helpers import save_results_to_disk
 from myriad.platform.constants import (
     CHECKPOINT_EXTENSION,
@@ -23,7 +24,8 @@ def test_save_results_to_disk_without_checkpoint():
     with tempfile.TemporaryDirectory() as tmpdir:
         directory = Path(tmpdir)
 
-        # Create mock results object
+        # Create mock config and results object
+        config = create_eval_config(env="cartpole-control", agent="random")
         results = EvaluationResults(
             mean_return=100.0,
             std_return=10.0,
@@ -37,6 +39,7 @@ def test_save_results_to_disk_without_checkpoint():
             episode_lengths=jnp.array([50]),
             num_episodes=1,
             seed=42,
+            config=config,
         )
 
         # Save without checkpoint
@@ -61,6 +64,9 @@ def test_save_results_to_disk_with_checkpoint():
     with tempfile.TemporaryDirectory() as tmpdir:
         directory = Path(tmpdir)
 
+        # Create mock config
+        config = create_eval_config(env="cartpole-control", agent="random")
+
         # Create mock results and agent state
         results = EvaluationResults(
             mean_return=100.0,
@@ -75,6 +81,7 @@ def test_save_results_to_disk_with_checkpoint():
             episode_lengths=jnp.array([50]),
             num_episodes=1,
             seed=42,
+            config=config,
         )
         agent_state = {"params": {"weights": jnp.array([1.0, 2.0])}, "step": 100}
 
@@ -99,6 +106,9 @@ def test_save_results_to_disk_checkpoint_flag_false_with_state():
     with tempfile.TemporaryDirectory() as tmpdir:
         directory = Path(tmpdir)
 
+        # Create mock config
+        config = create_eval_config(env="cartpole-control", agent="random")
+
         results = EvaluationResults(
             mean_return=100.0,
             std_return=10.0,
@@ -112,6 +122,7 @@ def test_save_results_to_disk_checkpoint_flag_false_with_state():
             episode_lengths=jnp.array([50]),
             num_episodes=1,
             seed=42,
+            config=config,
         )
         agent_state = {"params": {}, "step": 100}
 
@@ -128,6 +139,9 @@ def test_save_results_to_disk_creates_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         directory = Path(tmpdir) / "nested" / "output"
 
+        # Create mock config
+        config = create_eval_config(env="cartpole-control", agent="random")
+
         results = EvaluationResults(
             mean_return=100.0,
             std_return=10.0,
@@ -141,6 +155,7 @@ def test_save_results_to_disk_creates_directory():
             episode_lengths=jnp.array([50]),
             num_episodes=1,
             seed=42,
+            config=config,
         )
 
         save_results_to_disk(results, directory, agent_state=None, save_checkpoint=False)
@@ -154,6 +169,12 @@ def test_save_results_to_disk_invalid_agent_state():
     with tempfile.TemporaryDirectory() as tmpdir:
         directory = Path(tmpdir)
 
+        # Create mock config
+        config = create_eval_config(env="cartpole-control", agent="random")
+
+        # Create mock config
+        config = create_eval_config(env="cartpole-control", agent="random")
+
         results = EvaluationResults(
             mean_return=100.0,
             std_return=10.0,
@@ -167,6 +188,7 @@ def test_save_results_to_disk_invalid_agent_state():
             episode_lengths=jnp.array([50]),
             num_episodes=1,
             seed=42,
+            config=config,
         )
 
         # Non-serializable agent state

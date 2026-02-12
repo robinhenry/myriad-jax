@@ -8,7 +8,6 @@ from tqdm import tqdm
 from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
-from myriad.utils.config import save_config
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
@@ -304,9 +303,7 @@ def train_and_evaluate(config: Config) -> TrainingResults:
     # Create run metadata at start
     create_and_save_run_metadata(run_dir, run_type="training")
 
-    # Save config to .hydra/config.yaml (matches Hydra runner output)
-    save_config(config, run_dir / ".hydra" / "config.yaml")
-
+    # Config will be saved by results.save() to avoid duplicate I/O
     session_logger = SessionLogger.for_training(config, run_dir=run_dir)
 
     try:

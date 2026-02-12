@@ -11,7 +11,7 @@ import chex
 import numpy as np
 from flax import struct
 
-from myriad.configs.default import Config
+from myriad.configs.default import Config, EvalConfig
 from myriad.envs.environment import EnvironmentState
 from myriad.utils.config import save_config
 
@@ -251,7 +251,7 @@ class EvaluationResults:
     - Summary statistics (mean, std, min, max)
     - Raw episode data (for custom analysis)
     - Optional trajectory data (if return_episodes=True)
-    - Metadata (seed, num_episodes)
+    - Metadata (seed, num_episodes, config)
     """
 
     # --- Summary Statistics ---
@@ -293,6 +293,10 @@ class EvaluationResults:
     seed: int
     """Random seed used for evaluation."""
 
+    # --- Configuration ---
+    config: EvalConfig
+    """Evaluation configuration used (for reproducibility)."""
+
     # --- Optional Trajectory Data ---
     episodes: dict[str, np.ndarray] | None = None
     """Full episode trajectories (if return_episodes=True).
@@ -315,6 +319,7 @@ class EvaluationResults:
         """Save results and optionally agent checkpoint to directory.
 
         Saves:
+        - .hydra/config.yaml: Configuration used for the run (if config is present)
         - results.pkl: EvaluationResults without agent_state
         - checkpoints/final.msgpack: Agent state (if save_checkpoint=True and agent_state exists)
 
@@ -333,6 +338,10 @@ class EvaluationResults:
             >>> results.save(Path.cwd(), save_checkpoint=True)
         """
         directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        # Save config to .hydra/config.yaml (matches Hydra runner output)
+        save_config(self.config, directory / ".hydra" / "config.yaml")
 
         # Save results without agent_state
         # Create a shallow copy with agent_state set to None
@@ -349,6 +358,7 @@ class EvaluationResults:
             episode_lengths=self.episode_lengths,
             num_episodes=self.num_episodes,
             seed=self.seed,
+            config=self.config,  # Include config in pickled results
             episodes=self.episodes,
             agent_state=None,  # Don't pickle agent state - use checkpoint instead
         )

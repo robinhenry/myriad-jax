@@ -16,7 +16,6 @@ import numpy as np
 
 from myriad.agents.agent import AgentState
 from myriad.configs.default import EvalConfig
-from myriad.utils.config import save_config
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
@@ -71,9 +70,7 @@ def evaluate(
     # Create run metadata at start
     create_and_save_run_metadata(run_dir, run_type="evaluation")
 
-    # Save config to .hydra/config.yaml (matches Hydra runner output)
-    save_config(config, run_dir / ".hydra" / "config.yaml")
-
+    # Config will be saved by results.save() to avoid duplicate I/O
     # Create unified logger (handles W&B init/close automatically)
     session_logger = SessionLogger.for_evaluation(config, run_dir=run_dir)
 
@@ -128,6 +125,7 @@ def evaluate(
             episode_lengths=episode_lengths,
             num_episodes=eval_rollouts,
             seed=seed,
+            config=config,  # Store config for reproducibility
             episodes=episodes_data if return_episodes else None,
             agent_state=agent_state,  # Store agent state for potential checkpoint saving
             run_dir=run_dir,  # Store output directory for tests and inspection

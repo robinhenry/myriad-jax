@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import pytest
 import yaml
 
+from myriad.configs.builder import create_eval_config
 from myriad.platform.artifact_loader import (
     RunArtifacts,
     load_run,
@@ -53,6 +54,7 @@ def create_mock_run_directory(tmpdir: Path, run_type: str = "training") -> Path:
         yaml.dump(metadata, f)
 
     # Create results.pkl
+    config = create_eval_config(env="cartpole-control", agent="random")
     results = EvaluationResults(
         mean_return=100.0,
         std_return=10.0,
@@ -66,6 +68,7 @@ def create_mock_run_directory(tmpdir: Path, run_type: str = "training") -> Path:
         episode_lengths=jnp.array([50, 55]),
         num_episodes=2,
         seed=42,
+        config=config,
     )
     with open(run_dir / RESULTS_FILENAME, "wb") as f:
         pickle.dump(results, f)
