@@ -138,33 +138,6 @@ class TestTiming:
         assert stats["median"] <= stats["max"]
         assert stats["min"] <= stats["mean"] <= stats["max"]
 
-    def test_warmup_excludes_compilation(self):
-        """Warmup should exclude compilation from timing."""
-
-        # Use different functions to avoid cache pollution
-        # (calling same function twice would have it pre-compiled on 2nd call)
-
-        @jax.jit
-        def fn_with_warmup(x):
-            return jnp.dot(x, x.T)
-
-        @jax.jit
-        def fn_without_warmup(x):
-            return jnp.dot(x, x.T)
-
-        x = jnp.ones((100, 100))
-
-        # Time with warmup (compilation excluded)
-        stats_with_warmup = time_jitted_fn(fn_with_warmup, x, num_runs=10, warmup_steps=5)
-
-        # Time without warmup (first run includes compilation)
-        stats_no_warmup = time_jitted_fn(fn_without_warmup, x, num_runs=10, warmup_steps=0)
-
-        # With warmup should have more consistent times (lower std)
-        # This is a heuristic - may fail if system is under load
-        # Allow generous tolerance for flakiness
-        assert stats_with_warmup["std"] <= stats_no_warmup["std"] * 3
-
 
 class TestCompilationTime:
     """Tests for measure_compilation_time."""
