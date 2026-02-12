@@ -39,13 +39,15 @@ class DiskBackend:
         self,
         episode_data: dict[str, Any],
         global_step: int,
+        steps_per_env: int,
         save_count: int,
     ) -> Path | None:
         """Save episode trajectories to disk.
 
         Args:
             episode_data: Dictionary containing 'episodes', 'episode_length', 'episode_return'
-            global_step: Current training step (for naming/organization)
+            global_step: Current global training step (total across all envs)
+            steps_per_env: Training steps per individual environment (for directory naming)
             save_count: Number of episodes to save (saves first N from eval_rollouts)
 
         Returns:
@@ -58,7 +60,8 @@ class DiskBackend:
         episode_lengths = episode_data["episode_length"]
         episode_returns = episode_data["episode_return"]
 
-        episodes_dir = self.base_dir / f"step_{global_step:08d}"
+        # Use steps_per_env for more intuitive directory naming
+        episodes_dir = self.base_dir / f"step_{steps_per_env:06d}"
 
         try:
             episodes_dir.mkdir(parents=True, exist_ok=True)

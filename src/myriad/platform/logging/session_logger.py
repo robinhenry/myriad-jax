@@ -170,7 +170,7 @@ class SessionLogger:
                 episode_save_count = len(episode_lengths) if episode_lengths is not None else 0
 
             if episode_save_count > 0:
-                episode_dir = self._disk.save_episodes(eval_results, global_step, episode_save_count)
+                episode_dir = self._disk.save_episodes(eval_results, global_step, steps_per_env, episode_save_count)
 
                 # Log artifact to W&B
                 if episode_dir is not None:

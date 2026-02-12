@@ -22,11 +22,18 @@ Example:
 """
 
 from myriad.configs.builder import create_config, create_eval_config
+from myriad.configs.default import Config, EvalConfig, config_to_eval_config
 from myriad.platform import evaluate, train_and_evaluate
+from myriad.utils.config import load_config, save_config
 
 __all__ = [
     "create_config",
     "create_eval_config",
     "train_and_evaluate",
     "evaluate",
+    "Config",
+    "EvalConfig",
+    "config_to_eval_config",
+    "load_config",
+    "save_config",
 ]

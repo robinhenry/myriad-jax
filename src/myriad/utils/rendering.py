@@ -91,7 +91,7 @@ def render_episode_to_video(
         Path object pointing to the saved video file
 
     Example:
-        >>> episode_data = np.load("episodes/step_1000000/episode_0.npz")
+        >>> episode_data = np.load("episodes/step_001000/episode_0.npz")
         >>> video_path = render_episode_to_video(
         ...     episode_data,
         ...     render_cartpole_frame,
@@ -117,3 +117,93 @@ def render_episode_to_video(
 
     # Convert frames to video
     return frames_to_video(frames, output_path, fps=fps)
+
+
+def render_saved_episodes(
+    env_name: str,
+    episodes_dir: str | Path = "episodes",
+    steps: int | list[int] | None = None,
+    output_dir: str | Path = "videos",
+    fps: int = 50,
+    episode_index: int = 0,
+) -> tuple[list[Path], list[dict[str, np.ndarray]]]:
+    """Render saved episodes from training checkpoints to videos.
+
+    Convenience function for batch rendering episodes saved during training.
+    Automatically finds the render function for the environment and loads
+    episodes from disk.
+
+    Args:
+        env_name: Environment name (e.g., "cartpole-control")
+        episodes_dir: Base directory containing saved episodes (default: "./episodes")
+        steps: Steps per env to render. Can be:
+            - None: render all available checkpoints
+            - int: render single checkpoint (e.g., 500)
+            - list: render multiple checkpoints (e.g., [500, 2500, 5000])
+        output_dir: Directory where videos will be saved (default: "./videos")
+        fps: Frames per second for output videos
+        episode_index: Which episode to render if multiple were saved (default: 0)
+
+    Returns:
+        Tuple of (video_paths, episode_data_list):
+        - video_paths: List of Path objects pointing to rendered video files
+        - episode_data_list: List of dicts containing episode metadata:
+            - 'observations': trajectory observations
+            - 'actions': trajectory actions
+            - 'rewards': trajectory rewards
+            - 'dones': trajectory done flags
+            - 'episode_return': total return
+            - 'episode_length': episode length
+            - 'global_step': global training step
+            - 'seed': random seed
+
+    Example:
+        >>> # Render 1st, 5th, and 10th eval checkpoints
+        >>> from myriad.utils.rendering import render_saved_episodes
+        >>> video_paths, episode_data = render_saved_episodes(
+        ...     "cartpole-control",
+        ...     steps=[500, 2500, 5000]
+        ... )
+        >>> for path, data in zip(video_paths, episode_data):
+        ...     print(f"{path.name}: return={data['episode_return']:.1f}")
+    """
+    from myriad.envs import get_env_info
+
+    episodes_dir = Path(episodes_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get render function for this environment
+    env_info = get_env_info(env_name)
+    render_fn = env_info.render_frame_fn
+
+    # Determine which checkpoints to render
+    if steps is None:
+        # Find all available checkpoint directories
+        checkpoint_dirs = sorted([d for d in episodes_dir.iterdir() if d.is_dir() and d.name.startswith("step_")])
+        steps_list = [int(d.name.split("_")[1]) for d in checkpoint_dirs]
+    elif isinstance(steps, int):
+        steps_list = [steps]
+    else:
+        steps_list = list(steps)
+
+    video_paths = []
+    episode_data_list = []
+
+    for step in steps_list:
+        # Load episode from disk
+        episode_file = episodes_dir / f"step_{step:06d}" / f"episode_{episode_index}.npz"
+        if not episode_file.exists():
+            warnings.warn(f"Episode file not found: {episode_file}, skipping")
+            continue
+
+        episode_data = np.load(episode_file)
+
+        # Render to video
+        output_path = output_dir / f"{env_name.replace('-', '_')}_step_{step:06d}.mp4"
+        video_path = render_episode_to_video(episode_data, render_fn, output_path, fps=fps)
+
+        video_paths.append(video_path)
+        episode_data_list.append(dict(episode_data))
+
+    return video_paths, episode_data_list
