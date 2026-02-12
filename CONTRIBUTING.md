@@ -17,7 +17,7 @@ People usually contribute one of the following:
 * New environments/tasks inline with the library's main goals
 * New agents/algorithms
 * Addressing [existing issues](https://github.com/robinhenry/myriad-jax/issues) (e.g., reported bugs)
-* Improving [the documentation](https://myriad-jax.readthedocs.io/), such as adding new tutorials or clarifying confusing bits.
+* Improving [the documentation](https://myriad-jax.readthedocs.io/), such as filling in gaps, adding new tutorials, or clarifying confusing bits.
 
 But, again, this is not an exhaustive list and we welcome new initiatives.
 
