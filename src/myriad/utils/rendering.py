@@ -316,7 +316,9 @@ def render_episodes(
             # Directory path - auto-generate filenames
             output_dir = Path(output_path)
             # Detect if it's meant to be a directory
-            if not (str(output_path).endswith("/") or output_dir.is_dir()):
+            # Check: ends with '/', is existing dir, or has no file extension
+            is_dir_intent = str(output_path).endswith("/") or output_dir.is_dir() or output_dir.suffix == ""
+            if not is_dir_intent:
                 raise ValueError(
                     "For batch rendering, output_path must be a directory (ending with '/') "
                     "or a list of paths matching the number of episodes"
