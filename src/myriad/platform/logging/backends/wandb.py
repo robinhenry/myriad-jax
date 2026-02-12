@@ -146,6 +146,7 @@ class WandbBackend:
         fps: int = 50,
         max_episodes: int | None = None,
         max_frames: int | None = None,
+        video_dir: Path | None = None,
     ) -> None:
         """Render saved episodes to videos and log to W&B.
 
@@ -156,6 +157,8 @@ class WandbBackend:
             fps: Frames per second for rendered videos
             max_episodes: Maximum number of episodes to render (None = all)
             max_frames: Maximum frames per episode (None = full episode)
+            video_dir: Optional output directory for videos. If provided, videos are saved
+                there permanently. Otherwise, temporary videos are created and cleaned up.
         """
         if not self.use_wandb:
             return
@@ -173,10 +176,22 @@ class WandbBackend:
             if max_episodes is not None:
                 episode_files = episode_files[:max_episodes]
 
+            # Determine if we should save videos permanently or create temporary ones
+            save_videos = video_dir is not None
+            if save_videos:
+                assert video_dir is not None  # type narrowing for mypy
+                video_dir.mkdir(parents=True, exist_ok=True)
+
             for i, episode_file in enumerate(episode_files):
                 try:
                     episode_data = np.load(episode_file)
-                    video_path = episode_dir / f"{episode_file.stem}_video.mp4"
+
+                    # Save to video_dir if provided, otherwise create temporary in episode_dir
+                    if save_videos:
+                        assert video_dir is not None  # type narrowing for mypy
+                        video_path = video_dir / f"{episode_file.stem}.mp4"
+                    else:
+                        video_path = episode_dir / f"{episode_file.stem}_video.mp4"
 
                     render_episode_to_video(
                         episode_data,
@@ -191,7 +206,9 @@ class WandbBackend:
                         step=global_step,
                     )
 
-                    video_path.unlink()
+                    # Only delete temporary videos, keep permanent ones
+                    if not save_videos:
+                        video_path.unlink()
 
                 except Exception as e:
                     print(f"Warning: Failed to render/log {episode_file.name}: {e}")

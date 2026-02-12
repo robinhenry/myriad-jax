@@ -8,9 +8,12 @@ from tqdm import tqdm
 from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
+from myriad.utils.config import save_config
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
+from .metadata import create_and_save_run_metadata
+from .output_dir import get_or_create_output_dir
 from .runners import (
     make_chunk_runner,
     make_chunked_collector,
@@ -280,6 +283,10 @@ def train_and_evaluate(config: Config) -> TrainingResults:
     Main entry point for a training run.
     Initializes everything and runs the outer training loop.
 
+    Output directory is automatically managed:
+    - Under Hydra: uses current directory (Hydra-managed)
+    - Otherwise: creates timestamped directory in outputs/
+
     Args:
         config: Training configuration specifying environment, agent, and run parameters.
 
@@ -291,10 +298,26 @@ def train_and_evaluate(config: Config) -> TrainingResults:
         - config: Configuration used (for reproducibility)
         - final_env_state: Final environment states (can be used to resume training)
     """
-    session_logger = SessionLogger.for_training(config)
+    # Get or create output directory
+    run_dir = get_or_create_output_dir(None)
+
+    # Create run metadata at start
+    create_and_save_run_metadata(run_dir, run_type="training")
+
+    # Save config to .hydra/config.yaml (matches Hydra runner output)
+    save_config(config, run_dir / ".hydra" / "config.yaml")
+
+    session_logger = SessionLogger.for_training(config, run_dir=run_dir)
 
     try:
         results = _run_training_loop(config, session_logger)
+
+        # Save artifacts directly
+        results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
+
+        # Log output directory for user convenience
+        logger.info(f"Artifacts saved to: {run_dir}")
+
         return results
     except Exception:
         # Ensure W&B is closed on error

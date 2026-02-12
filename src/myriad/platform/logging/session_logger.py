@@ -25,6 +25,9 @@ from .backends.wandb import WandbBackend, init_wandb
 class SessionLogger:
     """Unified logger for training and evaluation sessions.
 
+    Focuses on logging metrics and episodes during runs. Artifact persistence
+    (saving results, checkpoints) is handled by the result objects themselves.
+
     Handles three destinations automatically:
     1. Memory - Captures metrics for return values
     2. Disk - Saves episode trajectories
@@ -63,41 +66,43 @@ class SessionLogger:
         self._disk = DiskBackend(base_dir=episode_base_dir, seed=seed)
 
     @classmethod
-    def for_training(cls, config: Config) -> "SessionLogger":
+    def for_training(cls, config: Config, run_dir: Path | None = None) -> "SessionLogger":
         """Create a logger for training sessions.
 
         Args:
             config: Training configuration
+            run_dir: Output directory for artifacts (default: current directory)
 
         Returns:
             Configured SessionLogger instance
         """
         wandb_run = init_wandb(config)
-        run_dir = Path.cwd()  # Hydra sets this to the output dir
+        if run_dir is None:
+            run_dir = Path.cwd()  # Hydra sets this to the output dir
         return cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
 
     @classmethod
-    def for_evaluation(cls, config: EvalConfig) -> "SessionLogger":
+    def for_evaluation(cls, config: EvalConfig, run_dir: Path | None = None) -> "SessionLogger":
         """Create a logger for evaluation-only sessions.
 
         Args:
             config: Evaluation configuration
+            run_dir: Output directory for artifacts (default: current directory)
 
         Returns:
             Configured SessionLogger instance
         """
         wandb_run = init_wandb(config)
-        run_dir = Path.cwd()
+        if run_dir is None:
+            run_dir = Path.cwd()
         return cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
 
     def _get_episode_base_dir(self) -> Path:
         """Get the base directory for episode storage.
 
-        Prefers W&B local directory when available (keeps everything together),
-        otherwise falls back to run_dir/episodes/.
+        Episodes always save to the run directory for consistency.
+        W&B syncs from here as artifacts (not the other way around).
         """
-        if self._wandb.local_dir is not None:
-            return self._wandb.local_dir / "episodes"
         return self._run_dir / "episodes"
 
     # --- Training API ---
@@ -206,6 +211,7 @@ class SessionLogger:
         global_step: int,
         fps: int = 50,
         max_episodes: int | None = None,
+        video_dir: Path | None = None,
     ) -> None:
         """Render saved episodes to videos and log to W&B.
 
@@ -215,6 +221,7 @@ class SessionLogger:
             global_step: Global environment steps (for W&B logging step)
             fps: Frames per second for rendered videos
             max_episodes: Maximum number of episodes to render (None = all)
+            video_dir: Optional output directory for videos (if None, creates temporary videos)
         """
         self._wandb.log_videos(
             episode_dir=episode_dir,
@@ -222,6 +229,7 @@ class SessionLogger:
             global_step=global_step,
             fps=fps,
             max_episodes=max_episodes,
+            video_dir=video_dir,
         )
 
     # --- Properties ---

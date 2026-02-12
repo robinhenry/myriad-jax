@@ -13,6 +13,11 @@ from flax import struct
 
 from myriad.configs.default import Config
 from myriad.envs.environment import EnvironmentState
+from myriad.utils.config import save_config
+
+from .artifact_helpers import save_results_to_disk
+from .constants import RESULTS_FILENAME
+from .serialization import load_agent_state, save_agent_state
 
 
 @struct.dataclass
@@ -143,37 +148,78 @@ class TrainingResults:
             f")"
         )
 
-    def save_agent(self, path: str | Path) -> None:
-        """Save trained agent state to file.
+    def save(self, directory: Path | str, save_checkpoint: bool = False) -> None:
+        """Save results and optionally agent checkpoint to directory.
 
-        Note: Due to JAX/Flax limitations with pickling closures, this uses
-        a restricted pickle protocol. For more robust serialization, consider
-        using Flax's serialization utilities directly on the agent parameters.
+        Saves:
+        - .hydra/config.yaml: Configuration used for the run
+        - results.pkl: TrainingResults without agent_state
+        - checkpoints/final.msgpack: Agent state (if save_checkpoint=True)
+
+        Note: The agent_state is excluded from results.pkl and saved separately
+        using Flax msgpack serialization for reliability with JAX/Flax objects.
 
         Args:
-            path: Path to save the agent state (typically with .pkl extension)
+            directory: Directory to save results to (typically Hydra output directory)
+            save_checkpoint: Whether to save agent checkpoint
+
+        Raises:
+            RuntimeError: If agent checkpoint serialization fails
 
         Example:
             >>> results = train_and_evaluate(config)
-            >>> try:
-            ...     results.save_agent("trained_agent.pkl")
-            ... except (AttributeError, pickle.PicklingError) as e:
-            ...     print(f"Serialization warning: {e}")
+            >>> results.save(Path.cwd(), save_checkpoint=True)
         """
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(path, "wb") as f:
-                # Use highest protocol for better support
-                pickle.dump(self.agent_state, f, protocol=pickle.HIGHEST_PROTOCOL)
-        except (AttributeError, pickle.PicklingError) as e:
-            # Provide helpful error message for common JAX/Flax serialization issues
-            raise RuntimeError(
-                f"Failed to pickle agent state due to JAX/Flax closure limitations. "
-                f"Original error: {e}. "
-                f"Consider using Flax's serialization utilities or extracting only the "
-                f"parameter arrays from the agent state."
-            ) from e
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        # Save config to .hydra/config.yaml (matches Hydra runner output)
+        save_config(self.config, directory / ".hydra" / "config.yaml")
+
+        # Save results without agent_state
+        # Create a shallow copy with agent_state and final_env_state set to None
+        results_copy = TrainingResults(
+            agent_state=None,  # Don't pickle agent state - use checkpoint instead
+            training_metrics=self.training_metrics,
+            eval_metrics=self.eval_metrics,
+            config=self.config,
+            final_env_state=None,  # Also exclude env state - not needed for analysis
+        )
+
+        # Use shared helper for saving results and checkpoint
+        save_results_to_disk(results_copy, directory, self.agent_state, save_checkpoint)
+
+    @staticmethod
+    def load(directory: Path | str) -> "TrainingResults":
+        """Load results from directory.
+
+        Args:
+            directory: Directory containing results.pkl
+
+        Returns:
+            Loaded TrainingResults object
+
+        Example:
+            >>> results = TrainingResults.load("outputs/2026-02-12/14-30-52")
+            >>> print(results.summary())
+        """
+        with open(Path(directory) / RESULTS_FILENAME, "rb") as f:
+            return pickle.load(f)
+
+    def save_agent(self, path: str | Path) -> None:
+        """Save trained agent state to file using Flax msgpack serialization.
+
+        Args:
+            path: Path to save the agent state (typically with .msgpack extension)
+
+        Raises:
+            RuntimeError: If serialization fails
+
+        Example:
+            >>> results = train_and_evaluate(config)
+            >>> results.save_agent("trained_agent.msgpack")
+        """
+        save_agent_state(self.agent_state, path)
 
     @staticmethod
     def load_agent(path: str | Path) -> Any:
@@ -185,12 +231,15 @@ class TrainingResults:
         Returns:
             The loaded agent state (can be passed to evaluate())
 
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            RuntimeError: If deserialization fails
+
         Example:
-            >>> agent_state = TrainingResults.load_agent("trained_agent.pkl")
+            >>> agent_state = TrainingResults.load_agent("trained_agent.msgpack")
             >>> results = evaluate(config, agent_state=agent_state)
         """
-        with open(path, "rb") as f:
-            return pickle.load(f)
+        return load_agent_state(path)
 
 
 @dataclass
@@ -253,6 +302,72 @@ class EvaluationResults:
     - rewards: Shape ``(num_episodes, max_steps)``
     - dones: Shape ``(num_episodes, max_steps)``
     """
+
+    # --- Optional Agent State ---
+    agent_state: Any | None = None
+    """Agent state used for evaluation (if provided)."""
+
+    def save(self, directory: Path | str, save_checkpoint: bool = False) -> None:
+        """Save results and optionally agent checkpoint to directory.
+
+        Saves:
+        - results.pkl: EvaluationResults without agent_state
+        - checkpoints/final.msgpack: Agent state (if save_checkpoint=True and agent_state exists)
+
+        Note: The agent_state is excluded from results.pkl and saved separately
+        using Flax msgpack serialization for reliability with JAX/Flax objects.
+
+        Args:
+            directory: Directory to save results to (typically Hydra output directory)
+            save_checkpoint: Whether to save agent checkpoint
+
+        Raises:
+            RuntimeError: If agent checkpoint serialization fails
+
+        Example:
+            >>> results = evaluate(config, agent_state=agent_state)
+            >>> results.save(Path.cwd(), save_checkpoint=True)
+        """
+        directory = Path(directory)
+
+        # Save results without agent_state
+        # Create a shallow copy with agent_state set to None
+        results_copy = EvaluationResults(
+            mean_return=self.mean_return,
+            std_return=self.std_return,
+            min_return=self.min_return,
+            max_return=self.max_return,
+            mean_length=self.mean_length,
+            std_length=self.std_length,
+            min_length=self.min_length,
+            max_length=self.max_length,
+            episode_returns=self.episode_returns,
+            episode_lengths=self.episode_lengths,
+            num_episodes=self.num_episodes,
+            seed=self.seed,
+            episodes=self.episodes,
+            agent_state=None,  # Don't pickle agent state - use checkpoint instead
+        )
+
+        # Use shared helper for saving results and checkpoint
+        save_results_to_disk(results_copy, directory, self.agent_state, save_checkpoint)
+
+    @staticmethod
+    def load(directory: Path | str) -> "EvaluationResults":
+        """Load results from directory.
+
+        Args:
+            directory: Directory containing results.pkl
+
+        Returns:
+            Loaded EvaluationResults object
+
+        Example:
+            >>> results = EvaluationResults.load("outputs/2026-02-12/14-30-52")
+            >>> print(results.summary())
+        """
+        with open(Path(directory) / RESULTS_FILENAME, "rb") as f:
+            return pickle.load(f)
 
     def summary(self) -> dict[str, float]:
         """Get summary statistics for quick inspection.

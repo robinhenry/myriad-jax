@@ -98,8 +98,9 @@ def evaluate_main(cfg: DictConfig) -> None:
 
     # Render videos if enabled
     if config.run.eval_render_videos and config.run.eval_episode_save_frequency > 0:
-        episodes_path = Path("episodes").resolve()
-        videos_path = Path("videos").resolve()
+        # Use run directory (Hydra sets cwd to the output directory)
+        episodes_path = Path.cwd() / "episodes"
+        videos_path = Path.cwd() / "videos"
 
         # Get the renderer from the environment registry
         env_info = get_env_info(config.env.name)

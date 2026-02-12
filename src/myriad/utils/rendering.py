@@ -120,27 +120,24 @@ def render_episode_to_video(
 
 
 def render_saved_episodes(
-    env_name: str,
-    episodes_dir: str | Path = "episodes",
+    run_dir: str | Path,
     steps: int | list[int] | None = None,
-    output_dir: str | Path = "videos",
     fps: int = 50,
     episode_index: int = 0,
 ) -> tuple[list[Path], list[dict[str, np.ndarray]]]:
     """Render saved episodes from training checkpoints to videos.
 
     Convenience function for batch rendering episodes saved during training.
-    Automatically finds the render function for the environment and loads
+    Automatically loads the environment name from the saved config and renders
     episodes from disk.
 
     Args:
-        env_name: Environment name (e.g., "cartpole-control")
-        episodes_dir: Base directory containing saved episodes (default: "./episodes")
+        run_dir: Run directory containing episodes/ subdirectory and config.
+            Videos will be saved to {run_dir}/videos/
         steps: Steps per env to render. Can be:
             - None: render all available checkpoints
             - int: render single checkpoint (e.g., 500)
             - list: render multiple checkpoints (e.g., [500, 2500, 5000])
-        output_dir: Directory where videos will be saved (default: "./videos")
         fps: Frames per second for output videos
         episode_index: Which episode to render if multiple were saved (default: 0)
 
@@ -158,20 +155,25 @@ def render_saved_episodes(
             - 'seed': random seed
 
     Example:
-        >>> # Render 1st, 5th, and 10th eval checkpoints
         >>> from myriad.utils.rendering import render_saved_episodes
         >>> video_paths, episode_data = render_saved_episodes(
-        ...     "cartpole-control",
+        ...     run_dir="tutorial_run",
         ...     steps=[500, 2500, 5000]
         ... )
         >>> for path, data in zip(video_paths, episode_data):
         ...     print(f"{path.name}: return={data['episode_return']:.1f}")
     """
     from myriad.envs import get_env_info
+    from myriad.platform.artifact_loader import load_run_config
 
-    episodes_dir = Path(episodes_dir)
-    output_dir = Path(output_dir)
+    run_dir = Path(run_dir)
+    episodes_dir = run_dir / "episodes"
+    output_dir = run_dir / "videos"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load config to get environment name
+    config = load_run_config(run_dir)
+    env_name = config.env.name
 
     # Get render function for this environment
     env_info = get_env_info(env_name)

@@ -9,16 +9,23 @@ This module provides evaluation capabilities for:
 
 from __future__ import annotations
 
+import logging
+
 import jax
 import numpy as np
 
 from myriad.agents.agent import AgentState
 from myriad.configs.default import EvalConfig
+from myriad.utils.config import save_config
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
+from .metadata import create_and_save_run_metadata
+from .output_dir import get_or_create_output_dir
 from .steps import make_eval_rollout_fn
 from .types import EvaluationResults
+
+logger = logging.getLogger(__name__)
 
 
 def evaluate(
@@ -35,6 +42,10 @@ def evaluate(
     - Pre-trained models
     - Baseline comparisons
     - Benchmarking and validation
+
+    Output directory is automatically managed:
+    - Under Hydra: uses current directory (Hydra-managed)
+    - Otherwise: creates timestamped directory in outputs/
 
     Args:
         config: EvalConfig specifying environment, agent, and evaluation parameters.
@@ -54,9 +65,17 @@ def evaluate(
         - Optional trajectory data (if return_episodes=True)
         - Metadata (num_episodes, seed)
     """
+    # Get or create output directory
+    run_dir = get_or_create_output_dir(None)
+
+    # Create run metadata at start
+    create_and_save_run_metadata(run_dir, run_type="evaluation")
+
+    # Save config to .hydra/config.yaml (matches Hydra runner output)
+    save_config(config, run_dir / ".hydra" / "config.yaml")
 
     # Create unified logger (handles W&B init/close automatically)
-    logger = SessionLogger.for_evaluation(config)
+    session_logger = SessionLogger.for_evaluation(config, run_dir=run_dir)
 
     try:
         # Extract evaluation settings
@@ -110,6 +129,7 @@ def evaluate(
             num_episodes=eval_rollouts,
             seed=seed,
             episodes=episodes_data if return_episodes else None,
+            agent_state=agent_state,  # Store agent state for potential checkpoint saving
         )
 
         # Log evaluation with single unified call
@@ -123,16 +143,22 @@ def evaluate(
             eval_results_dict["episodes"] = episodes_data
 
         save_count = config.run.eval_episode_save_count or eval_rollouts
-        logger.log_evaluation(
+        session_logger.log_evaluation(
             global_step=0,
             steps_per_env=0,
             eval_results=eval_results_dict,
             save_episodes=save_episodes_to_disk_flag,
             episode_save_count=save_count,
         )
-        logger.log_final(0)
+        session_logger.log_final(0)
+
+        # Save artifacts directly
+        results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
+
+        # Log output directory for user convenience
+        logger.info(f"Artifacts saved to: {run_dir}")
 
         return results
 
     finally:
-        logger.finalize()
+        session_logger.finalize()

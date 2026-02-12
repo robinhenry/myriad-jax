@@ -1,11 +1,16 @@
 """Plotting utilities for visualizing training and evaluation results."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from myriad.platform.types import TrainingResults
+if TYPE_CHECKING:
+    from myriad.platform.types import TrainingResults
 
 
 def plot_training_curve(
