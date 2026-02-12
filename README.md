@@ -1,4 +1,4 @@
-<h1 align="center"> Myriad (<a href="https://myriad-jax.readthedocs.io">docs</a>)</h1>
+<h1 align="center"> Myriad</h1>
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/myriad-jax.svg)](https://pypi.org/project/myriad-jax/)
@@ -26,7 +26,7 @@ It's a **ready-to-go experimental platform**. You can use one of the already-imp
 
 Last but not least, it yields results that are 100% reproducible. 🌟
 
-> *Interested in the story behind Myriad? Read our [Mission Statement & Philosophy](https://myriad-jax.readthedocs.io/en/latest/introduction/motivation_philosophy.html).*
+> *Interested in the story behind Myriad? Read our [Motivation & Philosophy](https://myriad-jax.readthedocs.io/en/latest/introduction/motivation_philosophy.html).*
 
 
 ### Key Features

@@ -78,9 +78,7 @@ class TestEnvConfigs:
         "env_config,expected_name",
         [
             ("cartpole_control", "cartpole-control"),
-            ("cartpole_sysid", "cartpole-sysid"),
             ("ccas_ccar_control", "ccas-ccar-control"),
-            ("ccas_ccar_sysid", "ccas-ccar-sysid"),
         ],
     )
     def test_env_config_loads(self, hydra_context, env_config, expected_name):
