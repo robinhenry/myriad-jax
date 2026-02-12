@@ -28,7 +28,6 @@ Last but not least, it yields results that are 100% reproducible. 🌟
 
 > *Interested in the story behind Myriad? Read our [Motivation & Philosophy](https://myriad-jax.readthedocs.io/en/latest/introduction/motivation_philosophy.html).*
 
-
 ### Key Features
 
 * **⚡ Massive GPU Parallelism:** run algorithms on 1M+ of environments simultaneously.
@@ -42,19 +41,6 @@ Last but not least, it yields results that are 100% reproducible. 🌟
 * **∇ Differentiable "White-Box" Physics:** exposes underlying physics, ODEs, and jump processes for gradient-based system ID and active learning.
 
 * **🛠 Research-Ready:** pre-configured with [Hydra](https://hydra.cc/), [Pydantic](https://docs.pydantic.dev/), and [W&B](https://wandb.ai/site) support.
-
-### Ecosystem
-
-Many amazing RL x JAX tools already exist! Here's how we believe Myriad complements the most popular ones.
-
-| Library | Best for | Physics | System ID | Differentiable | Primary Goals |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gymnax** | Standard RL benchmarks | Black box / various | Low support | No | Agent Performance |
-| **Brax** | Robotics & locomotion | Rigid bodies | Low support | Yes | Fast physical control |
-| **Myriad** | Wet-lab / scientific systems | Stochastic, ODEs, jump processes | Key focus | Yes | Active learning & stochastic control |
-
-For a longer lists, see the [See Also 🔎](#see-also-) section.
-
 
 ## Installation 🌱
 
