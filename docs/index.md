@@ -68,5 +68,5 @@ tutorials/basics/index
 :caption: Development
 
 Github <https://github.com/robinhenry/myriad-jax>
-development/guidelines
+Contributing <https://github.com/robinhenry/myriad-jax?tab=contributing-ov-file>
 ```
