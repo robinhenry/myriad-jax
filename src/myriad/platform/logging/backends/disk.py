@@ -13,12 +13,16 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Centralized formats for episode storage (defined once, used everywhere)
+STEP_DIR_FORMAT = "step_{:08d}"  # 8 digits to support large step counts
+EPISODE_FILE_FORMAT = "episode_{:04d}.npz"  # 4 digits for consistency
+
 
 class DiskBackend:
     """Backend for persisting episodes to disk.
 
     Episodes are saved as compressed numpy archives (.npz) with the structure:
-    - `{base_dir}/step_{global_step:08d}/episode_{i}.npz`
+    - `{base_dir}/step_{steps_per_env:08d}/episode_{i:04d}.npz`
 
     Each episode file contains:
     - observations, actions, rewards, dones (trajectory data)
@@ -39,13 +43,15 @@ class DiskBackend:
         self,
         episode_data: dict[str, Any],
         global_step: int,
+        steps_per_env: int,
         save_count: int,
     ) -> Path | None:
         """Save episode trajectories to disk.
 
         Args:
             episode_data: Dictionary containing 'episodes', 'episode_length', 'episode_return'
-            global_step: Current training step (for naming/organization)
+            global_step: Current global training step (total across all envs)
+            steps_per_env: Training steps per individual environment (for directory naming)
             save_count: Number of episodes to save (saves first N from eval_rollouts)
 
         Returns:
@@ -58,7 +64,8 @@ class DiskBackend:
         episode_lengths = episode_data["episode_length"]
         episode_returns = episode_data["episode_return"]
 
-        episodes_dir = self.base_dir / f"step_{global_step:08d}"
+        # Use steps_per_env for more intuitive directory naming
+        episodes_dir = self.base_dir / STEP_DIR_FORMAT.format(steps_per_env)
 
         try:
             episodes_dir.mkdir(parents=True, exist_ok=True)
@@ -71,7 +78,7 @@ class DiskBackend:
 
         for i in range(num_to_save):
             ep_len = int(episode_lengths[i])
-            ep_file = episodes_dir / f"episode_{i}.npz"
+            ep_file = episodes_dir / EPISODE_FILE_FORMAT.format(i)
 
             try:
                 np.savez_compressed(

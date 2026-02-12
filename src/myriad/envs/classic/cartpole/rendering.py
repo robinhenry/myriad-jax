@@ -19,7 +19,7 @@ def render_cartpole_frame(
     pole_length: float = 1.0,
     cart_width: float = 0.5,
     cart_height: float = 0.3,
-    figsize: tuple[float, float] = (6, 4),
+    figsize: tuple[float, float] = (6.4, 4),
     dpi: int = 100,
 ) -> np.ndarray:
     """Render a single CartPole frame from task state.
@@ -54,7 +54,7 @@ def render_cartpole_frame(
         >>> obs, state = env.reset(key)
         >>> frame = render_cartpole_frame(state, env.config)
         >>> frame.shape
-        (400, 600, 3)
+        (400, 640, 3)
     """
     # Extract state components from physics state
     x = float(state.physics.x)

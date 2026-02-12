@@ -87,6 +87,9 @@ class EvalConfigBase(BaseModel):
     eval_render_videos: bool = False  # Enable automatic video rendering after evaluation
     eval_video_fps: int = 50  # Frames per second for rendered videos
 
+    # --- Artifact Saving (optional) ---
+    save_agent_checkpoint: bool = False  # Auto-save agent checkpoint to checkpoints/final.pkl after run
+
 
 class RunConfig(EvalConfigBase):
     """Configuration for training runs (extends EvalConfigBase).

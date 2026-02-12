@@ -21,7 +21,7 @@ def render_ccas_ccar_frame(
     action: int | None = None,
     trajectory_history: list[ControlTaskState] | None = None,
     action_history: list[int] | None = None,
-    figsize: tuple[float, float] = (10, 6),
+    figsize: tuple[float, float] = (10.08, 6.08),
     dpi: int = 100,
 ) -> np.ndarray:
     """Render a single CcaS-CcaR frame from task state.
@@ -61,7 +61,7 @@ def render_ccas_ccar_frame(
         >>> obs, state = env.reset(key)
         >>> frame = render_ccas_ccar_frame(state, env.config)
         >>> frame.shape
-        (600, 1000, 3)
+        (608, 1008, 3)
     """
     # Extract values directly from state
     F_current = float(state.physics.F)
@@ -260,7 +260,7 @@ def render_population_heatmap(
     actions: np.ndarray | None = None,
     F_obs_normalizer: float = 80.0,
     grid_shape: tuple[int, int] | None = None,
-    figsize: tuple[float, float] = (12, 10),
+    figsize: tuple[float, float] = (12, 10.08),
     dpi: int = 100,
 ) -> np.ndarray:
     """Render population-level heatmap of fluorescence across many cells.
@@ -287,7 +287,7 @@ def render_population_heatmap(
         >>> actions = np.random.randint(0, 2, size=10000)  # Random actions
         >>> frame = render_population_heatmap(obs, actions)
         >>> frame.shape
-        (1000, 1200, 3)
+        (1008, 1200, 3)
     """
     n_envs = observations.shape[0]
 

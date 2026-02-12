@@ -6,7 +6,11 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from myriad.platform.logging.backends.disk import DiskBackend, render_episodes_to_videos
+from myriad.platform.logging.backends.disk import (
+    EPISODE_FILE_FORMAT,
+    DiskBackend,
+    render_episodes_to_videos,
+)
 
 
 @pytest.fixture
@@ -42,9 +46,10 @@ class TestDiskBackend:
         """Episodes should be saved with correct directory structure and metadata."""
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=42)
         global_step = 1000
+        steps_per_env = 1000
         save_count = 2
 
-        result_dir = backend.save_episodes(sample_episode_data, global_step, save_count)
+        result_dir = backend.save_episodes(sample_episode_data, global_step, steps_per_env, save_count)
 
         assert result_dir is not None
         episodes_dir = Path(result_dir)
@@ -54,7 +59,7 @@ class TestDiskBackend:
         episode_files = list(episodes_dir.glob("*.npz"))
         assert len(episode_files) == save_count
 
-        ep0_data = np.load(episodes_dir / "episode_0.npz")
+        ep0_data = np.load(episodes_dir / EPISODE_FILE_FORMAT.format(0))
         expected_len = sample_episode_data["episode_length"][0]
 
         assert ep0_data["observations"].shape[0] == expected_len
@@ -72,7 +77,7 @@ class TestDiskBackend:
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
         save_count = 100
 
-        result_dir = backend.save_episodes(sample_episode_data, 0, save_count)
+        result_dir = backend.save_episodes(sample_episode_data, 0, 0, save_count)
 
         assert result_dir is not None
         episodes_dir = Path(result_dir)
@@ -87,14 +92,14 @@ class TestDiskBackend:
             "episode_return": np.array([10.0]),
         }
 
-        result = backend.save_episodes(incomplete_data, 0, 1)
+        result = backend.save_episodes(incomplete_data, 0, 0, 1)
         assert result is None
 
     def test_creates_nested_directory_structure(self, tmp_path, sample_episode_data):
         """Should create parent directories if they don't exist."""
         backend = DiskBackend(base_dir=tmp_path / "deep" / "nested" / "episodes", seed=0)
 
-        result_dir = backend.save_episodes(sample_episode_data, 5000, 1)
+        result_dir = backend.save_episodes(sample_episode_data, 5000, 5000, 1)
 
         assert result_dir is not None
         assert (tmp_path / "deep" / "nested" / "episodes").exists()
@@ -104,7 +109,7 @@ class TestDiskBackend:
         """Should handle save_count=0 gracefully."""
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
 
-        result = backend.save_episodes(sample_episode_data, 0, 0)
+        result = backend.save_episodes(sample_episode_data, 0, 0, 0)
         assert result is None
 
 
@@ -123,7 +128,7 @@ class TestRenderEpisodesToVideos:
     def test_renders_saved_episodes_to_videos(self, tmp_path, sample_episode_data, mock_render_frame_fn):
         """Should render all saved episodes to video files."""
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
-        episodes_dir = backend.save_episodes(sample_episode_data, 0, 2)
+        episodes_dir = backend.save_episodes(sample_episode_data, 0, 0, 2)
         assert episodes_dir is not None
 
         with patch("myriad.utils.rendering.render_episode_to_video") as mock_render:
@@ -145,7 +150,7 @@ class TestRenderEpisodesToVideos:
 
             assert render_fn == mock_render_frame_fn
             assert fps == 30
-            assert "episode_0.mp4" in str(video_path)
+            assert "episode_0000.mp4" in str(video_path)
 
     def test_returns_zero_when_directory_not_found(self, tmp_path, mock_render_frame_fn):
         """Should return 0 when episodes directory doesn't exist."""
@@ -167,7 +172,7 @@ class TestRenderEpisodesToVideos:
     def test_creates_output_directory_if_missing(self, tmp_path, sample_episode_data, mock_render_frame_fn):
         """Should create output directory if it doesn't exist."""
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
-        episodes_dir = backend.save_episodes(sample_episode_data, 0, 1)
+        episodes_dir = backend.save_episodes(sample_episode_data, 0, 0, 1)
 
         with patch("myriad.utils.rendering.render_episode_to_video"):
             output_dir = tmp_path / "new_videos_dir"
@@ -180,7 +185,7 @@ class TestRenderEpisodesToVideos:
     def test_handles_rendering_errors_gracefully(self, tmp_path, sample_episode_data, mock_render_frame_fn):
         """Should continue rendering other episodes if one fails."""
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
-        episodes_dir = backend.save_episodes(sample_episode_data, 0, 3)
+        episodes_dir = backend.save_episodes(sample_episode_data, 0, 0, 3)
 
         with patch("myriad.utils.rendering.render_episode_to_video") as mock_render:
             call_count = 0
@@ -207,11 +212,11 @@ class TestIntegration:
         backend = DiskBackend(base_dir=tmp_path / "episodes", seed=0)
 
         # Step 1: Save episodes
-        episodes_dir = backend.save_episodes(sample_episode_data, 500, 2)
+        episodes_dir = backend.save_episodes(sample_episode_data, 500, 500, 2)
         assert episodes_dir is not None
 
         # Step 2: Verify saved files can be loaded
-        ep_path = Path(episodes_dir) / "episode_0.npz"
+        ep_path = Path(episodes_dir) / EPISODE_FILE_FORMAT.format(0)
         assert ep_path.exists()
 
         loaded_data = np.load(ep_path)
