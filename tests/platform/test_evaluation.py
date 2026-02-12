@@ -267,10 +267,11 @@ class TestEvaluateEpisodeSaving:
         test_eval_config.run.eval_episode_save_frequency = 1
         test_eval_config.run.eval_episode_save_count = 2
 
-        _results = evaluate(test_eval_config, agent_state=None, return_episodes=False)
+        results = evaluate(test_eval_config, agent_state=None, return_episodes=False)
 
         # Check that episodes directory was created
-        episodes_dir = tmp_path / "episodes" / "step_00000000"
+        assert results.run_dir is not None
+        episodes_dir = results.run_dir / "episodes" / "step_00000000"
         assert episodes_dir.exists()
 
         # Check that episodes were saved
@@ -297,9 +298,10 @@ class TestEvaluateEpisodeSaving:
         test_eval_config.run.eval_episode_save_frequency = 1
         test_eval_config.run.eval_episode_save_count = None  # Save all
 
-        evaluate(test_eval_config, agent_state=None, return_episodes=False)
+        results = evaluate(test_eval_config, agent_state=None, return_episodes=False)
 
-        episodes_dir = tmp_path / "episodes" / "step_00000000"
+        assert results.run_dir is not None
+        episodes_dir = results.run_dir / "episodes" / "step_00000000"
         episode_files = list(episodes_dir.glob("*.npz"))
 
         # Should save all 3 episodes (eval_rollouts=3)

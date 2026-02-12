@@ -66,9 +66,11 @@ def plot_training_curve(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.get_figure()
-        if fig is None:
+        fig_tmp = ax.get_figure()
+        if fig_tmp is None:
             raise ValueError("Provided axes must be attached to a figure")
+        # get_figure() can return SubFigure, but we treat it as Figure for our purposes
+        fig = fig_tmp  # type: ignore[assignment]
 
     # Plot each result
     for result, label in zip(results_list, labels_list):

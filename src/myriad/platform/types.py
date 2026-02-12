@@ -307,6 +307,10 @@ class EvaluationResults:
     agent_state: Any | None = None
     """Agent state used for evaluation (if provided)."""
 
+    # --- Output Directory ---
+    run_dir: Path | None = None
+    """Directory where evaluation outputs were saved."""
+
     def save(self, directory: Path | str, save_checkpoint: bool = False) -> None:
         """Save results and optionally agent checkpoint to directory.
 

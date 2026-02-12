@@ -130,6 +130,7 @@ def evaluate(
             seed=seed,
             episodes=episodes_data if return_episodes else None,
             agent_state=agent_state,  # Store agent state for potential checkpoint saving
+            run_dir=run_dir,  # Store output directory for tests and inspection
         )
 
         # Log evaluation with single unified call

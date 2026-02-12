@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import imageio
 import numpy as np
@@ -288,19 +288,38 @@ def render_episodes(
     # Detect and validate mode
     mode = _detect_mode(results, episode, run_dir, env_name, step)
 
+    # After mode detection, we know certain parameters are guaranteed non-None.
+    # _detect_mode() does the actual validation; these assertions document the guarantee.
+    if mode == "results":
+        assert results is not None  # Validated by _detect_mode
+    elif mode == "episode":
+        assert episode is not None  # Validated by _detect_mode
+        assert env_name is not None  # Validated by _detect_mode
+    elif mode == "disk":
+        assert run_dir is not None and step is not None  # Validated by _detect_mode
+
     # Detect if batch rendering is requested
     is_batch = False
     num_episodes = 1
 
     if mode == "results":
-        is_batch = isinstance(episode_index, list)
-        num_episodes = len(episode_index) if is_batch else 1
+        if isinstance(episode_index, list):
+            is_batch = True
+            num_episodes = len(episode_index)
+        else:
+            num_episodes = 1
     elif mode == "episode":
-        is_batch = isinstance(episode, list)
-        num_episodes = len(episode) if is_batch else 1
+        if isinstance(episode, list):
+            is_batch = True
+            num_episodes = len(episode)
+        else:
+            num_episodes = 1
     elif mode == "disk":
-        is_batch = isinstance(step, list)
-        num_episodes = len(step) if is_batch else 1
+        if isinstance(step, list):
+            is_batch = True
+            num_episodes = len(step)
+        else:
+            num_episodes = 1
 
     # Handle output paths
     output_paths: list[Path]
@@ -337,15 +356,15 @@ def render_episodes(
         # Try to get from config first, then fall back to explicit env_name
         if env_name is not None:
             discovered_env_name = env_name
-        elif hasattr(results, "config") and hasattr(results.config, "env"):
-            discovered_env_name = results.config.env.name
+        elif hasattr(results, "config") and hasattr(cast(Any, results).config, "env"):
+            discovered_env_name = cast(Any, results).config.env.name
         else:
             raise ValueError("Cannot determine env_name from EvaluationResults. " "Please provide env_name explicitly.")
     elif mode == "episode":
-        discovered_env_name = env_name  # Required, already validated
+        discovered_env_name = cast(str, env_name)
     elif mode == "disk":
         # Load config to get env_name
-        config = load_run_config(run_dir)
+        config = load_run_config(cast(str | Path, run_dir))
         discovered_env_name = config.env.name
 
     # Get render function
@@ -362,10 +381,12 @@ def render_episodes(
 
     # Prepare iteration based on mode
     if mode == "results":
-        indices = episode_index if is_batch else [episode_index]
+        assert cast(Any, results).episodes is not None  # Already validated by _detect_mode
+        # Construct list for iteration (is_batch determines the actual type)
+        indices: list[int] = cast(list[int], episode_index) if is_batch else [cast(int, episode_index)]
         for i, idx in enumerate(indices):
             # Extract episode from results
-            episode_data = {k: v[idx] for k, v in results.episodes.items()}
+            episode_data = {k: v[idx] for k, v in cast(Any, results).episodes.items()}
 
             # Auto-generate filename if needed
             if is_batch and not isinstance(output_path, list):
@@ -389,7 +410,10 @@ def render_episodes(
             metadata_list.append(meta)
 
     elif mode == "episode":
-        episodes = episode if is_batch else [episode]
+        # Construct list for iteration (is_batch determines the actual type)
+        episodes: list[dict[str, np.ndarray]] = (
+            cast(list[dict[str, np.ndarray]], episode) if is_batch else [cast(dict[str, np.ndarray], episode)]
+        )
         for i, ep in enumerate(episodes):
             # Auto-generate filename if needed
             if is_batch and not isinstance(output_path, list):
@@ -413,9 +437,10 @@ def render_episodes(
             metadata_list.append(meta)
 
     elif mode == "disk":
-        run_dir_path = Path(run_dir)
+        run_dir_path = Path(cast(str | Path, run_dir))
         episodes_dir = run_dir_path / "episodes"
-        steps = step if is_batch else [step]
+        # Construct list for iteration (is_batch determines the actual type)
+        steps: list[int] = cast(list[int], step) if is_batch else [cast(int, step)]
 
         for i, s in enumerate(steps):
             # Load episode from disk
