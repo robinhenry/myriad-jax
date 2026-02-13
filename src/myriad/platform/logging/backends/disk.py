@@ -98,7 +98,7 @@ class DiskBackend:
                 continue
 
         if saved_count > 0:
-            logger.info(f"Saved {saved_count}/{num_to_save} episodes to {episodes_dir}")
+            logger.debug(f"Saved {saved_count}/{num_to_save} episodes to {episodes_dir}")
             return episodes_dir
         else:
             return None
