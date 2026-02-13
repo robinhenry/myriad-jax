@@ -156,7 +156,6 @@ def evaluate(
         logger.info(f"Artifacts saved to: {run_dir}")
 
         return results
-
-    finally:
+    except Exception:
         session_logger.finalize()
         raise
