@@ -15,9 +15,9 @@ import pytest
 
 from myriad.core import spaces
 from myriad.envs import make_env as make_env_from_registry
-from myriad.envs.bio.ccas_ccar.physics import PhysicsState
-from myriad.envs.bio.ccas_ccar.tasks.base import CcasCcarControlObs, TaskConfig
-from myriad.envs.bio.ccas_ccar.tasks.control import (
+from myriad.envs.bio.ccasr_gfp.physics import PhysicsState
+from myriad.envs.bio.ccasr_gfp.tasks.base import CcasrGfpControlObs, TaskConfig
+from myriad.envs.bio.ccasr_gfp.tasks.control import (
     ControlTaskConfig,
     ControlTaskParams,
     ControlTaskState,
@@ -79,7 +79,7 @@ class TestObservations:
 
         obs = get_obs(state, ControlTaskParams(), config)
 
-        assert isinstance(obs, CcasCcarControlObs)
+        assert isinstance(obs, CcasrGfpControlObs)
         assert jnp.isclose(obs.F_normalized, 25.0 / config.task.F_obs_normalizer)
         # Obs: [F, F_target[0], F_target[1]]
         assert obs.to_array().shape == (3,)
@@ -107,7 +107,7 @@ class TestObservations:
 
         obs = get_obs(state, ControlTaskParams(), config)
         arr = obs.to_array()
-        obs_restored = CcasCcarControlObs.from_array(arr)
+        obs_restored = CcasrGfpControlObs.from_array(arr)
 
         assert jnp.isclose(obs.F_normalized, obs_restored.F_normalized)
         assert jnp.allclose(obs.F_target, obs_restored.F_target)
@@ -254,7 +254,7 @@ class TestStepFunction:
         assert jnp.isfinite(next_state.physics.time)
         assert jnp.isfinite(next_state.physics.H) and next_state.physics.H >= 0
         assert jnp.isfinite(next_state.physics.F) and next_state.physics.F >= 0
-        assert isinstance(obs, CcasCcarControlObs)
+        assert isinstance(obs, CcasrGfpControlObs)
 
 
 class TestEnvironmentCreation:
@@ -278,7 +278,7 @@ class TestEnvironmentCreation:
 
     def test_make_env_registry(self):
         """Test creating environment from registry."""
-        env = make_env_from_registry("ccas-ccar-control")
+        env = make_env_from_registry("ccasr-gfp-control")
 
         assert isinstance(env, Environment)
         assert isinstance(env.config, ControlTaskConfig)
@@ -309,7 +309,7 @@ class TestFullEpisode:
 
             assert jnp.isfinite(state.physics.H) and state.physics.H >= 0
             assert jnp.isfinite(state.physics.F) and state.physics.F >= 0
-            assert isinstance(obs, CcasCcarControlObs)
+            assert isinstance(obs, CcasrGfpControlObs)
 
         assert step_count > 0
 
@@ -326,7 +326,7 @@ class TestFullEpisode:
         obs, state, reward, done, info = step_jit(step_key, state, jnp.array(1), env.params, env.config)
 
         assert jnp.isfinite(reward)
-        assert isinstance(obs, CcasCcarControlObs)
+        assert isinstance(obs, CcasrGfpControlObs)
 
     def test_vmap_compatibility(self, env):
         """Test that environment can be vmapped for parallel execution."""
@@ -336,7 +336,7 @@ class TestFullEpisode:
         reset_batch = jax.vmap(env.reset, in_axes=(0, None, None))
         obs_batch, state_batch = reset_batch(keys, env.params, env.config)
 
-        assert isinstance(obs_batch, CcasCcarControlObs)
+        assert isinstance(obs_batch, CcasrGfpControlObs)
         assert obs_batch.F_normalized.shape == (batch_size,)
         assert state_batch.t.shape == (batch_size,)
 
@@ -348,6 +348,6 @@ class TestFullEpisode:
             keys, state_batch, action_batch, env.params, env.config
         )
 
-        assert isinstance(obs_batch, CcasCcarControlObs)
+        assert isinstance(obs_batch, CcasrGfpControlObs)
         assert reward_batch.shape == (batch_size,)
         assert done_batch.shape == (batch_size,)

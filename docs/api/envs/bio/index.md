@@ -4,11 +4,11 @@
 :maxdepth: 1
 :hidden:
 
-ccas_ccar
+ccasr_gfp
 ```
 
 Stochastic biological systems with native Gillespie simulation support.
 
 | Environment | Description |
 |-------------|-------------|
-| [CcaS-CcaR](ccas_ccar.md) | Optogenetic gene circuit control |
+| [ccasr-gfp-control](ccasr_gfp.md) | CcaS-CcaR + GFP bi-stable gene circuit |

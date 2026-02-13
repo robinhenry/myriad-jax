@@ -25,7 +25,7 @@ obs, state, reward, done, info = env.step(key, state, action, env.params, env.co
 |----|----------|-------------|-------------|
 | `cartpole-control` | [Classic](classic/index.md) | [CartPole](classic/cartpole.md) | Inverted pendulum balancing |
 | `pendulum-control` | [Classic](classic/index.md) | [Pendulum](classic/pendulum.md) | Swing-up control |
-| `ccas-ccar-control` | [Biology](bio/index.md) | [CcaS-CcaR](bio/ccas_ccar.md) | Bacterial gene circuit control |
+| `ccasr-gfp-control` | [Biology](bio/index.md) | [CcaSR-GFP](bio/ccasr_gfp.md) | CcaS/CcaR + GFP optogenetic gene circuit |
 
 ## Factory Function
 

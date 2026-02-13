@@ -12,7 +12,7 @@ Shows:
 import numpy as np
 
 from myriad import create_eval_config, evaluate
-from myriad.envs.bio.ccas_ccar.rendering import render_population_heatmap
+from myriad.envs.bio.ccasr_gfp.rendering import render_population_heatmap
 from myriad.utils.rendering import frames_to_video
 
 # Configuration

@@ -1,5 +1,5 @@
-from .bio.ccas_ccar.rendering import render_ccas_ccar_frame
-from .bio.ccas_ccar.tasks import control as ccas_ccar_control
+from .bio.ccasr_gfp.rendering import render_frame as render_ccasr_gfp_frame
+from .bio.ccasr_gfp.tasks import control as ccasr_gfp_control
 from .classic.cartpole.rendering import render_cartpole_frame_from_obs
 from .classic.cartpole.tasks import control as cartpole_control
 from .classic.pendulum.rendering import render_pendulum_frame_from_obs
@@ -20,28 +20,16 @@ register_env(
     render_frame_fn=render_cartpole_frame_from_obs,
 )
 register_env(
-    "cartpole-sysid",
-    cartpole_control.make_env,
-    cartpole_control.ControlTaskConfig,
-    render_frame_fn=render_cartpole_frame_from_obs,
-)
-register_env(
     "pendulum-control",
     pendulum_control.make_env,
     pendulum_control.ControlTaskConfig,
     render_frame_fn=render_pendulum_frame_from_obs,
 )
 register_env(
-    "ccas-ccar-control",
-    ccas_ccar_control.make_env,
-    ccas_ccar_control.ControlTaskConfig,
-    render_frame_fn=render_ccas_ccar_frame,
-)
-register_env(
-    "ccas-ccar-sysid",
-    ccas_ccar_control.make_env,
-    ccas_ccar_control.ControlTaskConfig,
-    render_frame_fn=render_ccas_ccar_frame,
+    "ccasr-gfp-control",
+    ccasr_gfp_control.make_env,
+    ccasr_gfp_control.ControlTaskConfig,
+    render_frame_fn=render_ccasr_gfp_frame,
 )
 
 __all__ = [

@@ -8,11 +8,11 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
-from myriad.envs.classic.cartpole.physics import PhysicsState
-from myriad.envs.classic.cartpole.tasks.control import ControlTaskConfig, ControlTaskState
+from .physics import PhysicsState
+from .tasks.control import ControlTaskConfig, ControlTaskState
 
 
-def render_cartpole_frame(
+def render_frame(
     state: ControlTaskState,
     config: ControlTaskConfig,
     action: int | None = None,
@@ -134,4 +134,4 @@ def render_cartpole_frame_from_obs(obs: np.ndarray) -> np.ndarray:
         physics=PhysicsState.from_array(obs),  # type: ignore[arg-type]
         t=np.int32(0),  # type: ignore[arg-type]
     )
-    return render_cartpole_frame(state, ControlTaskConfig())
+    return render_frame(state, ControlTaskConfig())

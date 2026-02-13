@@ -4,13 +4,13 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from myriad.envs.bio.ccas_ccar.physics import PhysicsState
-from myriad.envs.bio.ccas_ccar.rendering import render_ccas_ccar_frame, render_population_heatmap
-from myriad.envs.bio.ccas_ccar.tasks.control import ControlTaskConfig, ControlTaskState
+from myriad.envs.bio.ccasr_gfp.physics import PhysicsState
+from myriad.envs.bio.ccasr_gfp.rendering import render_frame, render_population_heatmap
+from myriad.envs.bio.ccasr_gfp.tasks.control import ControlTaskConfig, ControlTaskState
 
 
 class TestRenderCcasCcarFrame:
-    """Tests for render_ccas_ccar_frame function."""
+    """Tests for render_frame function."""
 
     @pytest.fixture
     def config(self) -> ControlTaskConfig:
@@ -54,18 +54,18 @@ class TestRenderCcasCcarFrame:
 
     def test_frame_shape_default(self, basic_state: ControlTaskState, config: ControlTaskConfig):
         """Test that rendered frame has correct shape with default parameters."""
-        frame = render_ccas_ccar_frame(basic_state, config)
+        frame = render_frame(basic_state, config)
         assert frame.ndim == 3, "Frame should be 3D array (height, width, channels)"
         assert frame.shape[-1] == 3, "Frame should have 3 color channels (RGB)"
 
     def test_frame_dtype(self, basic_state: ControlTaskState, config: ControlTaskConfig):
         """Test that rendered frame has correct dtype."""
-        frame = render_ccas_ccar_frame(basic_state, config)
+        frame = render_frame(basic_state, config)
         assert frame.dtype == np.uint8, "Frame should be uint8 for image data"
 
     def test_frame_values_in_range(self, basic_state: ControlTaskState, config: ControlTaskConfig):
         """Test that pixel values are in valid range [0, 255]."""
-        frame = render_ccas_ccar_frame(basic_state, config)
+        frame = render_frame(basic_state, config)
         assert np.all(frame >= 0), "Pixel values should be >= 0"
         assert np.all(frame <= 255), "Pixel values should be <= 255"
 
@@ -76,8 +76,8 @@ class TestRenderCcasCcarFrame:
         config: ControlTaskConfig,
     ):
         """Test that different states produce different visual frames."""
-        frame1 = render_ccas_ccar_frame(basic_state, config)
-        frame2 = render_ccas_ccar_frame(high_fluorescence_state, config)
+        frame1 = render_frame(basic_state, config)
+        frame2 = render_frame(high_fluorescence_state, config)
         assert not np.array_equal(frame1, frame2), "Different states should produce different frames"
 
     def test_custom_normalizer(self, basic_state: ControlTaskState):
@@ -86,16 +86,16 @@ class TestRenderCcasCcarFrame:
         config1 = config1.replace(task=config1.task.replace(F_obs_normalizer=80.0))
         config2 = ControlTaskConfig()
         config2 = config2.replace(task=config2.task.replace(F_obs_normalizer=100.0))
-        frame1 = render_ccas_ccar_frame(basic_state, config1)
-        frame2 = render_ccas_ccar_frame(basic_state, config2)
+        frame1 = render_frame(basic_state, config1)
+        frame2 = render_frame(basic_state, config2)
         assert frame1.shape[-1] == 3
         assert frame2.shape[-1] == 3
         assert not np.array_equal(frame1, frame2)
 
     def test_custom_figsize_and_dpi(self, basic_state: ControlTaskState, config: ControlTaskConfig):
         """Test rendering with custom figure size and DPI."""
-        frame_small = render_ccas_ccar_frame(basic_state, config, figsize=(4, 3), dpi=50)
-        frame_large = render_ccas_ccar_frame(basic_state, config, figsize=(10, 8), dpi=150)
+        frame_small = render_frame(basic_state, config, figsize=(4, 3), dpi=50)
+        frame_large = render_frame(basic_state, config, figsize=(10, 8), dpi=150)
         assert frame_small.shape[-1] == 3
         assert frame_large.shape[-1] == 3
         assert frame_large.size > frame_small.size
@@ -107,15 +107,15 @@ class TestRenderCcasCcarFrame:
         config: ControlTaskConfig,
     ):
         """Test that multiple sequential renders work correctly (no state leakage)."""
-        frame1 = render_ccas_ccar_frame(basic_state, config)
-        frame2 = render_ccas_ccar_frame(high_fluorescence_state, config)
-        frame3 = render_ccas_ccar_frame(basic_state, config)
+        frame1 = render_frame(basic_state, config)
+        frame2 = render_frame(high_fluorescence_state, config)
+        frame3 = render_frame(basic_state, config)
         assert np.array_equal(frame1, frame3), "Same state should produce identical frames"
         assert not np.array_equal(frame1, frame2)
 
     def test_frame_is_not_empty(self, basic_state: ControlTaskState, config: ControlTaskConfig):
         """Test that rendered frame contains actual content."""
-        frame = render_ccas_ccar_frame(basic_state, config)
+        frame = render_frame(basic_state, config)
         assert frame.std() > 0, "Frame should contain visual content with variation"
 
 

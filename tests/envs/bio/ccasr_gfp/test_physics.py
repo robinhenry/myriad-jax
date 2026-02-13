@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from myriad.envs.bio.ccas_ccar.physics import (
+from myriad.envs.bio.ccasr_gfp.physics import (
     PhysicsConfig,
     PhysicsParams,
     PhysicsState,

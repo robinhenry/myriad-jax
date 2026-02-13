@@ -1,7 +1,7 @@
-"""CcaS-CcaR gene circuit rendering utilities.
+"""CcaS-CcaR + GFP gene circuit rendering utilities.
 
-This module provides functions to render CcaS-CcaR fluorescence states as RGB frames
-for video generation and visualization.
+This module provides functions to render CcaS-CcaR + GFP fluorescence states as
+RGB frames for video generation and visualization.
 
 Rendering modes:
 1. Single-cell trajectory: Shows one cell's fluorescence over time
@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 
-from myriad.envs.bio.ccas_ccar.tasks.control import ControlTaskConfig, ControlTaskState
+from .tasks.control import ControlTaskConfig, ControlTaskState
 
 
-def render_ccas_ccar_frame(
+def render_frame(
     state: ControlTaskState,
     config: ControlTaskConfig,
     action: int | None = None,
@@ -24,7 +24,7 @@ def render_ccas_ccar_frame(
     figsize: tuple[float, float] = (10.08, 6.08),
     dpi: int = 100,
 ) -> np.ndarray:
-    """Render a single CcaS-CcaR frame from task state.
+    """Render a single CcaS-CcaR GFP frame from task state.
 
     Creates a visualization showing:
     - Fluorescence trajectory over time (if trajectory_history provided)
@@ -54,7 +54,7 @@ def render_ccas_ccar_frame(
         RGB image array with shape (height, width, 3) and dtype uint8
 
     Example:
-        >>> from myriad.envs.bio.ccas_ccar.tasks.control import make_env
+        >>> from myriad.envs.bio.ccasr_gfp.tasks.control import make_env
         >>> import jax
         >>> env = make_env()
         >>> key = jax.random.PRNGKey(0)

@@ -1,4 +1,4 @@
-"""Pure stateless physics for the CcaS-CcaR gene circuit system.
+"""Pure stateless physics for the CcaS-CcaR + GFP with self-activation gene circuit system.
 
 This module contains the ground truth stochastic dynamics for the bi-stable genetic
 circuit, using the Gillespie algorithm for exact stochastic simulation.

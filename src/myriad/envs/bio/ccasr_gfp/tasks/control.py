@@ -1,4 +1,4 @@
-"""Control task wrapper for CcaS-CcaR gene circuit.
+"""Control task wrapper for CcaS-CcaR + GFP gene circuit.
 
 Standard tracking task: Control GFP expression (F) to match a target trajectory.
 Reward: Negative absolute error between F and F_target.
@@ -21,12 +21,12 @@ from myriad.envs.environment import Environment
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
 from .base import (
-    CcasCcarControlObs,
+    CcasrGfpControlObs,
     TaskConfig,
     check_termination,
     generate_constant_target,
     generate_sinewave_target,
-    get_ccas_ccar_action_space,
+    get_action_space as _get_action_space,
     sample_initial_physics,
 )
 
@@ -88,7 +88,7 @@ def _step(
     action: Array,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> tuple[CcasCcarControlObs, ControlTaskState, Array, Array, dict[str, Any]]:
+) -> tuple[CcasrGfpControlObs, ControlTaskState, Array, Array, dict[str, Any]]:
     """Step the control task forward one timestep.
 
     Args:
@@ -164,7 +164,7 @@ def _reset(
     key: PRNGKey,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> tuple[CcasCcarControlObs, ControlTaskState]:
+) -> tuple[CcasrGfpControlObs, ControlTaskState]:
     """Reset the control task to initial state.
 
     Initializes the system at zero protein concentrations and generates initial target.
@@ -214,7 +214,7 @@ def get_obs(
     state: ControlTaskState,
     params: ControlTaskParams,
     config: ControlTaskConfig,
-) -> CcasCcarControlObs:
+) -> CcasrGfpControlObs:
     """Extract observation from state.
 
     Returns a structured observation with named fields for semantic access
@@ -234,7 +234,7 @@ def get_obs(
     # Normalize F_target
     F_target_normalized = state.F_target / config.task.F_obs_normalizer
 
-    return CcasCcarControlObs(
+    return CcasrGfpControlObs(
         F_normalized=F_normalized,
         F_target=F_target_normalized,
     )
@@ -264,15 +264,15 @@ def get_action_space(config: ControlTaskConfig) -> Discrete:
     Returns:
         Discrete space with 2 actions: 0 (light off) and 1 (light on)
     """
-    return get_ccas_ccar_action_space()
+    return _get_action_space()
 
 
 def make_env(
     config: ControlTaskConfig | None = None,
     params: ControlTaskParams | None = None,
     **kwargs,
-) -> Environment[ControlTaskState, ControlTaskConfig, ControlTaskParams, CcasCcarControlObs]:
-    """Create a CcaS-CcaR control task environment.
+) -> Environment[ControlTaskState, ControlTaskConfig, ControlTaskParams, CcasrGfpControlObs]:
+    """Create a Ccasr-gfp control task environment.
 
     Args:
         config: Custom ControlTaskConfig. If None, uses defaults.
