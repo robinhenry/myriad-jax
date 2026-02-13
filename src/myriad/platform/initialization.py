@@ -35,6 +35,13 @@ def initialize_environment_and_agent(
     # Create the agent
     agent_kwargs = get_factory_kwargs(config.agent)
     action_space = env.get_action_space(env.config)
+
+    # Auto-inject dt from environment config if agent doesn't have it
+    if "dt" not in agent_kwargs:
+        env_dt = getattr(env.config, "dt", None)
+        if env_dt is not None:
+            agent_kwargs["dt"] = env_dt
+
     agent = make_agent(config.agent.name, action_space=action_space, **agent_kwargs)
 
     return env, agent, action_space
