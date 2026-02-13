@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+# Run parameters
+run:
+  seed: 0
+  eval_rollouts: 1000
+  eval_max_steps: 288
+
+# Environment overrides
+env:
+  name: ccasr-gfp-control
+
+# Agent overrides
+agent:
+  name: random
+
+# W&B settings
+wandb:
+  enabled: false
+  project: myriad
+  entity: lugagne-lab
+  group: examples
+  tags: ["random", "ccasr-gfp", "constant"]
