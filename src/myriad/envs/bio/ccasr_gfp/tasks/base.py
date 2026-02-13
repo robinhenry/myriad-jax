@@ -1,4 +1,4 @@
-"""Shared utilities for CcaS-CcaR gene circuit task wrappers."""
+"""Shared utilities for CcaS-CcaR + GFP gene circuit task wrappers."""
 
 from typing import NamedTuple
 
@@ -13,7 +13,7 @@ from myriad.core.types import PRNGKey
 from ..physics import PhysicsState
 
 
-class CcasCcarControlObs(NamedTuple):
+class CcasrGfpControlObs(NamedTuple):
     """CcaS-CcaR control task observation with named fields.
 
     Note: This is a partially observable system. The agent does not directly
@@ -36,7 +36,7 @@ class CcasCcarControlObs(NamedTuple):
         return jnp.concatenate([jnp.array([self.F_normalized]), self.F_target])
 
     @classmethod
-    def from_array(cls, arr: Array) -> "CcasCcarControlObs":
+    def from_array(cls, arr: Array) -> "CcasrGfpControlObs":
         """Create observation from flat array.
 
         Args:
@@ -78,7 +78,7 @@ def check_termination(t: Array, task_config: TaskConfig) -> Array:
     return (t >= task_config.max_steps).astype(jnp.float32)
 
 
-def get_ccas_ccar_action_space() -> Discrete:
+def get_action_space() -> Discrete:
     """Get the discrete action space for CcaS-CcaR.
 
     Returns:

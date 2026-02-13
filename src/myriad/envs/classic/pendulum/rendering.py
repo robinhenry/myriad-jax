@@ -8,11 +8,11 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
-from myriad.envs.classic.pendulum.physics import PhysicsState
-from myriad.envs.classic.pendulum.tasks.control import ControlTaskConfig, ControlTaskState
+from .physics import PhysicsState
+from .tasks.control import ControlTaskConfig, ControlTaskState
 
 
-def render_pendulum_frame(
+def render_frame(
     state: ControlTaskState,
     config: ControlTaskConfig,
     action: float | None = None,
@@ -129,4 +129,4 @@ def render_pendulum_frame_from_obs(obs: np.ndarray) -> np.ndarray:
         physics=PhysicsState(theta=theta, theta_dot=float(obs[2])),  # type: ignore[arg-type]
         t=np.int32(0),  # type: ignore[arg-type]
     )
-    return render_pendulum_frame(state, ControlTaskConfig())
+    return render_frame(state, ControlTaskConfig())
