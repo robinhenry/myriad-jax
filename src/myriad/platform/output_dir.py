@@ -51,6 +51,43 @@ def create_timestamped_output_dir(base_dir: Path | str = "outputs") -> Path:
     return output_dir
 
 
+def format_artifacts_tree(run_dir: Path) -> str:
+    """Format a compact tree view of a run's artifacts directory for logging."""
+    lines = [f"Artifacts: {run_dir}"]
+    children: list[tuple[str, str]] = []  # (label, detail)
+
+    for item in sorted(run_dir.iterdir()):
+        name = item.name
+        if name.startswith("__"):
+            continue
+        if item.is_dir() and name == "episodes":
+            step_dirs = sorted(item.iterdir())
+            n_steps = len(step_dirs)
+            if n_steps > 0:
+                children.append(("episodes/", f"{n_steps} step checkpoint{'s' if n_steps != 1 else ''}"))
+        elif item.is_dir() and name == "checkpoints":
+            children.append(("checkpoints/", "agent checkpoint"))
+        elif item.is_dir() and name == ".hydra":
+            children.append((".hydra/", "config snapshot"))
+        elif item.is_file():
+            descriptions = {
+                "results.pkl": "metrics & config",
+                "run_metadata.yaml": "timing & status",
+            }
+            if name.endswith(".log"):
+                desc = "training log"
+            else:
+                desc = descriptions.get(name, "")
+            children.append((name, desc))
+
+    for i, (label, detail) in enumerate(children):
+        prefix = "└── " if i == len(children) - 1 else "├── "
+        suffix = f"  ({detail})" if detail else ""
+        lines.append(f"  {prefix}{label}{suffix}")
+
+    return "\n".join(lines)
+
+
 def get_or_create_output_dir(output_dir: Path | str | None = None) -> Path:
     """Get the output directory for a run, creating if necessary.
 

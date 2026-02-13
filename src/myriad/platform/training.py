@@ -4,7 +4,6 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tqdm import tqdm
 
 from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
@@ -13,7 +12,7 @@ from myriad.utils import to_array
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
 from .metadata import RunMetadata
-from .output_dir import get_or_create_output_dir
+from .output_dir import format_artifacts_tree, get_or_create_output_dir
 from .runners import (
     make_chunk_runner,
     make_chunked_collector,
@@ -99,17 +98,9 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     log_frequency = config.run.log_frequency
     eval_frequency = config.run.eval_frequency
 
-    # Initialize progress bar for training loop
     steps_completed = 0
-    pbar = tqdm(
-        total=steps_per_env,
-        desc="Training",
-        unit="steps",
-        dynamic_ncols=True,
-        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}",
-    )
-    # Track metrics for progress bar display
-    pbar_metrics = {}
+    # Track latest metrics for periodic log lines
+    latest_metrics: dict[str, str] = {}
 
     while steps_completed < steps_per_env:
         remaining_steps = steps_per_env - steps_completed
@@ -184,22 +175,15 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         steps_completed += steps_this_chunk
         global_step = steps_completed * config.run.num_envs
 
-        # Update progress bar
-        pbar.update(steps_this_chunk)
-
-        # Extract latest metrics for progress bar display
+        # Extract latest metrics for log line display
         try:
-            # Get the most recent metrics from the history (last value in each array)
             if "loss" in metrics_history:
                 latest_loss = float(jax.device_get(metrics_history["loss"][-1]))
-                pbar_metrics["loss"] = f"{latest_loss:.3f}"
+                latest_metrics["loss"] = f"{latest_loss:.3f}"
             if "reward" in metrics_history:
                 latest_reward = float(jax.device_get(metrics_history["reward"][-1]))
-                pbar_metrics["reward"] = f"{latest_reward:.2f}"
-            if pbar_metrics:
-                pbar.set_postfix(pbar_metrics, refresh=False)
+                latest_metrics["reward"] = f"{latest_reward:.2f}"
         except (KeyError, IndexError, TypeError):
-            # Metrics might not be available in first iteration or for some agents
             pass
 
         # Log training metrics (handles both local capture and W&B)
@@ -244,11 +228,16 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
                 episode_save_count=save_count,
             )
 
-            # Update progress bar with evaluation results
             if "episode_return" in eval_results_host:
                 mean_return = float(np.mean(eval_results_host["episode_return"]))  # type: ignore[call-overload]
-                pbar_metrics["eval_return"] = f"{mean_return:.2f}"
-                pbar.set_postfix(pbar_metrics, refresh=False)
+                latest_metrics["eval_return"] = f"{mean_return:.2f}"
+
+        # Print a clean progress line at each log/eval boundary
+        if should_log or should_eval:
+            pct = 100 * steps_completed / steps_per_env
+            metrics_str = " | ".join(f"{k}={v}" for k, v in latest_metrics.items())
+            suffix = f" | {metrics_str}" if metrics_str else ""
+            logger.info(f"Step {steps_completed:>{len(str(steps_per_env))}}/{steps_per_env} ({pct:3.0f}%){suffix}")
 
     # Always log the final step if it wasn't just logged
     # This ensures training_metrics.global_steps[-1] reflects actual completion
@@ -262,9 +251,6 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         )
 
     session_logger.log_final(total_env_steps)
-
-    # Close progress bar
-    pbar.close()
 
     # Get captured metrics and return complete results
     training_metrics, eval_metrics = session_logger.finalize()
@@ -312,8 +298,7 @@ def train_and_evaluate(config: Config) -> TrainingResults:
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
-        # Log output directory for user convenience
-        logger.info(f"Artifacts saved to: {run_dir}")
+        logger.info(format_artifacts_tree(run_dir))
 
         return results
     except Exception:
