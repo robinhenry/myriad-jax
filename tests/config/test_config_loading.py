@@ -78,7 +78,7 @@ class TestEnvConfigs:
         "env_config,expected_name",
         [
             ("cartpole_control", "cartpole-control"),
-            ("ccas_ccar_control", "ccas-ccar-control"),
+            ("ccasr_gfp_control", "ccasr-gfp-control"),
         ],
     )
     def test_env_config_loads(self, hydra_context, env_config, expected_name):
@@ -97,7 +97,7 @@ class TestExperimentConfigs:
     @pytest.mark.parametrize(
         "experiment_name",
         [
-            "experiments/ccas_sinewave_tracking",
+            "experiments/ccasr_gfp_sinewave_tracking",
         ],
     )
     def test_experiment_config_loads(self, hydra_context, experiment_name):

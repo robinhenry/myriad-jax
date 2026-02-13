@@ -5,7 +5,7 @@
 
 defaults:
   - /agent: pqn
-  - /env: ccas_ccar_control
+  - /env: ccasr_gfp_control
   - _self_
 
 # Run parameters (based on PQN settings)
