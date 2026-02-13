@@ -1,7 +1,6 @@
 """Tests for artifact loading functionality."""
 
 import pickle
-import tempfile
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -69,6 +68,7 @@ def create_mock_run_directory(tmpdir: Path, run_type: str = "training") -> Path:
         num_episodes=2,
         seed=42,
         config=config,
+        run_dir=run_dir,
     )
     with open(run_dir / RESULTS_FILENAME, "wb") as f:
         pickle.dump(results, f)
@@ -83,134 +83,120 @@ def create_mock_run_directory(tmpdir: Path, run_type: str = "training") -> Path:
     return run_dir
 
 
-def test_load_run_metadata():
+def test_load_run_metadata(tmp_path):
     """Test loading run metadata."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir))
-        metadata = load_run_metadata(run_dir)
+    run_dir = create_mock_run_directory(tmp_path)
+    metadata = load_run_metadata(run_dir)
 
-        assert metadata["run_type"] == "training"
-        assert metadata["git_hash"] == "abc123"
+    assert metadata["run_type"] == "training"
+    assert metadata["git_hash"] == "abc123"
 
 
-def test_load_run_metadata_missing_file():
+def test_load_run_metadata_missing_file(tmp_path):
     """Test that missing metadata file raises FileNotFoundError with helpful message."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with pytest.raises(FileNotFoundError, match="Run metadata is required"):
-            load_run_metadata(Path(tmpdir))
+    with pytest.raises(FileNotFoundError, match="Run metadata is required"):
+        load_run_metadata(tmp_path)
 
 
-def test_load_run_config_requires_metadata():
+def test_load_run_config_requires_metadata(tmp_path):
     """Test that load_run_config requires metadata to exist."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    # Create config but no metadata
+    hydra_dir = tmp_path / ".hydra"
+    hydra_dir.mkdir()
+    with open(hydra_dir / "config.yaml", "w") as f:
+        yaml.dump({"env": {"name": "test"}, "agent": {"name": "random"}}, f)
 
-        # Create config but no metadata
-        hydra_dir = tmpdir / ".hydra"
-        hydra_dir.mkdir()
-        with open(hydra_dir / "config.yaml", "w") as f:
-            yaml.dump({"env": {"name": "test"}, "agent": {"name": "random"}}, f)
-
-        # Should raise because metadata is missing
-        with pytest.raises(FileNotFoundError, match="Run metadata is required"):
-            load_run_config(tmpdir)
+    # Should raise because metadata is missing
+    with pytest.raises(FileNotFoundError, match="Run metadata is required"):
+        load_run_config(tmp_path)
 
 
-def test_load_run_config_missing_run_type():
+def test_load_run_config_missing_run_type(tmp_path):
     """Test that load_run_config raises if run_type missing from metadata."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    # Create config
+    hydra_dir = tmp_path / ".hydra"
+    hydra_dir.mkdir()
+    config_data = {
+        "env": {"name": "cartpole-control"},
+        "agent": {"name": "random"},
+        "run": {"seed": 42, "eval_rollouts": 10, "eval_max_steps": 200},
+    }
+    with open(hydra_dir / "config.yaml", "w") as f:
+        yaml.dump(config_data, f)
 
-        # Create config
-        hydra_dir = tmpdir / ".hydra"
-        hydra_dir.mkdir()
-        config_data = {
-            "env": {"name": "cartpole-control"},
-            "agent": {"name": "random"},
-            "run": {"seed": 42, "eval_rollouts": 10, "eval_max_steps": 200},
-        }
-        with open(hydra_dir / "config.yaml", "w") as f:
-            yaml.dump(config_data, f)
+    # Create metadata WITHOUT run_type
+    with open(tmp_path / METADATA_FILENAME, "w") as f:
+        yaml.dump({"timestamp": "2026-02-12"}, f)
 
-        # Create metadata WITHOUT run_type
-        with open(tmpdir / METADATA_FILENAME, "w") as f:
-            yaml.dump({"timestamp": "2026-02-12"}, f)
-
-        # Should raise because run_type is missing
-        with pytest.raises(RuntimeError, match="Missing 'run_type' field"):
-            load_run_config(tmpdir)
+    # Should raise because run_type is missing
+    with pytest.raises(RuntimeError, match="Missing 'run_type' field"):
+        load_run_config(tmp_path)
 
 
-def test_load_run_checkpoint():
+def test_load_run_checkpoint(tmp_path):
     """Test loading agent checkpoint."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir))
-        checkpoint = load_run_checkpoint(run_dir)
+    run_dir = create_mock_run_directory(tmp_path)
+    checkpoint = load_run_checkpoint(run_dir)
 
-        assert checkpoint["step"] == 100
-        assert jnp.allclose(checkpoint["params"]["weights"], jnp.array([1.0, 2.0]))
+    assert checkpoint["step"] == 100
+    assert jnp.allclose(checkpoint["params"]["weights"], jnp.array([1.0, 2.0]))
 
 
-def test_load_run_checkpoint_missing_file():
+def test_load_run_checkpoint_missing_file(tmp_path):
     """Test that missing checkpoint raises FileNotFoundError."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with pytest.raises(FileNotFoundError, match="No checkpoint"):
-            load_run_checkpoint(Path(tmpdir))
+    with pytest.raises(FileNotFoundError, match="No checkpoint"):
+        load_run_checkpoint(tmp_path)
 
 
-def test_load_run_results():
+def test_load_run_results(tmp_path):
     """Test loading results."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir))
-        results = load_run_results(run_dir)
+    run_dir = create_mock_run_directory(tmp_path)
+    results = load_run_results(run_dir)
 
-        assert isinstance(results, EvaluationResults)
-        assert results.mean_return == 100.0
-        assert results.num_episodes == 2
+    assert isinstance(results, EvaluationResults)
+    assert results.mean_return == 100.0
+    assert results.num_episodes == 2
 
 
-def test_load_run_complete():
+def test_load_run_complete(tmp_path):
     """Test load_run loads all artifacts."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir), run_type="evaluation")
-        artifacts = load_run(run_dir)
+    run_dir = create_mock_run_directory(tmp_path, run_type="evaluation")
+    artifacts = load_run(run_dir)
 
-        assert isinstance(artifacts, RunArtifacts)
-        assert artifacts.config.run.seed == 42
-        assert artifacts.results.mean_return == 100.0
-        assert artifacts.metadata["run_type"] == "evaluation"
-        assert artifacts.run_path == run_dir
+    assert isinstance(artifacts, RunArtifacts)
+    assert artifacts.config.run.seed == 42
+    assert artifacts.results.mean_return == 100.0
+    assert artifacts.metadata["run_type"] == "evaluation"
+    assert artifacts.run_path == run_dir
 
 
-def test_run_artifacts_load_checkpoint_no_caching():
+def test_run_artifacts_load_checkpoint_no_caching(tmp_path):
     """Test that load_checkpoint always loads fresh (no caching)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir), run_type="evaluation")
-        artifacts = load_run(run_dir)
+    run_dir = create_mock_run_directory(tmp_path, run_type="evaluation")
+    artifacts = load_run(run_dir)
 
-        # Load checkpoint twice
-        checkpoint1 = artifacts.load_checkpoint()
-        checkpoint2 = artifacts.load_checkpoint()
+    # Load checkpoint twice
+    checkpoint1 = artifacts.load_checkpoint()
+    checkpoint2 = artifacts.load_checkpoint()
 
-        # Both should have the same values
-        assert checkpoint1["step"] == checkpoint2["step"]
-        assert jnp.allclose(checkpoint1["params"]["weights"], checkpoint2["params"]["weights"])
+    # Both should have the same values
+    assert checkpoint1["step"] == checkpoint2["step"]
+    assert jnp.allclose(checkpoint1["params"]["weights"], checkpoint2["params"]["weights"])
 
-        # Importantly, they should be separate objects (not cached)
-        # Modify checkpoint1 and verify checkpoint2 is unaffected
-        checkpoint1["step"] = 999
-        checkpoint3 = artifacts.load_checkpoint()
-        assert checkpoint3["step"] == 100  # Original value, not 999
+    # Importantly, they should be separate objects (not cached)
+    # Modify checkpoint1 and verify checkpoint2 is unaffected
+    checkpoint1["step"] = 999
+    checkpoint3 = artifacts.load_checkpoint()
+    assert checkpoint3["step"] == 100  # Original value, not 999
 
 
-def test_run_artifacts_generics():
+def test_run_artifacts_generics(tmp_path):
     """Test that RunArtifacts maintains type information through generics."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        run_dir = create_mock_run_directory(Path(tmpdir), run_type="evaluation")
-        artifacts = load_run(run_dir)
+    run_dir = create_mock_run_directory(tmp_path, run_type="evaluation")
+    artifacts = load_run(run_dir)
 
-        # Should have correct types (this is more of a type checker test,
-        # but we can at least verify runtime behavior)
-        assert hasattr(artifacts.config, "run")
-        assert hasattr(artifacts.results, "mean_return")
-        assert isinstance(artifacts.metadata, dict)
+    # Should have correct types (this is more of a type checker test,
+    # but we can at least verify runtime behavior)
+    assert hasattr(artifacts.config, "run")
+    assert hasattr(artifacts.results, "mean_return")
+    assert isinstance(artifacts.metadata, dict)

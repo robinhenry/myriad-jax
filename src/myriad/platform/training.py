@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -29,7 +30,7 @@ from .types import TrainingEnvState, TrainingResults
 logger = logging.getLogger(__name__)
 
 
-def _run_training_loop(config: Config, session_logger: SessionLogger) -> TrainingResults:
+def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: Path) -> TrainingResults:
     """Executes the training loop and returns metrics + trained agent.
 
     Returns:
@@ -273,6 +274,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger) -> Trainin
         training_metrics=training_metrics,
         eval_metrics=eval_metrics,
         config=config,
+        run_dir=run_dir,
         final_env_state=training_env_states,
     )
 
@@ -305,7 +307,7 @@ def train_and_evaluate(config: Config) -> TrainingResults:
 
     try:
         with RunMetadata(run_dir, run_type="training"):
-            results = _run_training_loop(config, session_logger)
+            results = _run_training_loop(config, session_logger, run_dir)
 
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)

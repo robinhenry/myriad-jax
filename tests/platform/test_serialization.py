@@ -1,8 +1,5 @@
 """Tests for Flax-based agent state serialization."""
 
-import tempfile
-from pathlib import Path
-
 import jax.numpy as jnp
 import pytest
 
@@ -33,24 +30,23 @@ def test_serialize_deserialize_round_trip():
     assert jnp.allclose(loaded["params"]["bias"], state["params"]["bias"])
 
 
-def test_save_load_round_trip():
+def test_save_load_round_trip(tmp_path):
     """Test saving and loading agent state from file."""
     state = {
         "params": {"weights": jnp.array([1.0, 2.0, 3.0])},
         "step": 100,
     }
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        path = Path(tmpdir) / "agent.msgpack"
+    path = tmp_path / "agent.msgpack"
 
-        # Save
-        save_agent_state(state, path)
-        assert path.exists()
+    # Save
+    save_agent_state(state, path)
+    assert path.exists()
 
-        # Load
-        loaded = load_agent_state(path)
-        assert loaded["step"] == state["step"]
-        assert jnp.allclose(loaded["params"]["weights"], state["params"]["weights"])
+    # Load
+    loaded = load_agent_state(path)
+    assert loaded["step"] == state["step"]
+    assert jnp.allclose(loaded["params"]["weights"], state["params"]["weights"])
 
 
 def test_load_agent_state_missing_file():
@@ -76,12 +72,11 @@ def test_deserialize_corrupted_data():
         deserialize_agent_state(corrupted_data)
 
 
-def test_save_creates_parent_directory():
+def test_save_creates_parent_directory(tmp_path):
     """Test that save_agent_state creates parent directories."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        path = Path(tmpdir) / "nested" / "dir" / "agent.msgpack"
-        state = {"params": {}, "step": 0}
+    path = tmp_path / "nested" / "dir" / "agent.msgpack"
+    state = {"params": {}, "step": 0}
 
-        save_agent_state(state, path)
-        assert path.exists()
-        assert path.parent.exists()
+    save_agent_state(state, path)
+    assert path.exists()
+    assert path.parent.exists()

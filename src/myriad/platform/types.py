@@ -112,6 +112,9 @@ class TrainingResults:
     config: Config
     """Configuration used for this training run (for reproducibility)."""
 
+    run_dir: Path
+    """Directory where training outputs were saved."""
+
     final_env_state: Any | None = None
     """Final state of training environments (can be used to resume training)."""
 
@@ -183,6 +186,7 @@ class TrainingResults:
             training_metrics=self.training_metrics,
             eval_metrics=self.eval_metrics,
             config=self.config,
+            run_dir=self.run_dir,
             final_env_state=None,  # Also exclude env state - not needed for analysis
         )
 
@@ -297,6 +301,10 @@ class EvaluationResults:
     config: EvalConfig
     """Evaluation configuration used (for reproducibility)."""
 
+    # --- Output Directory ---
+    run_dir: Path
+    """Directory where evaluation outputs were saved."""
+
     # --- Optional Trajectory Data ---
     episodes: dict[str, np.ndarray] | None = None
     """Full episode trajectories (if return_episodes=True).
@@ -310,10 +318,6 @@ class EvaluationResults:
     # --- Optional Agent State ---
     agent_state: Any | None = None
     """Agent state used for evaluation (if provided)."""
-
-    # --- Output Directory ---
-    run_dir: Path | None = None
-    """Directory where evaluation outputs were saved."""
 
     def save(self, directory: Path | str, save_checkpoint: bool = False) -> None:
         """Save results and optionally agent checkpoint to directory.
@@ -358,7 +362,8 @@ class EvaluationResults:
             episode_lengths=self.episode_lengths,
             num_episodes=self.num_episodes,
             seed=self.seed,
-            config=self.config,  # Include config in pickled results
+            config=self.config,
+            run_dir=self.run_dir,
             episodes=self.episodes,
             agent_state=None,  # Don't pickle agent state - use checkpoint instead
         )
