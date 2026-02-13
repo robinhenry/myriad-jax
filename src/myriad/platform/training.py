@@ -11,7 +11,7 @@ from myriad.utils import to_array
 
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
-from .metadata import create_and_save_run_metadata
+from .metadata import RunMetadata
 from .output_dir import get_or_create_output_dir
 from .runners import (
     make_chunk_runner,
@@ -300,17 +300,15 @@ def train_and_evaluate(config: Config) -> TrainingResults:
     # Get or create output directory
     run_dir = get_or_create_output_dir(None)
 
-    # Create run metadata at start
-    create_and_save_run_metadata(run_dir, run_type="training")
-
     # Config will be saved by results.save() to avoid duplicate I/O
     session_logger = SessionLogger.for_training(config, run_dir=run_dir)
 
     try:
-        results = _run_training_loop(config, session_logger)
+        with RunMetadata(run_dir, run_type="training"):
+            results = _run_training_loop(config, session_logger)
 
-        # Save artifacts directly
-        results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
+            # Save artifacts directly
+            results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
         # Log output directory for user convenience
         logger.info(f"Artifacts saved to: {run_dir}")
