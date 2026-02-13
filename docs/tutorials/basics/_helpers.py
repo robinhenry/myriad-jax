@@ -6,7 +6,7 @@ from pathlib import Path
 from IPython.display import HTML
 
 
-def side_by_side_videos(paths: list[Path], labels: list[str], width: int = 400) -> HTML:
+def side_by_side_videos(paths: list[Path], labels: list[str], width: int = 200) -> HTML:
     """Display videos side by side with labels."""
     cells = []
     for path, label in zip(paths, labels):
