@@ -159,3 +159,4 @@ def evaluate(
 
     finally:
         session_logger.finalize()
+        raise
