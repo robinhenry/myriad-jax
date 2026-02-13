@@ -212,6 +212,13 @@ def test_jax_transforms(env):
     assert jnp.all(rewards <= 0)
 
 
+def test_config_dt_property():
+    """ControlTaskConfig.dt delegates to physics.dt."""
+    env = make_env()
+    assert env.config.dt == env.config.physics.dt
+    assert env.config.dt > 0
+
+
 def test_env_registry_integration():
     """Verify registry loading."""
     env = make_env_from_registry("pendulum-control")

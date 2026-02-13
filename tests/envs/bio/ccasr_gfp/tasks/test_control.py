@@ -283,6 +283,12 @@ class TestEnvironmentCreation:
         assert isinstance(env, Environment)
         assert isinstance(env.config, ControlTaskConfig)
 
+    def test_config_dt_property(self):
+        """ControlTaskConfig.dt delegates to physics.timestep_minutes."""
+        env = make_env()
+        assert env.config.dt == env.config.physics.timestep_minutes
+        assert env.config.dt > 0
+
 
 class TestFullEpisode:
     """Test running full episodes."""
