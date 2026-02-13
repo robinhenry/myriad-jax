@@ -11,9 +11,9 @@ from tests.conftest import MockObs
 
 def test_make_agent_discrete():
     """Test agent creation and validation for Discrete action space."""
-    agent = make_agent(action_space=Discrete(n=3), threshold=1.5, obs_field="x")
+    agent = make_agent(action_space=Discrete(n=3), setpoint=1.5, obs_field="x")
     assert agent.params.action_space.n == 3  # type: ignore
-    assert agent.params.threshold == 1.5
+    assert agent.params.setpoint == 1.5
     assert agent.params.obs_field == "x"
     assert agent.params.invert is False
     assert agent.params.low_action == jnp.array(0)
@@ -53,7 +53,7 @@ def test_select_action_discrete(key, make_obs):
     obs_below = make_obs(theta=-0.1)
     obs_above = make_obs(theta=0.1)
 
-    agent = make_agent(action_space=Discrete(n=3), threshold=0.0, obs_field="theta")
+    agent = make_agent(action_space=Discrete(n=3), setpoint=0.0, obs_field="theta")
     state = agent.init(key, obs_below, agent.params)
     action_low, _ = agent.select_action(key, obs_below, state, agent.params, deterministic=True)
     action_high, _ = agent.select_action(key, obs_above, state, agent.params, deterministic=True)
@@ -66,7 +66,7 @@ def test_select_action_discrete_inverted(key, make_obs):
     obs_below = make_obs(theta=-0.1)
     obs_above = make_obs(theta=0.1)
 
-    agent = make_agent(action_space=Discrete(n=4), threshold=0.0, obs_field="theta", invert=True)
+    agent = make_agent(action_space=Discrete(n=4), setpoint=0.0, obs_field="theta", invert=True)
     state = agent.init(key, obs_below, agent.params)
     action_low, _ = agent.select_action(key, obs_below, state, agent.params, deterministic=True)
     action_high, _ = agent.select_action(key, obs_above, state, agent.params, deterministic=True)
@@ -79,7 +79,7 @@ def test_select_action_box(key, make_obs):
     obs_below = make_obs(theta=-0.1)
     obs_above = make_obs(theta=0.1)
 
-    agent = make_agent(action_space=Box(low=-2.0, high=3.0, shape=(1,)), threshold=0.0, obs_field="theta")
+    agent = make_agent(action_space=Box(low=-2.0, high=3.0, shape=(1,)), setpoint=0.0, obs_field="theta")
     state = agent.init(key, obs_below, agent.params)
     action_low, _ = agent.select_action(key, obs_below, state, agent.params, deterministic=True)
     action_high, _ = agent.select_action(key, obs_above, state, agent.params, deterministic=True)
@@ -98,7 +98,7 @@ def test_update(key, make_obs):
 
 def test_jax_transforms(key, make_obs):
     """End-to-end test with JIT and vmap."""
-    agent = make_agent(action_space=Discrete(n=2), threshold=0.0, obs_field="theta")
+    agent = make_agent(action_space=Discrete(n=2), setpoint=0.0, obs_field="theta")
 
     # JIT compatibility
     jitted_init = jax.jit(agent.init)

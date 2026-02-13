@@ -338,7 +338,7 @@ def test_run_training_loop_without_wandb(monkeypatch):
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
     # Create SessionLogger with no wandb
     session_logger = SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed)
-    training._run_training_loop(config, session_logger)
+    training._run_training_loop(config, session_logger, Path.cwd())
 
     assert "carry" in captured
     steps_per_env = config.run.steps_per_env
@@ -359,7 +359,7 @@ def test_run_training_loop_with_wandb_logs(wandb_stub):
     config = _create_config(wandb_enabled=True)
     wandb_run = wandb_backend.init_wandb(config)
     session_logger = SessionLogger(wandb_run=wandb_run, run_dir=Path.cwd(), seed=config.run.seed)
-    training._run_training_loop(config, session_logger)
+    training._run_training_loop(config, session_logger, Path.cwd())
 
     assert wandb_stub.init_kwargs is not None
     assert wandb_stub.init_kwargs["config"]["run"]["seed"] == 0
@@ -441,7 +441,9 @@ def test_run_training_loop_with_chunk_size_larger_than_total_steps(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
+    training._run_training_loop(
+        config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed), Path.cwd()
+    )
 
     # Chunk size should be clamped to at least 1
     assert captured.get("mask_length", 0) == 100
@@ -469,7 +471,9 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
+    training._run_training_loop(
+        config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed), Path.cwd()
+    )
 
     # Total active steps across all chunks should equal steps_per_env
     assert sum(active_counts) == config.run.steps_per_env
@@ -500,7 +504,9 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
+    training._run_training_loop(
+        config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed), Path.cwd()
+    )
 
     # Remove the JIT trace call (first call with 0 or minimal steps)
     actual_chunks = [size for size in chunk_sizes_observed if size > 0]
@@ -573,7 +579,9 @@ def _extract_final_states(monkeypatch, config: Config) -> tuple[dict[str, Any], 
         return wrapped
 
     monkeypatch.setattr(training, "make_chunk_runner", instrumented_make_chunk_runner)
-    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
+    training._run_training_loop(
+        config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed), Path.cwd()
+    )
 
     # Extract individual components from final carry
     key, agent_state, training_env_state, buffer_state = final_states["carry"]
@@ -1031,7 +1039,9 @@ def test_on_policy_training_logging_frequency(monkeypatch):
         return original_log_training_step(self, global_step, steps_per_env, metrics_history, steps_this_chunk)
 
     monkeypatch.setattr(SessionLogger, "log_training_step", instrumented_log_training_step)
-    training._run_training_loop(config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed))
+    training._run_training_loop(
+        config, SessionLogger(wandb_run=None, run_dir=Path.cwd(), seed=config.run.seed), Path.cwd()
+    )
 
     # Should log at: 8, 16, 24 (every log_frequency=8 steps per env)
     expected_checkpoints = [8, 16, 24]

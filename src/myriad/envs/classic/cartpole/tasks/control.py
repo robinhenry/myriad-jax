@@ -49,6 +49,11 @@ class ControlTaskConfig:
     task: TaskConfig = struct.field(default_factory=TaskConfig)
 
     @property
+    def dt(self) -> float:
+        """Timestep duration in seconds."""
+        return self.physics.dt
+
+    @property
     def max_steps(self) -> int:
         """Required by EnvironmentConfig protocol."""
         return self.task.max_steps

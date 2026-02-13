@@ -1,11 +1,11 @@
 """A classical bang-bang controller agent.
 
 A deterministic, stateless control policy that switches between two action values
-based on a threshold comparison of a selected observation field.
+based on a setpoint comparison of a selected observation field.
 
 Control Logic:
-    - If obs[obs_field] <= threshold: Select "low" action
-    - If obs[obs_field] > threshold: Select "high" action
+    - If obs[obs_field] <= setpoint: Select "low" action
+    - If obs[obs_field] > setpoint: Select "high" action
 
 Action Space Behavior:
     - Discrete(n): Low=0, High=n-1 (requires n >= 2)
@@ -33,15 +33,15 @@ class AgentParams:
 
     Attributes:
         action_space: Action space (Box or Discrete)
-        threshold: Switching threshold for bang-bang control
-        obs_field: Field name from observation NamedTuple to use for threshold comparison
+        setpoint: Switching setpoint for bang-bang control
+        obs_field: Field name from observation NamedTuple to use for setpoint comparison
         low_action: Pre-computed low action value (for JIT efficiency)
         high_action: Pre-computed high action value (for JIT efficiency)
-        invert: If True, swap action selection (high when below threshold, low when above)
+        invert: If True, swap action selection (high when below setpoint, low when above)
     """
 
     action_space: Space = struct.field(pytree_node=False)
-    threshold: float
+    setpoint: float
     obs_field: str = struct.field(pytree_node=False)
     low_action: Array
     high_action: Array
@@ -72,21 +72,21 @@ def _select_action(
     params: AgentParams,
     deterministic: bool,
 ) -> Tuple[Array, AgentState]:
-    """Select bang-bang action based on observation threshold.
+    """Select bang-bang action based on observation setpoint.
 
     Normal mode (invert=False):
-        - obs[field] <= threshold: low action
-        - obs[field] > threshold: high action
+        - obs[field] <= setpoint: low action
+        - obs[field] > setpoint: high action
 
     Inverted mode (invert=True):
-        - obs[field] <= threshold: high action
-        - obs[field] > threshold: low action
+        - obs[field] <= setpoint: high action
+        - obs[field] > setpoint: low action
 
     Args:
         key: Random key (unused, policy is deterministic)
         obs: Current observation (NamedTuple-like)
         state: Current agent state (contains obs_index)
-        params: Agent hyperparameters (contains threshold, pre-computed actions, invert flag)
+        params: Agent hyperparameters (contains setpoint, pre-computed actions, invert flag)
         deterministic: Ignored (bang-bang is always deterministic)
 
     Returns:
@@ -98,11 +98,11 @@ def _select_action(
     # Extract the observation value at the specified field index
     obs_value = obs_array[state.obs_index]
 
-    # Select action based on threshold comparison
+    # Select action based on setpoint comparison
     # Compute both normal and inverted actions, then select based on invert flag
     # This avoids Python control flow for JIT compatibility
-    normal_action = jnp.where(obs_value > params.threshold, params.high_action, params.low_action)
-    inverted_action = jnp.where(obs_value > params.threshold, params.low_action, params.high_action)
+    normal_action = jnp.where(obs_value > params.setpoint, params.high_action, params.low_action)
+    inverted_action = jnp.where(obs_value > params.setpoint, params.low_action, params.high_action)
 
     # Select between normal and inverted based on params.invert (JAX-compatible)
     action = jnp.where(params.invert, inverted_action, normal_action)
@@ -117,7 +117,7 @@ def _update(key: PRNGKey, state: AgentState, batch: Any, params: AgentParams) ->
 
 def make_agent(
     action_space: Space,
-    threshold: float = 0.0,
+    setpoint: float = 0.0,
     obs_field: str = "theta",
     invert: bool = False,
 ) -> Agent[AgentState, AgentParams, Observation]:
@@ -125,11 +125,11 @@ def make_agent(
 
     Args:
         action_space: Action space (Box or Discrete)
-        threshold: Bang-bang witching threshold. Default 0.0.
-        obs_field: Field name from observation NamedTuple to use for threshold comparison.
+        setpoint: Bang-bang switching setpoint. Default 0.0.
+        obs_field: Field name from observation NamedTuple to use for setpoint comparison.
             Default "theta" (pole angle for CartPole).
-        invert: If False (default): high action when obs > threshold. If True: low action when
-            obs > threshold (swapped polarity)
+        invert: If False (default): high action when obs > setpoint. If True: low action when
+            obs > setpoint (swapped polarity)
 
     Returns:
         Agent instance with bang-bang control policy
@@ -137,10 +137,10 @@ def make_agent(
     Example:
         >>> # Example: bang-bang controller for CartPole
         >>> # Normal: push right when pole tilts right
-        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta")
+        >>> agent = make_agent(action_space, setpoint=0.0, obs_field="theta")
         >>>
         >>> # Inverted: push left when pole tilts right (opposite polarity)
-        >>> agent = make_agent(action_space, threshold=0.0, obs_field="theta", invert=True)
+        >>> agent = make_agent(action_space, setpoint=0.0, obs_field="theta", invert=True)
     """
 
     if not obs_field or not isinstance(obs_field, str):
@@ -159,7 +159,7 @@ def make_agent(
     # Create parameters
     params = AgentParams(
         action_space=action_space,
-        threshold=threshold,
+        setpoint=setpoint,
         obs_field=obs_field,
         low_action=low_action,
         high_action=high_action,

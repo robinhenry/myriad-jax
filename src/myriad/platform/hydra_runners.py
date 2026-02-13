@@ -15,14 +15,74 @@ from omegaconf import DictConfig, OmegaConf
 
 from myriad.configs.default import Config, EvalConfig
 from myriad.envs import get_env_info
-from myriad.platform.evaluation import evaluate
-from myriad.platform.logging.backends.disk import render_episodes_to_videos
-from myriad.platform.training import train_and_evaluate
+
+from .evaluation import evaluate
+from .logging.backends.disk import render_episodes_to_videos
+from .training import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
 logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Shorten Hydra's verbose log prefix to timestamp + level."""
+    fmt = logging.Formatter(fmt="[%(asctime)s %(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    for handler in logging.root.handlers:
+        handler.setFormatter(fmt)
+
+
+def _fmt_fields(model: object) -> str:
+    """Format non-default fields of a Pydantic model as 'key=value | key=value'."""
+    from pydantic import BaseModel
+
+    if not isinstance(model, BaseModel):
+        return str(model)
+    non_defaults = model.model_dump(exclude_defaults=True)
+    # Always include 'name' if present (it's required, has no default, but exclude_defaults may still miss it)
+    if hasattr(model, "name") and "name" not in non_defaults:
+        non_defaults = {"name": model.name} | non_defaults  # type: ignore[attr-defined]
+    return " | ".join(f"{k}={v}" for k, v in non_defaults.items()) if non_defaults else "(defaults)"
+
+
+def _format_eval_config(config: "EvalConfig") -> str:
+    wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
+    config_path = Path.cwd() / ".hydra" / "config.yaml"
+    lines = [
+        f"Evaluating {config.agent.name} on {config.env.name}",
+        f"  Agent : {_fmt_fields(config.agent)}",
+        f"  Env   : {_fmt_fields(config.env)}",
+        f"  Run   : {_fmt_fields(config.run)}",
+        f"  W&B   : {wandb_status}",
+        f"  Config: {config_path}",
+    ]
+    return "\n".join(lines)
+
+
+def _format_eval_results(results: object) -> str:
+    lines = [
+        "Evaluation results",
+        f"  Episodes     : {results.num_episodes}",  # type: ignore[attr-defined]
+        f"  Mean return  : {results.mean_return:.2f} ± {results.std_return:.2f}",  # type: ignore[attr-defined]
+        f"  Min / Max    : {results.min_return:.2f} / {results.max_return:.2f}",  # type: ignore[attr-defined]
+        f"  Mean length  : {results.mean_length:.2f} ± {results.std_length:.2f}",  # type: ignore[attr-defined]
+    ]
+    return "\n".join(lines)
+
+
+def _format_train_config(config: "Config") -> str:
+    wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
+    config_path = Path.cwd() / ".hydra" / "config.yaml"
+    lines = [
+        f"Training {config.agent.name} on {config.env.name}",
+        f"  Agent : {_fmt_fields(config.agent)}",
+        f"  Env   : {_fmt_fields(config.env)}",
+        f"  Run   : {_fmt_fields(config.run)}",
+        f"  W&B   : {wandb_status}",
+        f"  Config: {config_path}",
+    ]
+    return "\n".join(lines)
 
 
 def _get_config_path() -> str:
@@ -59,14 +119,12 @@ _CONFIG_PATH = _get_config_path()
 @hydra.main(version_base=None, config_path=_CONFIG_PATH, config_name="config")
 def train_main(cfg: DictConfig) -> None:
     """Main entry point for training, decorated by Hydra."""
+    _configure_logging()
     # Convert Hydra configuration to Pydantic model for validation and typing
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
 
-    logger.info("=" * 60)
-    logger.info("Running with the following configuration:")
-    logger.info(str(config))
-    logger.info("=" * 60)
+    logger.info(_format_train_config(config))
 
     train_and_evaluate(config)
 
@@ -74,27 +132,17 @@ def train_main(cfg: DictConfig) -> None:
 @hydra.main(version_base=None, config_path=_CONFIG_PATH, config_name="config")
 def evaluate_main(cfg: DictConfig) -> None:
     """Main entry point for evaluation-only runs."""
+    _configure_logging()
     # Convert Hydra configuration to Pydantic model
     config_dict = OmegaConf.to_object(cfg)
     config = EvalConfig.model_validate(config_dict)
 
-    logger.info("Running evaluation with the following configuration:")
-    logger.info(str(config))
+    logger.info(_format_eval_config(config))
 
     # Run evaluation
     results = evaluate(config=config, return_episodes=False)
 
-    # Log summary statistics
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("EVALUATION RESULTS")
-    logger.info("=" * 60)
-    logger.info(f"Episodes: {results.num_episodes}")
-    logger.info(f"Mean return: {results.mean_return:.2f} ± {results.std_return:.2f}")
-    logger.info(f"Min return: {results.min_return:.2f}")
-    logger.info(f"Max return: {results.max_return:.2f}")
-    logger.info(f"Mean episode length: {results.mean_length:.2f}")
-    logger.info("=" * 60)
+    logger.info(_format_eval_results(results))
 
     # Render videos if enabled
     if config.run.eval_render_videos and config.run.eval_episode_save_frequency > 0:
@@ -109,7 +157,6 @@ def evaluate_main(cfg: DictConfig) -> None:
         if render_frame_fn is None:
             logger.warning(f"No renderer available for environment '{config.env.name}'. Skipping video rendering.")
         else:
-            logger.info("")
             logger.info(f"Rendering episode videos to: {videos_path}")
             render_episodes_to_videos(
                 episodes_dir=episodes_path,
@@ -128,6 +175,7 @@ def sweep_main(cfg: DictConfig) -> None:
     2. Overrides Hydra config with sweep parameters
     3. Runs training with the combined configuration
     """
+    _configure_logging()
     # Initialize W&B run - this will pull parameters from the sweep
     wandb.init()
 
@@ -154,10 +202,7 @@ def sweep_main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
 
-    logger.info("-" * 60)
-    logger.info("Running sweep with the following configuration:")
-    logger.info(str(config))
-    logger.info("-" * 60)
+    logger.info(_format_train_config(config))
 
     # Call the runner with the configuration
     train_and_evaluate(config)

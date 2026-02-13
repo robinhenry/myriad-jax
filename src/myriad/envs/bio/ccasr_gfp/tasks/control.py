@@ -70,6 +70,11 @@ class ControlTaskConfig:
     sinewave_vshift: float = 30.0
 
     @property
+    def dt(self) -> float:
+        """Timestep duration in minutes."""
+        return self.physics.timestep_minutes
+
+    @property
     def max_steps(self) -> int:
         """Required by EnvironmentConfig protocol."""
         return self.task.max_steps

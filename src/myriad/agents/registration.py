@@ -5,6 +5,7 @@ to query agent properties (like on/off policy) without necessarily
 instantiating them.
 """
 
+import inspect
 from typing import Any, Callable, NamedTuple
 
 
@@ -91,4 +92,9 @@ def make_agent(name: str, **kwargs: Any) -> Any:
         available = ", ".join(list_agents())
         raise ValueError(f"Agent '{name}' not found in the registry. Available agents: {available}")
 
+    sig = inspect.signature(info.make_fn)
+    has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+    if not has_var_keyword:
+        valid = set(sig.parameters.keys())
+        kwargs = {k: v for k, v in kwargs.items() if k in valid}
     return info.make_fn(**kwargs)

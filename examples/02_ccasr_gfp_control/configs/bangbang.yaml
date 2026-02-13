@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+# Run parameters
+run:
+  seed: 0
+  eval_rollouts: 1000
+  eval_max_steps: 288
+
+# Environment overrides
+env:
+  name: ccasr-gfp-control
+
+# Agent overrides
+agent:
+  name: bangbang
+  obs_field: F_normalized
+  setpoint: 0.3125 # 25 (target) / 80 (normalizer)
+  invert: true  # set action = 1 (0) when GFP count is below (above) target
+
+# W&B settings
+wandb:
+  enabled: false
