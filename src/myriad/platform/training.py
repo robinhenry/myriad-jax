@@ -176,15 +176,10 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         global_step = steps_completed * config.run.num_envs
 
         # Extract latest metrics for log line display
-        try:
-            if "loss" in metrics_history:
-                latest_loss = float(jax.device_get(metrics_history["loss"][-1]))
-                latest_metrics["loss"] = f"{latest_loss:.3f}"
-            if "reward" in metrics_history:
-                latest_reward = float(jax.device_get(metrics_history["reward"][-1]))
-                latest_metrics["reward"] = f"{latest_reward:.2f}"
-        except (KeyError, IndexError, TypeError):
-            pass
+        if "loss" in metrics_history:
+            latest_metrics["loss"] = f"{float(jax.device_get(metrics_history['loss'][-1])):.3f}"
+        if "reward" in metrics_history:
+            latest_metrics["reward"] = f"{float(jax.device_get(metrics_history['reward'][-1])):.2f}"
 
         # Log training metrics (handles both local capture and W&B)
         should_log = steps_completed % log_frequency == 0

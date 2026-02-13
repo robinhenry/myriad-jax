@@ -75,7 +75,7 @@ def format_artifacts_tree(run_dir: Path) -> str:
                 "run_metadata.yaml": "timing & status",
             }
             if name.endswith(".log"):
-                desc = "training log"
+                desc = "run log"
             else:
                 desc = descriptions.get(name, "")
             children.append((name, desc))

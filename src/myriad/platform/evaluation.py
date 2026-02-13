@@ -20,7 +20,7 @@ from myriad.configs.default import EvalConfig
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
 from .metadata import RunMetadata
-from .output_dir import get_or_create_output_dir
+from .output_dir import format_artifacts_tree, get_or_create_output_dir
 from .steps import make_eval_rollout_fn
 from .types import EvaluationResults
 
@@ -152,8 +152,7 @@ def evaluate(
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
-        # Log output directory for user convenience
-        logger.info(f"Artifacts saved to: {run_dir}")
+        logger.info(format_artifacts_tree(run_dir))
 
         return results
     except Exception:
