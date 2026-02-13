@@ -26,7 +26,3 @@ agent:
 # W&B settings
 wandb:
   enabled: false
-  project: myriad
-  entity: lugagne-lab
-  group: examples
-  tags: ["bangbang", "ccasr-gfp", "constant"]

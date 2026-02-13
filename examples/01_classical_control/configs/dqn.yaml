@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+# Training parameters
+run:
+  seed: 0
+  num_envs: 128
+  steps_per_env: 5000
+  eval_frequency: 500
+  log_frequency: 500
+  eval_rollouts: 50
+  eval_max_steps: 500
+  scan_chunk_size: 500
+  eval_episode_save_frequency: 500
+  eval_episode_save_count: 1
+
+env:
+  name: cartpole-control
+
+# Agent overrides
+agent:
+  name: dqn
+  epsilon_decay_steps: 2000
+  target_network_frequency: 100
+
+# W&B settings
+wandb:
+  enabled: false
