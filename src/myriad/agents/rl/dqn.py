@@ -17,6 +17,7 @@ from typing import Any, Tuple
 
 import jax
 import jax.numpy as jnp
+import optax
 from flax import linen as nn, struct
 from flax.training.train_state import TrainState
 from jax import Array
@@ -111,7 +112,6 @@ def _init(
 
     if not isinstance(params.action_space, Discrete):
         raise ValueError("DQN only supports Discrete action spaces")
-
     action_dim = params.action_space.n
 
     # Initialize Q-network
@@ -119,8 +119,6 @@ def _init(
     q_params = q_network.init(key, sample_obs_array)
 
     # Create training state with optimizer
-    import optax
-
     optimizer = optax.adam(params.learning_rate)
     train_state = TrainState.create(
         apply_fn=q_network.apply,

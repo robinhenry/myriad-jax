@@ -15,15 +15,16 @@ Reference: `PureJaxQL <https://github.com/mttga/purejaxql>`_
 
 from typing import Tuple
 
-import chex
 import jax
 import jax.numpy as jnp
 import optax
 from flax import linen as nn, struct
 from flax.training.train_state import TrainState
+from jax import Array
 
 from myriad.core.spaces import Discrete, Space
-from myriad.core.types import Transition
+from myriad.core.types import Observation, PRNGKey, Transition
+from myriad.utils.observations import to_array
 
 from ..agent import Agent
 
@@ -36,7 +37,7 @@ class QNetwork(nn.Module):
     num_layers: int = 2
 
     @nn.compact
-    def __call__(self, x: chex.Array) -> chex.Array:
+    def __call__(self, x: Array) -> Array:
         """Forward pass to compute Q-values for all actions.
 
         Args:
@@ -98,12 +99,12 @@ class AgentState:
     """
 
     train_state: TrainState
-    global_step: chex.Array
+    global_step: Array
 
 
 def _init(
-    key: chex.PRNGKey,
-    sample_obs: chex.Array,
+    key: PRNGKey,
+    sample_obs: Observation,
     params: AgentParams,
 ) -> AgentState:
     """Initialize the PQN agent.
@@ -116,9 +117,11 @@ def _init(
     Returns:
         Initial agent state containing network and optimizer
     """
+    # Convert observation to array if needed
+    sample_obs_array = to_array(sample_obs)
+
     if not isinstance(params.action_space, Discrete):
         raise ValueError("PQN only supports Discrete action spaces")
-
     action_dim = params.action_space.n
 
     # Initialize Q-network
@@ -127,12 +130,12 @@ def _init(
         hidden_size=params.hidden_size,
         num_layers=params.num_layers,
     )
-    q_params = q_network.init(key, sample_obs)
+    q_params = q_network.init(key, sample_obs_array)
 
     # Create optimizer with gradient clipping
     optimizer = optax.chain(
         optax.clip_by_global_norm(params.max_grad_norm),
-        optax.adam(params.learning_rate),
+        optax.radam(params.learning_rate),
     )
 
     train_state = TrainState.create(
@@ -148,34 +151,37 @@ def _init(
 
 
 def _select_action(
-    key: chex.PRNGKey,
-    obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
     deterministic: bool = False,
-) -> Tuple[chex.Array, AgentState]:
+) -> Tuple[Array, AgentState]:
     """Select action using epsilon-greedy policy.
 
     Args:
         key: Random key for exploration
         obs: Current observation
-        agent_state: Current agent state
+        state: Current agent state
         params: Agent hyperparameters
         deterministic: If True, use greedy policy (epsilon=0). Default False.
 
     Returns:
         Tuple of (action, unchanged agent_state)
     """
+    # Convert observation to array if needed
+    obs_array = to_array(obs)
+
     # Calculate current epsilon with linear decay (or use 0 if deterministic)
     epsilon_decayed = jnp.maximum(
         params.epsilon_end,
         params.epsilon_start
-        - (params.epsilon_start - params.epsilon_end) * agent_state.global_step / params.epsilon_decay_steps,
+        - (params.epsilon_start - params.epsilon_end) * state.global_step / params.epsilon_decay_steps,
     )
     epsilon = jax.lax.select(deterministic, jnp.array(0.0), epsilon_decayed)
 
     # Get Q-values
-    q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs)
+    q_values = state.train_state.apply_fn(state.train_state.params, obs_array)
 
     # Epsilon-greedy action selection
     key_explore, key_action = jax.random.split(key)
@@ -190,16 +196,16 @@ def _select_action(
     # Select based on epsilon
     action = jax.lax.select(explore, random_action, greedy_action)
 
-    return action, agent_state
+    return action, state
 
 
 def _compute_lambda_returns(
-    rewards: chex.Array,
-    dones: chex.Array,
-    next_q_max: chex.Array,
+    rewards: Array,
+    dones: Array,
+    next_q_max: Array,
     gamma: float,
     lambda_: float,
-) -> chex.Array:
+) -> Array:
     """Compute lambda-returns backward through trajectory.
 
     Uses the GAE-style recursive formula (matching PureJaxQL):
@@ -260,7 +266,7 @@ def _compute_lambda_returns(
 
 
 def _update(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     agent_state: AgentState,
     batch: Transition,
     params: AgentParams,
