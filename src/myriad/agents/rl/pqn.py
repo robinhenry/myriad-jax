@@ -1,4 +1,4 @@
-"""Parallelized Q-Network (PQN) agent implementation using JAX and Flax.
+"""Parallelized Q-Network (PQN) with LayerNorm agent implementation using JAX and Flax.
 
 PQN is an on-policy value-based RL algorithm designed for massively parallel training.
 
@@ -290,8 +290,8 @@ def _update(
     next_q_max = jnp.max(next_q_values, axis=1)
 
     # Compute lambda-returns
-    # Scale rewards (using tree_map to handle ArrayTree type, though rewards are typically arrays)
-    rewards = jax.tree_util.tree_map(lambda x: x * params.reward_scale, batch.reward)
+    # Scale rewards
+    rewards = batch.reward * params.reward_scale
     dones = batch.done.astype(jnp.float32)
     lambda_returns = _compute_lambda_returns(
         rewards=rewards,
@@ -338,7 +338,7 @@ def _update(
 
                 # MSE loss against lambda-returns
                 td_error = q_values_selected - mb_targets
-                loss = jnp.mean(td_error**2)
+                loss = 0.5 * jnp.mean(td_error**2)
 
                 return loss, {
                     "td_error_mean": jnp.mean(jnp.abs(td_error)),
