@@ -88,10 +88,55 @@ def test_select_action_deterministic_greedy(key, sample_obs, agent):
     agent_state = agent.init(key, sample_obs, agent.params)
 
     # Select action twice with same key
-    action1, _ = agent.select_action(key, sample_obs, agent_state, agent.params)
-    action2, _ = agent.select_action(key, sample_obs, agent_state, agent.params)
+    action1, _ = agent.select_action(key, sample_obs, agent_state, agent.params, deterministic=False)
+    action2, _ = agent.select_action(key, sample_obs, agent_state, agent.params, deterministic=False)
 
     assert action1 == action2
+
+
+def test_select_action_deterministic_flag(key, sample_obs, action_space):
+    """Test that deterministic=True returns greedy actions regardless of epsilon."""
+    # Create agent with high exploration (epsilon=1.0 always)
+    agent_with_explore = make_agent(
+        action_space=action_space,
+        epsilon_start=1.0,
+        epsilon_end=1.0,
+        epsilon_decay_steps=1,  # Won't decay
+    )
+
+    # Initialize agent
+    key, init_key = jax.random.split(key)
+    agent_state = agent_with_explore.init(init_key, sample_obs, agent_with_explore.params)
+
+    # Select actions with different keys but deterministic=True
+    key1, key2, key3 = jax.random.split(key, 3)
+    action1, _ = agent_with_explore.select_action(
+        key1, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action2, _ = agent_with_explore.select_action(
+        key2, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action3, _ = agent_with_explore.select_action(
+        key3, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+
+    # All actions should be identical (greedy) despite different keys and epsilon=1.0
+    assert action1 == action2
+    assert action1 == action3
+
+    # Verify actions are different when deterministic=False (with epsilon=1.0, should be random)
+    key4, key5 = jax.random.split(key)
+    action_random1, _ = agent_with_explore.select_action(
+        key4, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+    action_random2, _ = agent_with_explore.select_action(
+        key5, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+
+    # With epsilon=1.0, random actions may differ (though could be same by chance)
+    # Just verify they are valid actions
+    assert 0 <= action_random1 < action_space.n
+    assert 0 <= action_random2 < action_space.n
 
 
 def test_compute_lambda_returns():
