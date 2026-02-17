@@ -5,9 +5,11 @@ Captures minimal information needed to reproduce a run:
 - Run type (training vs evaluation)
 - Git hash (if in git repo)
 - Python/JAX versions
+- Device backend (cpu/gpu/tpu), architecture, model, and count
 - Duration (seconds)
 """
 
+import platform
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -17,6 +19,45 @@ from types import TracebackType
 
 import jax
 import yaml
+
+
+def _get_detailed_device_info() -> str:
+    """Get detailed CPU/machine information on a best-effort basis.
+
+    Tries platform-specific commands to get detailed hardware info,
+    falls back to generic platform information.
+    """
+    # Try macOS sysctl for CPU brand string
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=1,
+        )
+        brand = result.stdout.strip()
+        if brand:
+            return brand
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Try Linux /proc/cpuinfo
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except (FileNotFoundError, PermissionError):
+        pass
+
+    # Fallback to platform.processor()
+    proc = platform.processor()
+    if proc:
+        return proc
+
+    # Last resort: just return architecture
+    return platform.machine()
 
 
 class RunMetadata:
@@ -40,6 +81,20 @@ class RunMetadata:
             "python_version": sys.version.split()[0],
             "jax_version": jax.__version__,
         }
+
+        # Capture device information
+        devices = jax.devices()
+        backend = jax.default_backend()
+        metadata["device_backend"] = backend
+        metadata["device_count"] = len(devices)
+        metadata["device_architecture"] = platform.machine()
+
+        # For CPU backend, get detailed CPU info
+        # For GPU/TPU, JAX's device_kind usually includes the model
+        if backend == "cpu":
+            metadata["device_model"] = _get_detailed_device_info()
+        elif devices:
+            metadata["device_model"] = devices[0].device_kind
 
         try:
             result = subprocess.run(
