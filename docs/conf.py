@@ -51,7 +51,10 @@ myst_enable_extensions = [
 myst_heading_anchors = 3  # Auto-generate anchors for headings up to level 3
 
 # -- Notebook execution (myst-nb) -------------------------------------------
-nb_execution_mode = "force"  # Always re-execute so docs reflect current code
+# Changed from "force" to "cache" - tutorials must be executed locally before committing
+# This is required because some tutorials (e.g., 03_parallel_training.ipynb) need GPU
+# and would timeout on CPU-only CI runners. See docs/tutorials/README.md for workflow.
+nb_execution_mode = "cache"  # Only execute if outputs are missing
 nb_execution_timeout = 120  # Per-cell timeout in seconds
 nb_execution_raise_on_error = True  # Fail the build on notebook errors
 
