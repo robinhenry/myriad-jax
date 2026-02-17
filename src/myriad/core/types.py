@@ -1,6 +1,5 @@
 from typing import NamedTuple, Protocol
 
-import chex
 import jax
 from pydantic import BaseModel as _BaseModel, ConfigDict
 
@@ -23,11 +22,11 @@ class Observation(Protocol):
 
 
 class Transition(NamedTuple):
-    obs: chex.ArrayTree
-    action: chex.ArrayTree
-    reward: chex.ArrayTree
-    next_obs: chex.ArrayTree
-    done: chex.ArrayTree
+    obs: jax.Array
+    action: jax.Array
+    reward: jax.Array
+    next_obs: jax.Array
+    done: jax.Array
 
 
 class BaseModel(_BaseModel):
