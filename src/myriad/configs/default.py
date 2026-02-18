@@ -44,7 +44,6 @@ class AgentConfig(BaseModel):
     model_config = {"extra": "allow"}
 
     name: str
-    batch_size: PositiveInt = 32  # for off-policy agents: size of batches sampled from replay buffer
 
 
 class EnvConfig(BaseModel):
@@ -115,6 +114,7 @@ class RunConfig(EvalConfigBase):
     num_envs: PositiveInt = 1  # default to single environment
     scan_chunk_size: PositiveInt = 256  # reasonable default for most cases
     buffer_size: PositiveInt = 10000  # for off-policy algorithms: replay buffer capacity
+    batch_size: PositiveInt = 32  # for off-policy algorithms: size of batches sampled from replay buffer
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation (training-specific) ---

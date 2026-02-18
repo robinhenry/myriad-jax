@@ -128,7 +128,3 @@ def test_get_factory_kwargs_removes_name():
     assert "name" not in kwargs
 
 
-def test_get_factory_kwargs_removes_batch_size():
-    config = AgentConfig(name="random", batch_size=32)
-    kwargs = get_factory_kwargs(config)
-    assert "batch_size" not in kwargs

@@ -9,7 +9,7 @@ def test_create_config_basic():
     assert config.agent.name == "dqn"
     assert config.run.steps_per_env == 1000
     assert config.run.eval_max_steps == 500  # Default from cartpole ControlTaskConfig
-    assert config.agent.batch_size == 32  # Default from default.py
+    assert config.run.batch_size == 32  # Default from default.py
 
 
 def test_create_config_overrides():

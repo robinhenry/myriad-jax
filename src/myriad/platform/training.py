@@ -90,8 +90,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         buffer_state = replay_buffer.init(sample_transition)
         # Create chunk runner that batches multiple step-update cycles
         train_step_fn = make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
-        batch_size = config.agent.batch_size if config.agent.batch_size is not None else 1
-        run_chunk_fn = make_chunk_runner(train_step_fn, batch_size)
+        run_chunk_fn = make_chunk_runner(train_step_fn, config.run.batch_size)
 
     # Training runs for steps_per_env steps in each environment
     steps_per_env = config.run.steps_per_env
