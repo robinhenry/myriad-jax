@@ -9,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 
+import jax
 import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
@@ -18,6 +19,7 @@ from myriad.envs import get_env_info
 
 from .evaluation import evaluate
 from .logging.backends.disk import render_episodes_to_videos
+from .metadata import _get_detailed_device_info
 from .training import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
@@ -46,6 +48,19 @@ def _fmt_fields(model: object) -> str:
     return " | ".join(f"{k}={v}" for k, v in non_defaults.items()) if non_defaults else "(defaults)"
 
 
+def _fmt_device_info() -> str:
+    """Format device backend and model for display (e.g. 'cpu | Intel Core i7 x4')."""
+    backend = jax.default_backend()
+    devices = jax.devices()
+    if backend == "cpu":
+        model = _get_detailed_device_info()
+    elif devices:
+        model = devices[0].device_kind
+    else:
+        model = "unknown"
+    return f"{backend} | {model} x{len(devices)}"
+
+
 def _format_eval_config(config: "EvalConfig") -> str:
     wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
     config_path = Path.cwd() / ".hydra" / "config.yaml"
@@ -55,6 +70,7 @@ def _format_eval_config(config: "EvalConfig") -> str:
         f"  Env   : {_fmt_fields(config.env)}",
         f"  Run   : {_fmt_fields(config.run)}",
         f"  W&B   : {wandb_status}",
+        f"  Device: {_fmt_device_info()}",
         f"  Config: {config_path}",
     ]
     return "\n".join(lines)
@@ -80,6 +96,7 @@ def _format_train_config(config: "Config") -> str:
         f"  Env   : {_fmt_fields(config.env)}",
         f"  Run   : {_fmt_fields(config.run)}",
         f"  W&B   : {wandb_status}",
+        f"  Device: {_fmt_device_info()}",
         f"  Config: {config_path}",
     ]
     return "\n".join(lines)
