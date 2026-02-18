@@ -26,6 +26,7 @@ Examples:
 
 import click
 
+from .autotune import autotune
 from .evaluate import evaluate
 from .render import render
 from .sweep import sweep
@@ -48,6 +49,7 @@ main.add_command(train)
 main.add_command(evaluate)
 main.add_command(sweep)
 main.add_command(render)
+main.add_command(autotune)
 
 
-__all__ = ["main", "train", "evaluate", "sweep", "render"]
+__all__ = ["main", "train", "evaluate", "sweep", "render", "autotune"]
