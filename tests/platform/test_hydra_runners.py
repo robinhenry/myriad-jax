@@ -7,8 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from omegaconf import OmegaConf
+
 from myriad.configs.default import AgentConfig, EnvConfig, EvalConfig, EvalRunConfig, WandbConfig
 from myriad.platform.hydra_runners import (
+    _apply_auto_tune,
     _fmt_fields,
     _format_eval_config,
     _format_eval_results,
@@ -109,6 +112,62 @@ class TestFormatTrainConfig:
         assert "dqn" in result
         assert "cartpole-control" in result
         assert "disabled" in result
+
+
+class TestApplyAutoTune:
+    def test_patches_scan_chunk_size(self, monkeypatch):
+        """_apply_auto_tune should call suggest_scan_chunk_size and update cfg in-place."""
+        cfg = OmegaConf.create({
+            "run": {"num_envs": 100, "scan_chunk_size": 64},
+            "env": {"name": "cartpole-control"},
+            "agent": {"name": "dqn"},
+        })
+        monkeypatch.setattr("myriad.platform.autotune.suggest_scan_chunk_size", lambda **kw: 512)
+
+        _apply_auto_tune(cfg)
+
+        assert cfg.run.scan_chunk_size == 512
+
+    def test_passes_correct_args(self, monkeypatch):
+        """_apply_auto_tune should forward num_envs, env, agent, and buffer_size."""
+        cfg = OmegaConf.create({
+            "run": {"num_envs": 200, "scan_chunk_size": 64, "buffer_size": 10000},
+            "env": {"name": "cartpole-control"},
+            "agent": {"name": "dqn"},
+        })
+        captured = {}
+
+        def fake_suggest(**kw):
+            captured.update(kw)
+            return 256
+
+        monkeypatch.setattr("myriad.platform.autotune.suggest_scan_chunk_size", fake_suggest)
+
+        _apply_auto_tune(cfg)
+
+        assert captured["num_envs"] == 200
+        assert captured["env"] == "cartpole-control"
+        assert captured["agent"] == "dqn"
+        assert captured["buffer_size"] == 10000
+
+    def test_buffer_size_none_when_absent(self, monkeypatch):
+        """buffer_size should be None when not present in cfg.run."""
+        cfg = OmegaConf.create({
+            "run": {"num_envs": 50, "scan_chunk_size": 64},
+            "env": {"name": "cartpole-control"},
+            "agent": {"name": "dqn"},
+        })
+        captured = {}
+
+        def fake_suggest(**kw):
+            captured.update(kw)
+            return 128
+
+        monkeypatch.setattr("myriad.platform.autotune.suggest_scan_chunk_size", fake_suggest)
+
+        _apply_auto_tune(cfg)
+
+        assert captured["buffer_size"] is None
 
 
 class TestGetConfigPath:

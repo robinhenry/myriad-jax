@@ -1,5 +1,6 @@
 """Tests for Hydra glue utilities."""
 
+import os
 import sys
 from unittest.mock import MagicMock
 
@@ -39,5 +40,40 @@ def test_run_with_hydra_default_script_name():
         assert sys.argv[0] == "myriad"
         assert "hydra.job.chdir=true" in sys.argv
 
+    finally:
+        sys.argv = original_argv
+
+
+def test_run_with_hydra_auto_tune_sets_env_var():
+    """auto_tune=True should set MYRIAD_AUTO_TUNE=1 in the environment when the runner is called."""
+    env_state_during_call = {}
+
+    def capturing_runner():
+        env_state_during_call["value"] = os.environ.get("MYRIAD_AUTO_TUNE")
+
+    original_argv = sys.argv[:]
+    os.environ.pop("MYRIAD_AUTO_TUNE", None)  # ensure clean slate
+
+    try:
+        run_with_hydra(capturing_runner, args=[], auto_tune=True)
+        assert env_state_during_call["value"] == "1"
+    finally:
+        sys.argv = original_argv
+        os.environ.pop("MYRIAD_AUTO_TUNE", None)
+
+
+def test_run_with_hydra_no_auto_tune_does_not_set_env_var():
+    """auto_tune=False (default) must not set MYRIAD_AUTO_TUNE."""
+    env_state_during_call = {}
+
+    def capturing_runner():
+        env_state_during_call["value"] = os.environ.get("MYRIAD_AUTO_TUNE")
+
+    original_argv = sys.argv[:]
+    os.environ.pop("MYRIAD_AUTO_TUNE", None)
+
+    try:
+        run_with_hydra(capturing_runner, args=[])
+        assert env_state_during_call["value"] is None
     finally:
         sys.argv = original_argv

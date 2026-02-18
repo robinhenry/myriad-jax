@@ -111,19 +111,19 @@ def create_config(
     Args:
         env: Environment name (e.g., "cartpole-control", "ccas-ccar-control")
         agent: Agent name (e.g., "dqn", "pqn", "random")
-        num_envs: Number of parallel environments to run (ignored if ``auto_tune=True``)
+        num_envs: Number of parallel environments to run
         steps_per_env: Number of steps to run per environment
         rollout_steps: Number of steps to collect per environment before updating
-            (for on-policy agents like PQN). If None, defaults to 2 for on-policy agents.
+            (for on-policy agents only). If None, defaults to 2 for on-policy agents.
         eval_max_steps: Maximum steps per evaluation episode.
             If None, uses environment-specific default from registry or Config models.
-        eval_frequency: Evaluate every N steps (0 to disable)
+        eval_frequency: Evaluate every N steps-per-env (0 to disable)
         eval_rollouts: Number of episodes to run during evaluation
         log_frequency: Log training metrics every N steps
         seed: Random seed for reproducibility
         wandb_enabled: Enable Weights & Biases logging
         auto_tune: If True, automatically find optimal ``scan_chunk_size`` for the given
-            ``num_envs`` on your hardware. First run profiles your system (~30-60s),
+            ``num_envs`` on your hardware. First run profiles your system,
             subsequent runs use cached values (<1s). Overrides ``scan_chunk_size`` parameter.
         **kwargs: Additional config overrides. Can specify nested parameters using
             dot notation (e.g., ``agent.learning_rate=1e-3``) or pass dicts for

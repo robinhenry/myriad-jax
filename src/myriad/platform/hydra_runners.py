@@ -28,6 +28,21 @@ logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+def _apply_auto_tune(cfg: DictConfig) -> None:
+    """Call suggest_scan_chunk_size and patch cfg.run.scan_chunk_size in-place."""
+    from myriad.platform.autotune import suggest_scan_chunk_size
+
+    buffer_size = getattr(cfg.run, "buffer_size", None)
+    chunk_size = suggest_scan_chunk_size(
+        num_envs=cfg.run.num_envs,
+        env=cfg.env.name,
+        agent=cfg.agent.name,
+        buffer_size=buffer_size,
+    )
+    OmegaConf.update(cfg, "run.scan_chunk_size", chunk_size)
+    logger.info(f"  Auto-tune: scan_chunk_size={chunk_size}")
+
+
 def _configure_logging() -> None:
     """Shorten Hydra's verbose log prefix to timestamp + level."""
     fmt = logging.Formatter(fmt="[%(asctime)s %(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -137,6 +152,8 @@ _CONFIG_PATH = _get_config_path()
 def train_main(cfg: DictConfig) -> None:
     """Main entry point for training, decorated by Hydra."""
     _configure_logging()
+    if os.environ.pop("MYRIAD_AUTO_TUNE", None):
+        _apply_auto_tune(cfg)
     # Convert Hydra configuration to Pydantic model for validation and typing
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
@@ -193,6 +210,8 @@ def sweep_main(cfg: DictConfig) -> None:
     3. Runs training with the combined configuration
     """
     _configure_logging()
+    if os.environ.pop("MYRIAD_AUTO_TUNE", None):
+        _apply_auto_tune(cfg)
     # Initialize W&B run - this will pull parameters from the sweep
     wandb.init()
 

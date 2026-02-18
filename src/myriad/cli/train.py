@@ -14,8 +14,9 @@ import click
         "allow_interspersed_args": False,
     }
 )
+@click.option("--auto-tune", is_flag=True, default=False, help="Auto-tune scan_chunk_size for this hardware.")
 @click.pass_context
-def train(ctx: click.Context) -> None:
+def train(ctx: click.Context, auto_tune: bool) -> None:
     """Train an agent using Hydra configuration.
 
     All arguments are passed through to Hydra. Examples:
@@ -42,4 +43,4 @@ def train(ctx: click.Context) -> None:
     from myriad.platform.hydra_runners import train_main
     from myriad.platform.runner_utils import run_with_hydra
 
-    run_with_hydra(train_main, script_name="myriad train", args=ctx.args)
+    run_with_hydra(train_main, script_name="myriad train", args=ctx.args, auto_tune=auto_tune)
