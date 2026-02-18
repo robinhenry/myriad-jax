@@ -39,7 +39,7 @@ def _apply_auto_tune(cfg: DictConfig) -> None:
         agent=cfg.agent.name,
         buffer_size=buffer_size,
     )
-    OmegaConf.update(cfg, "run.scan_chunk_size", chunk_size)
+    OmegaConf.update(cfg, "run.scan_chunk_size", chunk_size, force_add=True)
     logger.info(f"  Auto-tune: scan_chunk_size={chunk_size}")
 
 
