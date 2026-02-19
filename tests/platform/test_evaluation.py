@@ -154,7 +154,6 @@ def test_training_config():
             eval_frequency=50,
             eval_rollouts=3,
             eval_max_steps=10,
-            log_frequency=10,
         ),
         agent=AgentConfig(name="test-agent"),
         env=EnvConfig(name="test-env"),

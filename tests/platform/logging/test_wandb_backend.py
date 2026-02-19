@@ -26,7 +26,6 @@ def _make_config(*, enabled: bool) -> Config:
         eval_frequency=1,
         eval_rollouts=1,
         eval_max_steps=1,
-        log_frequency=1,
     )
     wandb_cfg = WandbConfig(
         enabled=enabled,

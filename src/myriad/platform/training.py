@@ -94,7 +94,6 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
 
     # Training runs for steps_per_env steps in each environment
     steps_per_env = config.run.steps_per_env
-    log_frequency = config.run.log_frequency
     eval_frequency = config.run.eval_frequency
 
     steps_completed = 0
@@ -129,17 +128,15 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         # Determine how many steps/cycles to run before the next logging or eval boundary.
         # For on-policy: steps = rollout-update cycles
         # For off-policy: steps = individual training steps
-        steps_to_log = _steps_until_boundary(steps_completed, log_frequency)
         steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
 
         if use_rollout_training:
             # On-policy: Calculate number of rollout-update cycles to run
             # Each cycle advances by rollout_steps, so we need to scale boundaries
             assert config.run.rollout_steps is not None
-            cycles_to_log = steps_to_log // config.run.rollout_steps if steps_to_log > 0 else chunk_size
             cycles_to_eval = steps_to_eval // config.run.rollout_steps if steps_to_eval > 0 else chunk_size
             cycles_remaining = (remaining_steps + config.run.rollout_steps - 1) // config.run.rollout_steps
-            num_cycles = min(chunk_size, cycles_remaining, cycles_to_log, cycles_to_eval)
+            num_cycles = min(chunk_size, cycles_remaining, cycles_to_eval)
 
             # Ensure we run at least one cycle if there are remaining steps
             num_cycles = max(1, num_cycles) if remaining_steps > 0 else 0
@@ -157,7 +154,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
             steps_this_chunk = min(num_cycles * config.run.rollout_steps, remaining_steps)
         else:
             # Off-policy: Calculate number of individual training steps to run
-            steps_this_chunk = min(chunk_size, remaining_steps, steps_to_log, steps_to_eval)
+            steps_this_chunk = min(chunk_size, remaining_steps, steps_to_eval)
 
             # Create a boolean mask for the scan:
             # - active_mask always has length chunk_size (for consistent JIT compilation)
@@ -180,9 +177,11 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         if "reward" in metrics_history:
             latest_metrics["reward"] = f"{float(jax.device_get(metrics_history['reward'][-1])):.2f}"
 
+        # Log and evaluate at each eval_frequency boundary
+        should_eval = eval_frequency > 0 and steps_completed > 0 and steps_completed % eval_frequency == 0
+
         # Log training metrics (handles both local capture and W&B)
-        should_log = steps_completed % log_frequency == 0
-        if should_log:
+        if should_eval:
             session_logger.log_training_step(
                 global_step=global_step,
                 steps_per_env=steps_completed,
@@ -191,7 +190,6 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
             )
 
         # Periodically run evaluation rollouts without touching the training buffer
-        should_eval = eval_frequency > 0 and steps_completed > 0 and steps_completed % eval_frequency == 0
         if should_eval:
             # Determine if we should save episodes this cycle
             should_save_episodes = (
@@ -226,8 +224,8 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
                 mean_return = float(np.mean(eval_results_host["episode_return"]))  # type: ignore[call-overload]
                 latest_metrics["eval_return"] = f"{mean_return:.2f}"
 
-        # Print a clean progress line at each log/eval boundary
-        if should_log or should_eval:
+        # Print a clean progress line at each eval boundary
+        if should_eval:
             pct = 100 * steps_completed / steps_per_env
             metrics_str = " | ".join(f"{k}={v}" for k, v in latest_metrics.items())
             suffix = f" | {metrics_str}" if metrics_str else ""
@@ -236,7 +234,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     # Always log the final step if it wasn't just logged
     # This ensures training_metrics.global_steps[-1] reflects actual completion
     total_env_steps = steps_completed * config.run.num_envs
-    if steps_completed % log_frequency != 0:
+    if steps_completed % eval_frequency != 0:
         session_logger.log_training_step(
             global_step=total_env_steps,
             steps_per_env=steps_completed,

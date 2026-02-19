@@ -3,11 +3,8 @@ run:
   num_envs: 32
   steps_per_env: 20000    # 640K total timesteps (≈ purejaxql's 500K)
   rollout_steps: 64
-  # scan_chunk_size must equal eval_frequency / rollout_steps for on-policy.
-  scan_chunk_size: 20     # = eval_frequency / rollout_steps = 1280 / 64
   eval_rollouts: 50
   eval_frequency: 1280
-  log_frequency: 1280
 
 env:
   name: cartpole-control

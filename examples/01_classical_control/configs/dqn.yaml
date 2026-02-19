@@ -9,7 +9,6 @@ run:
   num_envs: 128
   steps_per_env: 5000
   eval_frequency: 500
-  log_frequency: 500
   eval_rollouts: 50
   eval_max_steps: 500
   scan_chunk_size: 500

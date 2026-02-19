@@ -5,13 +5,8 @@ run:
   steps_per_env: 20000
   # Rollout (determines batch_size = num_envs x rollout_steps)
   rollout_steps: 64
-  # scan_chunk_size must equal eval_frequency / rollout_steps for on-policy.
-  # Default (256) causes 92% wasted iterations per chunk call.
-  scan_chunk_size: 20
-  # Logging frequency
   eval_rollouts: 50
   eval_frequency: 1280
-  log_frequency: 1280
 
 env:
   name: cartpole-control

@@ -78,9 +78,6 @@ parameters:
   run.eval_rollouts:
     value: 10
 
-  run.log_frequency:
-    value: 1000
-
   wandb.mode:
     value: online
 

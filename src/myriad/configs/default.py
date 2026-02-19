@@ -112,16 +112,13 @@ class RunConfig(EvalConfigBase):
     # --- Training Settings ---
     steps_per_env: PositiveInt  # REQUIRED: experiment-specific, defines run length
     num_envs: PositiveInt = 1  # default to single environment
-    scan_chunk_size: PositiveInt = 256  # reasonable default for most cases
+    scan_chunk_size: PositiveInt | None = None  # None = auto-compute from eval_frequency
     buffer_size: PositiveInt = 10000  # for off-policy algorithms: replay buffer capacity
     batch_size: PositiveInt = 32  # for off-policy algorithms: size of batches sampled from replay buffer
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
-    # --- Evaluation (training-specific) ---
-    eval_frequency: PositiveInt = 1000  # evaluate every 1k steps per env
-
-    # --- Logging ---
-    log_frequency: PositiveInt = 1000  # log every 1k steps per env
+    # --- Evaluation & Logging ---
+    eval_frequency: PositiveInt = 1000  # log and evaluate every N steps per env
 
     @property
     def total_timesteps(self) -> int:
@@ -134,66 +131,35 @@ class RunConfig(EvalConfigBase):
         return self.steps_per_env * self.num_envs
 
     @model_validator(mode="after")
-    def validate_scan_chunk_size_efficiency(self) -> "RunConfig":
-        """Warn if scan_chunk_size is configured inefficiently relative to logging/eval frequencies.
+    def validate_on_policy_frequencies(self) -> "RunConfig":
+        """Ensure rollout_steps aligns with eval_frequency for on-policy algorithms.
 
-        When scan_chunk_size is much larger than the logging or eval frequencies, the training loop
-        will frequently create partial chunks with many masked (inactive) iterations. These masked
-        iterations still execute but discard their results, wasting computation.
+        On-policy algorithms collect full rollouts before updating. For clean boundary alignment,
+        rollout_steps should divide evenly into eval_frequency.
         """
-        min_boundary_frequency = min(self.log_frequency, self.eval_frequency)
-
-        if self.scan_chunk_size > 2 * min_boundary_frequency:
-            warnings.warn(
-                f"Performance warning: scan_chunk_size ({self.scan_chunk_size}) is more than 2x "
-                f"the minimum boundary frequency ({min_boundary_frequency}). "
-                f"This may lead to wasted computation from masked iterations at logging/eval boundaries. "
-                f"Consider reducing scan_chunk_size or increasing log_frequency/eval_frequency. "
-                f"See src/myriad/platform/runners.py for details on the chunking strategy.",
-                UserWarning,
-                stacklevel=2,
-            )
+        if self.rollout_steps is not None:
+            if self.eval_frequency % self.rollout_steps != 0:
+                warnings.warn(
+                    f"On-policy training: For optimal boundary alignment, rollout_steps ({self.rollout_steps}) "
+                    f"should divide evenly into eval_frequency ({self.eval_frequency}). Current configuration may "
+                    f"cause logging/evaluation to occur at irregular intervals.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         return self
 
     @model_validator(mode="after")
-    def validate_on_policy_frequencies(self) -> "RunConfig":
-        """Ensure rollout_steps aligns with logging/eval frequencies for on-policy algorithms.
-
-        On-policy algorithms collect full rollouts before updating. For efficient boundary alignment,
-        rollout_steps should divide evenly into the logging and evaluation frequencies.
-        """
-        if self.rollout_steps is not None:
-            # On-policy training mode: check if frequencies are divisible by rollout_steps for clean alignment
-            if self.log_frequency % self.rollout_steps != 0 or self.eval_frequency % self.rollout_steps != 0:
-                warnings.warn(
-                    f"On-policy training: For optimal boundary alignment, rollout_steps ({self.rollout_steps}) "
-                    f"should divide evenly into log_frequency ({self.log_frequency}) and "
-                    f"eval_frequency ({self.eval_frequency}). Current configuration may cause "
-                    f"logging/evaluation to occur at irregular intervals.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
-            # Warn if scan_chunk_size is larger than cycles per log/eval boundary.
-            # For on-policy, the scan runs over rollout-update *cycles*, not env steps.
-            # The optimal scan_chunk_size is min(log_frequency, eval_frequency) / rollout_steps.
-            # A larger value causes dead (masked) iterations that still execute, wasting compute.
-            cycles_per_boundary = min(self.log_frequency, self.eval_frequency) // self.rollout_steps
-            if cycles_per_boundary > 0 and self.scan_chunk_size > cycles_per_boundary:
-                warnings.warn(
-                    f"On-policy training: scan_chunk_size ({self.scan_chunk_size}) exceeds "
-                    f"cycles_per_boundary ({cycles_per_boundary} = "
-                    f"min(log_frequency={self.log_frequency}, eval_frequency={self.eval_frequency}) "
-                    f"/ rollout_steps={self.rollout_steps}). "
-                    f"The scan will execute {self.scan_chunk_size} iterations per call but only "
-                    f"{cycles_per_boundary} will be active, wasting "
-                    f"{100 * (self.scan_chunk_size - cycles_per_boundary) // self.scan_chunk_size}% of compute. "
-                    f"Set scan_chunk_size={cycles_per_boundary} to eliminate this overhead.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
+    def compute_scan_chunk_size(self) -> "RunConfig":
+        """Auto-compute scan_chunk_size from eval_frequency if not explicitly set."""
+        if self.scan_chunk_size is None:
+            if self.rollout_steps is not None:
+                # On-policy: number of rollout-update cycles per eval_frequency boundary
+                cycles_per_boundary = self.eval_frequency // self.rollout_steps
+                self.scan_chunk_size = max(1, cycles_per_boundary)
+            else:
+                # Off-policy: number of steps per eval_frequency boundary
+                self.scan_chunk_size = self.eval_frequency
         return self
 
 

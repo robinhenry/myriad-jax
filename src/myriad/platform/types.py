@@ -38,7 +38,7 @@ class TrainingEnvState:
 class TrainingMetrics:
     """Training metrics collected at each logging checkpoint.
 
-    Metrics are captured at intervals defined by ``log_frequency`` in the run config.
+    Metrics are captured at intervals defined by ``eval_frequency`` in the run config.
     Each list contains one entry per logging checkpoint.
     """
 

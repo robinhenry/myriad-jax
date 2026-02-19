@@ -39,17 +39,10 @@ def test_subcommand_help(runner, command):
     assert f"Usage: main {command}" in result.output
 
 
-@pytest.mark.parametrize("command", ["train", "sweep"])
-def test_auto_tune_flag_in_help(runner, command):
-    """--auto-tune should be advertised in train and sweep help."""
+@pytest.mark.parametrize("command", ["train", "sweep", "evaluate"])
+def test_auto_tune_flag_not_in_help(runner, command):
+    """--auto-tune should not appear in any command help (it was removed)."""
     result = runner.invoke(main, [command, "--help"])
-    assert result.exit_code == 0
-    assert "--auto-tune" in result.output
-
-
-def test_auto_tune_flag_not_in_evaluate_help(runner):
-    """--auto-tune should not appear in evaluate help (EvalConfig has no scan_chunk_size)."""
-    result = runner.invoke(main, ["evaluate", "--help"])
     assert result.exit_code == 0
     assert "--auto-tune" not in result.output
 

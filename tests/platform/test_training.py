@@ -156,7 +156,6 @@ def _create_config(*, wandb_enabled: bool = False, run_overrides: dict | None = 
         "eval_frequency": 1,
         "eval_rollouts": 2,
         "eval_max_steps": 5,
-        "log_frequency": 2,
     }
     if run_overrides:
         run_defaults.update(run_overrides)
@@ -482,12 +481,12 @@ def test_run_training_loop_with_chunk_size_one(monkeypatch):
 
 
 def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
-    """Verify chunks align properly with logging frequency boundaries."""
+    """Verify chunks align properly with eval_frequency boundaries."""
     from myriad.platform import runners
 
-    # Setup: 10 steps per env, chunk_size=3, log every 4 steps
+    # Setup: 10 steps per env, chunk_size=3, eval every 4 steps
     config = _create_config(
-        run_overrides={"steps_per_env": 10, "num_envs": 2, "scan_chunk_size": 3, "log_frequency": 4}
+        run_overrides={"steps_per_env": 10, "num_envs": 2, "scan_chunk_size": 3, "eval_frequency": 4}
     )
 
     chunk_sizes_observed: list[int] = []
@@ -511,45 +510,13 @@ def test_run_training_loop_boundary_alignment_with_logging(monkeypatch):
     # Remove the JIT trace call (first call with 0 or minimal steps)
     actual_chunks = [size for size in chunk_sizes_observed if size > 0]
 
-    # With 10 steps per env, chunk_size=3, log_frequency=4:
-    # - Steps 0-3: chunk of 3, then chunk of 1 (to align with log boundary at step 4)
-    # - Steps 4-7: chunk of 3, then chunk of 1 (to align with log boundary at step 8)
+    # With 10 steps per env, chunk_size=3, eval_frequency=4:
+    # - Steps 0-3: chunk of 3, then chunk of 1 (to align with eval boundary at step 4)
+    # - Steps 4-7: chunk of 3, then chunk of 1 (to align with eval boundary at step 8)
     # - Steps 8-9: chunk of 2
     # The exact pattern depends on boundary alignment logic
     assert sum(actual_chunks) == 10  # Total steps per env should be correct
     assert all(chunk <= 3 for chunk in actual_chunks)  # No chunk exceeds scan_chunk_size
-
-
-def test_run_config_warns_on_inefficient_scan_chunk_size():
-    """RunConfig should warn when scan_chunk_size is much larger than logging/eval frequencies."""
-    import warnings
-
-    # Should NOT warn: scan_chunk_size (10) <= 2 * min(log_frequency=10, eval_frequency=20) = 20
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        _config = _create_config(run_overrides={"scan_chunk_size": 10, "log_frequency": 10, "eval_frequency": 20})
-        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
-        assert len(chunk_warnings) == 0
-
-    # Should warn: scan_chunk_size (50) > 2 * min(log_frequency=10, eval_frequency=20) = 20
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        _config = _create_config(run_overrides={"scan_chunk_size": 50, "log_frequency": 10, "eval_frequency": 20})
-        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
-        assert len(chunk_warnings) >= 1
-        assert issubclass(chunk_warnings[0].category, UserWarning)
-        assert "scan_chunk_size (50)" in str(chunk_warnings[0].message)
-        assert "minimum boundary frequency (10)" in str(chunk_warnings[0].message)
-
-    # Should warn: scan_chunk_size (100) > 2 * min(log_frequency=5, eval_frequency=3) = 6
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        _config = _create_config(run_overrides={"scan_chunk_size": 100, "log_frequency": 5, "eval_frequency": 3})
-        chunk_warnings = [warning for warning in w if "scan_chunk_size" in str(warning.message)]
-        assert len(chunk_warnings) >= 1
-        assert issubclass(chunk_warnings[0].category, UserWarning)
-        assert "scan_chunk_size (100)" in str(chunk_warnings[0].message)
-        assert "minimum boundary frequency (3)" in str(chunk_warnings[0].message)
 
 
 # ============================================================================
@@ -624,7 +591,6 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 5,
             "eval_frequency": 10,
         }
     )
@@ -637,7 +603,6 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 5,
-            "log_frequency": 5,
             "eval_frequency": 10,
         }
     )
@@ -650,7 +615,6 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 1,
-            "log_frequency": 5,
             "eval_frequency": 10,
         }
     )
@@ -663,60 +627,6 @@ def test_reproducibility_different_scan_chunk_sizes(monkeypatch):
     _assert_states_equal(env1, env3, "Env state (chunk_size 2 vs 1)")
     _assert_states_equal(buffer1, buffer2, "Buffer state (chunk_size 2 vs 5)")
     _assert_states_equal(buffer1, buffer3, "Buffer state (chunk_size 2 vs 1)")
-
-
-def test_reproducibility_different_log_frequencies(monkeypatch):
-    """Training with same seed but different log_frequency should yield identical results."""
-    base_seed = 123
-    steps_per_env = 8
-    num_envs = 2
-
-    # Run 1: log_frequency = 2
-    config1 = _create_config(
-        run_overrides={
-            "seed": base_seed,
-            "steps_per_env": steps_per_env,
-            "num_envs": num_envs,
-            "scan_chunk_size": 2,
-            "log_frequency": 2,
-            "eval_frequency": 8,
-        }
-    )
-    agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
-
-    # Run 2: log_frequency = 4 (different logging frequency)
-    config2 = _create_config(
-        run_overrides={
-            "seed": base_seed,
-            "steps_per_env": steps_per_env,
-            "num_envs": num_envs,
-            "scan_chunk_size": 2,
-            "log_frequency": 4,
-            "eval_frequency": 8,
-        }
-    )
-    agent2, env2, buffer2 = _extract_final_states(monkeypatch, config2)
-
-    # Run 3: log_frequency = 8 (same as eval, less frequent logging)
-    config3 = _create_config(
-        run_overrides={
-            "seed": base_seed,
-            "steps_per_env": steps_per_env,
-            "num_envs": num_envs,
-            "scan_chunk_size": 2,
-            "log_frequency": 8,
-            "eval_frequency": 8,
-        }
-    )
-    agent3, env3, buffer3 = _extract_final_states(monkeypatch, config3)
-
-    # All three runs should produce identical final states
-    _assert_states_equal(agent1, agent2, "Agent state (log_freq 2 vs 4)")
-    _assert_states_equal(agent1, agent3, "Agent state (log_freq 2 vs 8)")
-    _assert_states_equal(env1, env2, "Env state (log_freq 2 vs 4)")
-    _assert_states_equal(env1, env3, "Env state (log_freq 2 vs 8)")
-    _assert_states_equal(buffer1, buffer2, "Buffer state (log_freq 2 vs 4)")
-    _assert_states_equal(buffer1, buffer3, "Buffer state (log_freq 2 vs 8)")
 
 
 def test_reproducibility_different_eval_frequencies(monkeypatch):
@@ -732,7 +642,6 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
-            "log_frequency": 4,
             "eval_frequency": 4,
         }
     )
@@ -745,7 +654,6 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
-            "log_frequency": 4,
             "eval_frequency": 6,
         }
     )
@@ -758,7 +666,6 @@ def test_reproducibility_different_eval_frequencies(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 3,
-            "log_frequency": 4,
             "eval_frequency": 12,
         }
     )
@@ -786,7 +693,6 @@ def test_reproducibility_different_eval_rollouts(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 4,
             "eval_frequency": 8,
             "eval_rollouts": 2,
         }
@@ -800,7 +706,6 @@ def test_reproducibility_different_eval_rollouts(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 4,
             "eval_frequency": 8,
             "eval_rollouts": 5,
         }
@@ -826,7 +731,6 @@ def test_reproducibility_different_eval_max_steps(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 4,
             "eval_frequency": 8,
             "eval_max_steps": 5,
         }
@@ -840,7 +744,6 @@ def test_reproducibility_different_eval_max_steps(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 4,
             "eval_frequency": 8,
             "eval_max_steps": 10,
         }
@@ -866,7 +769,6 @@ def test_reproducibility_combined_config_variations(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 2,
-            "log_frequency": 4,
             "eval_frequency": 6,
             "eval_rollouts": 2,
             "eval_max_steps": 5,
@@ -874,14 +776,13 @@ def test_reproducibility_combined_config_variations(monkeypatch):
     )
     agent1, env1, buffer1 = _extract_final_states(monkeypatch, config1)
 
-    # Run 2: Config B (all logging/eval params different, but same seed)
+    # Run 2: Config B (all eval params different, but same seed)
     config2 = _create_config(
         run_overrides={
             "seed": base_seed,
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 4,
-            "log_frequency": 8,
             "eval_frequency": 12,
             "eval_rollouts": 4,
             "eval_max_steps": 10,
@@ -896,7 +797,6 @@ def test_reproducibility_combined_config_variations(monkeypatch):
             "steps_per_env": steps_per_env,
             "num_envs": num_envs,
             "scan_chunk_size": 1,
-            "log_frequency": 2,
             "eval_frequency": 4,
             "eval_rollouts": 1,
             "eval_max_steps": 3,
@@ -927,7 +827,6 @@ def test_training_reaches_exact_total_timesteps():
             "steps_per_env": 25,
             "num_envs": 4,
             "scan_chunk_size": 3,
-            "log_frequency": 10,
             "eval_frequency": 15,
         }
     )
@@ -943,7 +842,6 @@ def test_training_reaches_exact_total_timesteps():
             "steps_per_env": 3125,
             "num_envs": 16,
             "scan_chunk_size": 10,
-            "log_frequency": 1000,
             "eval_frequency": 5000,
         }
     )
@@ -959,7 +857,6 @@ def test_training_reaches_exact_total_timesteps():
             "steps_per_env": 25,
             "num_envs": 4,
             "scan_chunk_size": 5,
-            "log_frequency": 10,
             "eval_frequency": 20,
         }
     )
@@ -990,8 +887,7 @@ def test_on_policy_training_steps_increment_correctly():
             "num_envs": 4,
             "rollout_steps": 4,  # On-policy mode
             "scan_chunk_size": 2,
-            "log_frequency": 4,
-            "eval_frequency": 8,
+            "eval_frequency": 4,
         }
     )
 
@@ -1009,7 +905,7 @@ def test_on_policy_training_steps_increment_correctly():
         results.training_metrics.global_steps[-1] == expected_total
     ), f"Expected {expected_total} total steps, got {results.training_metrics.global_steps[-1]}"
 
-    # With log_frequency=4, should have 5 logs: at steps 4, 8, 12, 16, 20
+    # With eval_frequency=4, should have 5 logs: at steps 4, 8, 12, 16, 20
     assert (
         len(results.training_metrics.global_steps) == 5
     ), f"Expected 5 training logs, got {len(results.training_metrics.global_steps)}"
@@ -1024,8 +920,7 @@ def test_on_policy_training_logging_frequency(monkeypatch):
             "num_envs": 2,
             "rollout_steps": 4,  # On-policy mode
             "scan_chunk_size": 2,
-            "log_frequency": 8,  # Should log at steps 8, 16, 24
-            "eval_frequency": 100,  # Disable eval for this test
+            "eval_frequency": 8,  # Should log and eval at steps 8, 16, 24
         }
     )
 
@@ -1058,7 +953,6 @@ def test_on_policy_training_completes_full_duration():
             "num_envs": 4,
             "rollout_steps": 4,
             "scan_chunk_size": 2,
-            "log_frequency": 8,
             "eval_frequency": 16,
         }
     )
@@ -1085,8 +979,7 @@ def test_on_policy_training_produces_correct_number_of_logs():
             "num_envs": 2,
             "rollout_steps": 4,
             "scan_chunk_size": 2,
-            "log_frequency": 4,  # Should log at: 4, 8, 12, 16, 20 → 5 logs
-            "eval_frequency": 8,  # Should eval at: 8, 16 → 2 evals (20 not divisible by 8, so no eval at 20)
+            "eval_frequency": 4,  # Should log and eval at: 4, 8, 12, 16, 20 → 5 checkpoints
         }
     )
 
@@ -1097,14 +990,14 @@ def test_on_policy_training_produces_correct_number_of_logs():
         len(results.training_metrics.global_steps) == 5
     ), f"Expected 5 training logs, got {len(results.training_metrics.global_steps)}"
 
-    # Eval logs: at steps 8, 16 → 2 evals
+    # Eval logs: every 4 steps → 5 evals
     assert (
-        len(results.eval_metrics.global_steps) == 2
-    ), f"Expected 2 eval logs, got {len(results.eval_metrics.global_steps)}"
+        len(results.eval_metrics.global_steps) == 5
+    ), f"Expected 5 eval logs, got {len(results.eval_metrics.global_steps)}"
 
     # Verify exact checkpoint positions
     assert results.training_metrics.steps_per_env == [4, 8, 12, 16, 20]
-    assert results.eval_metrics.steps_per_env == [8, 16]
+    assert results.eval_metrics.steps_per_env == [4, 8, 12, 16, 20]
 
 
 def test_on_policy_vs_off_policy_same_total_steps():
@@ -1117,7 +1010,6 @@ def test_on_policy_vs_off_policy_same_total_steps():
             "num_envs": 3,
             "rollout_steps": 4,  # ON-POLICY
             "scan_chunk_size": 2,
-            "log_frequency": 12,
             "eval_frequency": 12,
         }
     )
@@ -1131,7 +1023,6 @@ def test_on_policy_vs_off_policy_same_total_steps():
             "buffer_size": 20,
             "batch_size": 2,
             "scan_chunk_size": 2,
-            "log_frequency": 12,
             "eval_frequency": 12,
         }
     )

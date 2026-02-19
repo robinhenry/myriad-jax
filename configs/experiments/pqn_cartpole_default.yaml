@@ -15,10 +15,9 @@ run:
   steps_per_env: 15625  # Total timesteps = 15625 * 32 = 500k
   num_envs: 32  # Parallel environments (original uses 32)
   rollout_steps: 2  # On-policy: collect 2 steps before training
-  eval_frequency: 10  # Evaluate every 10 steps
+  eval_frequency: 10  # Log and evaluate every 10 steps
   eval_rollouts: 16  # More rollouts for parallel eval
   eval_max_steps: 500  # CartPole max episode length
-  log_frequency: 10  # Log every 10 steps
 
 # W&B settings
 wandb:

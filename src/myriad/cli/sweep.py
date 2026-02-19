@@ -14,9 +14,8 @@ import click
         "allow_interspersed_args": False,
     }
 )
-@click.option("--auto-tune", is_flag=True, default=False, help="Auto-tune scan_chunk_size for this hardware.")
 @click.pass_context
-def sweep(ctx: click.Context, auto_tune: bool) -> None:
+def sweep(ctx: click.Context) -> None:
     """Run training with W&B sweep for hyperparameter optimization.
 
     This command is designed to work with W&B sweeps. It loads the base
@@ -47,4 +46,4 @@ def sweep(ctx: click.Context, auto_tune: bool) -> None:
     from myriad.platform.hydra_runners import sweep_main
     from myriad.platform.runner_utils import run_with_hydra
 
-    run_with_hydra(sweep_main, script_name="myriad sweep", args=ctx.args, auto_tune=auto_tune)
+    run_with_hydra(sweep_main, script_name="myriad sweep", args=ctx.args)
