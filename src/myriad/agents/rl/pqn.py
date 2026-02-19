@@ -220,6 +220,7 @@ def _compute_lambda_returns(
         rewards: Rewards array of shape (num_steps,)
         dones: Done flags array of shape (num_steps,)
         next_q_max: Max Q-values for next states of shape (num_steps,)
+            next_q_max[t] = V(s_{t+1})
         gamma: Discount factor
         lambda_: Lambda parameter for mixing TD targets
 
@@ -227,42 +228,24 @@ def _compute_lambda_returns(
         Lambda-returns of shape (num_steps,)
     """
 
-    def scan_fn(lambda_returns_and_next_q, transition):
-        lambda_returns, next_q = lambda_returns_and_next_q
-        reward, done, transition_next_q = transition
+    def scan_fn(G_next, transition):
+        reward, done, v_next = transition  # v_next = V(s_{t+1}) for this step
+        target_bootstrap = reward + gamma * (1.0 - done) * v_next
+        delta = G_next - v_next
+        G = target_bootstrap + gamma * lambda_ * delta
+        G = (1.0 - done) * G + done * reward  # mask terminal steps
+        return G, G
 
-        # Bootstrap target: r + gamma * (1 - done) * V(s')
-        target_bootstrap = reward + gamma * (1.0 - done) * next_q
-
-        # TD error delta: G_{t+1} - V(s_{t+1})
-        delta = lambda_returns - next_q
-
-        # Lambda-return: bootstrap + gamma * lambda * delta
-        lambda_returns = target_bootstrap + gamma * lambda_ * delta
-
-        # Mask done states to just return the reward
-        lambda_returns = (1.0 - done) * lambda_returns + done * reward
-
-        # Update next_q for next iteration
-        next_q = transition_next_q
-
-        return (lambda_returns, next_q), lambda_returns
-
-    # Initialize with last step
-    init_lambda_returns = rewards[-1]
-    init_next_q = next_q_max[-1]
+    # Bootstrap final step correctly: G_{T-1} = r_{T-1} + gamma * (1-done) * V(s_T)
+    G_last = rewards[-1] + gamma * (1.0 - dones[-1]) * next_q_max[-1]
+    G_last = (1.0 - dones[-1]) * G_last + dones[-1] * rewards[-1]
 
     # Scan backward through trajectory (excluding last step)
+    # next_q_max[t] = V(s_{t+1}), so each step reads the correct v_next
     transitions = (rewards[:-1], dones[:-1], next_q_max[:-1])
+    _, Gs = jax.lax.scan(scan_fn, G_last, transitions, reverse=True)
 
-    _, lambda_returns_reversed = jax.lax.scan(scan_fn, (init_lambda_returns, init_next_q), transitions, reverse=True)
-
-    # Append the initial return and reverse to get forward order
-    # lambda_returns_reversed contains [G_0, G_1, ..., G_{T-1}] (from reverse scan)
-    # We need to append G_T at the end
-    lambda_returns = jnp.concatenate([lambda_returns_reversed, jnp.array([init_lambda_returns])])
-
-    return lambda_returns
+    return jnp.concatenate([Gs, jnp.array([G_last])])
 
 
 def _update(
@@ -285,27 +268,24 @@ def _update(
     Returns:
         Tuple of (new agent_state, metrics dict)
     """
-    # Compute next Q-values and max
+    # batch has shape (T, E, ...) from make_chunked_collector.
+    # Compute per-environment lambda-returns on the natural trajectory shape.
+    rewards = batch.reward * params.reward_scale  # (T, E)
+    dones = batch.done.astype(jnp.float32)  # (T, E)
+
+    # next_obs shape (T, E, obs_dim) — nn.Dense broadcasts over leading dims
     next_q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, batch.next_obs)
-    next_q_max = jnp.max(next_q_values, axis=1)
+    next_q_max = jnp.max(next_q_values, axis=-1)  # (T, E)
 
-    # Compute lambda-returns
-    # Scale rewards
-    rewards = batch.reward * params.reward_scale
-    dones = batch.done.astype(jnp.float32)
-    lambda_returns = _compute_lambda_returns(
-        rewards=rewards,
-        dones=dones,
-        next_q_max=next_q_max,
-        gamma=params.gamma,
-        lambda_=params.lambda_,
-    )
+    # _compute_lambda_returns uses purely element-wise ops and a scalar carry, so
+    # passing (T, E) arrays works directly — the scan carry is (E,) at each step.
+    lambda_returns = _compute_lambda_returns(rewards, dones, next_q_max, params.gamma, params.lambda_)
+    lambda_returns = jax.lax.stop_gradient(lambda_returns)  # (T, E)
 
-    # Stop gradient on targets
-    lambda_returns = jax.lax.stop_gradient(lambda_returns)
-
-    # Prepare data for multi-epoch training
-    batch_size = len(rewards)
+    # Flatten for minibatch training
+    flat = jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), batch)
+    lambda_returns_flat = lambda_returns.reshape(-1)  # (T*E,)
+    batch_size = lambda_returns_flat.shape[0]
     minibatch_size = batch_size // params.num_minibatches
 
     def train_epoch(carry, _):
@@ -323,9 +303,9 @@ def _update(
             mb_indices = jax.lax.dynamic_slice(perm, (start_idx,), (minibatch_size,))
 
             # Get minibatch data using gather
-            mb_obs = batch.obs[mb_indices]
-            mb_actions = batch.action[mb_indices]
-            mb_targets = lambda_returns[mb_indices]
+            mb_obs = flat.obs[mb_indices]
+            mb_actions = flat.action[mb_indices]
+            mb_targets = lambda_returns_flat[mb_indices]
 
             def loss_fn(q_params):
                 """Compute TD loss for Q-network."""
@@ -379,7 +359,7 @@ def _update(
         "loss": jnp.mean(epoch_losses),
         "td_error": jnp.mean(epoch_td_errors),
         "q_value": jnp.mean(epoch_q_values),
-        "lambda_return_mean": jnp.mean(lambda_returns),
+        "lambda_return_mean": jnp.mean(lambda_returns_flat),
     }
 
     return new_agent_state, metrics

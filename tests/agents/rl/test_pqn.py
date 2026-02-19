@@ -161,14 +161,15 @@ def test_update(key, sample_obs, agent):
     """Test agent update with a batch of transitions."""
     agent_state = agent.init(key, sample_obs, agent.params)
 
-    # Create a batch of transitions (must be multiple of num_minibatches)
-    batch_size = 16  # Must be divisible by num_minibatches (4)
+    # Batch has shape (T, E, ...) as produced by make_chunked_collector.
+    # T*E must be divisible by num_minibatches (4), e.g. T=4, E=4.
+    T, E = 4, 4
     batch = Transition(
-        obs=jnp.tile(sample_obs, (batch_size, 1)),
-        action=jnp.zeros(batch_size, dtype=jnp.int32),
-        reward=jnp.ones(batch_size, dtype=jnp.float32),
-        next_obs=jnp.tile(sample_obs, (batch_size, 1)),
-        done=jnp.zeros(batch_size, dtype=jnp.bool_),
+        obs=jnp.tile(sample_obs, (T, E, 1)),
+        action=jnp.zeros((T, E), dtype=jnp.int32),
+        reward=jnp.ones((T, E), dtype=jnp.float32),
+        next_obs=jnp.tile(sample_obs, (T, E, 1)),
+        done=jnp.zeros((T, E), dtype=jnp.bool_),
     )
 
     # Update agent
@@ -226,13 +227,14 @@ def test_jit_compilation(key, sample_obs, agent):
     action, _ = jitted_select(key, sample_obs, agent_state, params=agent.params)
     assert action.shape == ()
 
-    # JIT compile update
+    # JIT compile update — batch shape (T, E, ...) as from make_chunked_collector
+    T, E = 4, 4
     batch = Transition(
-        obs=jnp.tile(sample_obs, (16, 1)),
-        action=jnp.zeros(16, dtype=jnp.int32),
-        reward=jnp.ones(16, dtype=jnp.float32),
-        next_obs=jnp.tile(sample_obs, (16, 1)),
-        done=jnp.zeros(16, dtype=jnp.bool_),
+        obs=jnp.tile(sample_obs, (T, E, 1)),
+        action=jnp.zeros((T, E), dtype=jnp.int32),
+        reward=jnp.ones((T, E), dtype=jnp.float32),
+        next_obs=jnp.tile(sample_obs, (T, E, 1)),
+        done=jnp.zeros((T, E), dtype=jnp.bool_),
     )
     jitted_update = jax.jit(agent.update, static_argnames=["params"])
     new_state, metrics = jitted_update(key, agent_state, batch, params=agent.params)

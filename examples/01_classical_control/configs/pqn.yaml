@@ -1,0 +1,35 @@
+run:
+  # Run parameters
+  seed: 0
+  num_envs: 32
+  steps_per_env: 20000
+  # Rollout (determines batch_size = num_envs x rollout_steps)
+  rollout_steps: 64
+  # scan_chunk_size must equal eval_frequency / rollout_steps for on-policy.
+  # Default (256) causes 92% wasted iterations per chunk call.
+  scan_chunk_size: 20
+  # Logging frequency
+  eval_rollouts: 50
+  eval_frequency: 1280
+  log_frequency: 1280
+
+env:
+  name: cartpole-control
+
+agent:
+  name: pqn
+  learning_rate: 0.0001
+  max_grad_norm: 10.0
+  num_epochs: 4
+  num_minibatches: 16
+  gamma: 0.99
+  lambda_: 0.95
+  reward_scale: 0.1
+  epsilon_start: 1.0
+  epsilon_end: 0.2
+  epsilon_decay_steps: 63
+  hidden_size: 256
+  num_layers: 2
+
+wandb:
+  enabled: false

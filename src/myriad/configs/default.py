@@ -175,12 +175,21 @@ class RunConfig(EvalConfigBase):
                     stacklevel=2,
                 )
 
-            # Additionally warn if scan_chunk_size doesn't align with rollout_steps
-            if self.rollout_steps % self.scan_chunk_size != 0 and self.scan_chunk_size % self.rollout_steps != 0:
+            # Warn if scan_chunk_size is larger than cycles per log/eval boundary.
+            # For on-policy, the scan runs over rollout-update *cycles*, not env steps.
+            # The optimal scan_chunk_size is min(log_frequency, eval_frequency) / rollout_steps.
+            # A larger value causes dead (masked) iterations that still execute, wasting compute.
+            cycles_per_boundary = min(self.log_frequency, self.eval_frequency) // self.rollout_steps
+            if cycles_per_boundary > 0 and self.scan_chunk_size > cycles_per_boundary:
                 warnings.warn(
-                    f"On-policy training: For efficient chunked execution, scan_chunk_size ({self.scan_chunk_size}) "
-                    f"should divide evenly into rollout_steps ({self.rollout_steps}) or vice versa. "
-                    f"This ensures minimal wasted computation from masked iterations.",
+                    f"On-policy training: scan_chunk_size ({self.scan_chunk_size}) exceeds "
+                    f"cycles_per_boundary ({cycles_per_boundary} = "
+                    f"min(log_frequency={self.log_frequency}, eval_frequency={self.eval_frequency}) "
+                    f"/ rollout_steps={self.rollout_steps}). "
+                    f"The scan will execute {self.scan_chunk_size} iterations per call but only "
+                    f"{cycles_per_boundary} will be active, wasting "
+                    f"{100 * (self.scan_chunk_size - cycles_per_boundary) // self.scan_chunk_size}% of compute. "
+                    f"Set scan_chunk_size={cycles_per_boundary} to eliminate this overhead.",
                     UserWarning,
                     stacklevel=2,
                 )
