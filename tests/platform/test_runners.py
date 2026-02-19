@@ -223,13 +223,12 @@ def test_make_chunked_collector_basic_functionality():
     # Env counters should have advanced by total_steps
     np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), total_steps))
 
-    # Transitions should be shaped (total_steps * num_envs, ...)
-    expected_batch_size = total_steps * num_envs
-    assert transitions.obs.shape[0] == expected_batch_size
-    assert transitions.action.shape[0] == expected_batch_size
-    assert transitions.reward.shape[0] == expected_batch_size
-    assert transitions.next_obs.shape[0] == expected_batch_size
-    assert transitions.done.shape[0] == expected_batch_size
+    # Transitions should be shaped (total_steps, num_envs, ...)
+    assert transitions.obs.shape[:2] == (total_steps, num_envs)
+    assert transitions.action.shape[:2] == (total_steps, num_envs)
+    assert transitions.reward.shape[:2] == (total_steps, num_envs)
+    assert transitions.next_obs.shape[:2] == (total_steps, num_envs)
+    assert transitions.done.shape[:2] == (total_steps, num_envs)
 
     # Verify key changed
     assert not np.array_equal(key, key_out)
@@ -250,7 +249,7 @@ def test_make_chunked_collector_with_larger_total_steps():
     key_out, agent_out, env_out, transitions = collect_rollout(key, agent_state, env_states)
 
     assert int(agent_out.step_count) == total_steps
-    assert transitions.obs.shape[0] == total_steps * num_envs
+    assert transitions.obs.shape[:2] == (total_steps, num_envs)
 
 
 def test_make_chunked_collector_small_total_steps():
@@ -269,7 +268,7 @@ def test_make_chunked_collector_small_total_steps():
 
     assert int(agent_out.step_count) == total_steps
     np.testing.assert_array_equal(env_out.counter, np.full((num_envs,), total_steps))
-    assert transitions.obs.shape[0] == total_steps * num_envs
+    assert transitions.obs.shape[:2] == (total_steps, num_envs)
 
 
 # -----------------------------------------------------------------------------
