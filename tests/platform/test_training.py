@@ -886,7 +886,7 @@ def test_on_policy_training_steps_increment_correctly():
             "steps_per_env": 20,
             "num_envs": 4,
             "rollout_steps": 4,  # On-policy mode
-            "scan_chunk_size": 2,
+            "scan_chunk_size": 8,
             "eval_frequency": 4,
         }
     )
@@ -919,7 +919,7 @@ def test_on_policy_training_logging_frequency(monkeypatch):
             "steps_per_env": 24,
             "num_envs": 2,
             "rollout_steps": 4,  # On-policy mode
-            "scan_chunk_size": 2,
+            "scan_chunk_size": 8,
             "eval_frequency": 8,  # Should log and eval at steps 8, 16, 24
         }
     )
@@ -952,7 +952,7 @@ def test_on_policy_training_completes_full_duration():
             "steps_per_env": 16,
             "num_envs": 4,
             "rollout_steps": 4,
-            "scan_chunk_size": 2,
+            "scan_chunk_size": 8,
             "eval_frequency": 16,
         }
     )
@@ -978,7 +978,7 @@ def test_on_policy_training_produces_correct_number_of_logs():
             "steps_per_env": 20,
             "num_envs": 2,
             "rollout_steps": 4,
-            "scan_chunk_size": 2,
+            "scan_chunk_size": 8,
             "eval_frequency": 4,  # Should log and eval at: 4, 8, 12, 16, 20 → 5 checkpoints
         }
     )
@@ -1009,7 +1009,7 @@ def test_on_policy_vs_off_policy_same_total_steps():
             "steps_per_env": 12,
             "num_envs": 3,
             "rollout_steps": 4,  # ON-POLICY
-            "scan_chunk_size": 2,
+            "scan_chunk_size": 8,
             "eval_frequency": 12,
         }
     )

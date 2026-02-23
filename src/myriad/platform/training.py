@@ -131,18 +131,19 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         steps_to_eval = _steps_until_boundary(steps_completed, eval_frequency)
 
         if use_rollout_training:
-            # On-policy: Calculate number of rollout-update cycles to run
-            # Each cycle advances by rollout_steps, so we need to scale boundaries
+            # On-policy: Calculate number of rollout-update cycles to run.
+            # chunk_size is in steps; convert to cycles for the scan.
             assert config.run.rollout_steps is not None
-            cycles_to_eval = steps_to_eval // config.run.rollout_steps if steps_to_eval > 0 else chunk_size
+            cycles_per_chunk = max(1, chunk_size // config.run.rollout_steps)
+            cycles_to_eval = steps_to_eval // config.run.rollout_steps if steps_to_eval > 0 else cycles_per_chunk
             cycles_remaining = (remaining_steps + config.run.rollout_steps - 1) // config.run.rollout_steps
-            num_cycles = min(chunk_size, cycles_remaining, cycles_to_eval)
+            num_cycles = min(cycles_per_chunk, cycles_remaining, cycles_to_eval)
 
             # Ensure we run at least one cycle if there are remaining steps
             num_cycles = max(1, num_cycles) if remaining_steps > 0 else 0
 
             # Create active mask for cycles
-            active_mask = (jnp.arange(chunk_size) < num_cycles).astype(jnp.bool_)
+            active_mask = (jnp.arange(cycles_per_chunk) < num_cycles).astype(jnp.bool_)
 
             # Run chunked on-policy training
             (key, agent_state, training_env_states), metrics_history = run_chunk_fn(

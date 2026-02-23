@@ -151,15 +151,23 @@ class RunConfig(EvalConfigBase):
 
     @model_validator(mode="after")
     def compute_scan_chunk_size(self) -> "RunConfig":
-        """Auto-compute scan_chunk_size from eval_frequency if not explicitly set."""
+        """Auto-compute scan_chunk_size if not explicitly set.
+
+        scan_chunk_size always represents environment steps, for both on-policy
+        and off-policy algorithms. This matches the unit of eval_frequency.
+        For on-policy algorithms, training.py converts to cycles internally.
+        """
         if self.scan_chunk_size is None:
-            if self.rollout_steps is not None:
-                # On-policy: number of rollout-update cycles per eval_frequency boundary
-                cycles_per_boundary = self.eval_frequency // self.rollout_steps
-                self.scan_chunk_size = max(1, cycles_per_boundary)
-            else:
-                # Off-policy: number of steps per eval_frequency boundary
-                self.scan_chunk_size = self.eval_frequency
+            self.scan_chunk_size = self.eval_frequency
+        elif self.rollout_steps is not None and self.scan_chunk_size % self.rollout_steps != 0:
+            warnings.warn(
+                f"On-policy training: scan_chunk_size ({self.scan_chunk_size}) is not divisible "
+                f"by rollout_steps ({self.rollout_steps}). Effective steps per chunk = "
+                f"{(self.scan_chunk_size // self.rollout_steps) * self.rollout_steps}. "
+                f"Consider setting scan_chunk_size to a multiple of rollout_steps.",
+                UserWarning,
+                stacklevel=2,
+            )
         return self
 
 
