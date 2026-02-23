@@ -66,7 +66,7 @@ class AgentParams:
         reward_scale: Internal scaling factor applied to rewards before computing returns.
         epsilon_start: Initial exploration rate.
         epsilon_end: Final exploration rate after decay.
-        epsilon_decay_steps: Number of update steps to decay epsilon from start to end.
+        epsilon_decay_steps: Number of environment steps (per env) to decay epsilon from start to end.
         max_grad_norm: Maximum gradient norm for clipping.
         num_epochs: Number of training epochs per rollout batch.
         num_minibatches: Number of minibatches per epoch.
@@ -95,7 +95,7 @@ class AgentState:
 
     Attributes:
         train_state: Flax TrainState containing network params and optimizer state.
-        global_step: Number of update steps taken (used for epsilon decay).
+        global_step: Number of environment steps taken per env (used for epsilon decay).
     """
 
     train_state: TrainState
@@ -351,7 +351,7 @@ def _update(
     # Create new agent state
     new_agent_state = AgentState(
         train_state=new_train_state,
-        global_step=agent_state.global_step + 1,
+        global_step=agent_state.global_step + batch.obs.shape[0],
     )
 
     # Return metrics (average over epochs)
@@ -390,7 +390,7 @@ def make_agent(
         lambda_: Lambda parameter for lambda-returns (0.0 = 1-step TD, 1.0 = Monte Carlo)
         epsilon_start: Initial exploration rate
         epsilon_end: Final exploration rate
-        epsilon_decay_steps: Number of update steps to decay epsilon from start to end.
+        epsilon_decay_steps: Number of environment steps (per env) to decay epsilon from start to end.
             When using :func:`~myriad.create_config`, pass ``epsilon_decay_fraction``
             instead and the absolute step count is resolved automatically.
         max_grad_norm: Maximum gradient norm for clipping

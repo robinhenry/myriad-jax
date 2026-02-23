@@ -64,6 +64,6 @@ def test_epsilon_decay_fraction_resolved():
         rollout_steps=10,
         epsilon_decay_fraction=0.2,
     )
-    expected = max(1, int(0.2 * (1000 // 10)))  # 0.2 * 100 = 20
+    expected = max(1, int(0.2 * 1000))  # 0.2 * 1000 = 200 env steps
     assert config.agent.epsilon_decay_steps == expected
     assert not hasattr(config.agent, "epsilon_decay_fraction")

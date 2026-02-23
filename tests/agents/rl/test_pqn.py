@@ -176,7 +176,7 @@ def test_update(key, sample_obs, agent):
     new_state, metrics = agent.update(key, agent_state, batch, agent.params)
 
     assert isinstance(new_state, AgentState)
-    assert new_state.global_step == agent_state.global_step + 1
+    assert new_state.global_step == agent_state.global_step + T  # increments by rollout_steps (env steps)
     assert "loss" in metrics
     assert "td_error" in metrics
     assert "q_value" in metrics
@@ -238,4 +238,4 @@ def test_jit_compilation(key, sample_obs, agent):
     )
     jitted_update = jax.jit(agent.update, static_argnames=["params"])
     new_state, metrics = jitted_update(key, agent_state, batch, params=agent.params)
-    assert new_state.global_step == agent_state.global_step + 1
+    assert new_state.global_step == agent_state.global_step + T  # increments by rollout_steps (env steps)
