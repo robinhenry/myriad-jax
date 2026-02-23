@@ -141,6 +141,15 @@ def create_config(
     if rollout_steps is None and agent_info and agent_info.is_on_policy:
         rollout_steps = DEFAULT_ON_POLICY_ROLLOUT_STEPS
 
+    # Resolve fraction-based epsilon schedule → absolute update-step count.
+    # epsilon_decay_fraction ∈ [0, 1] is a user-friendly alias: the fraction of total
+    # update steps over which epsilon decays (total_updates = steps_per_env // rollout_steps).
+    if "epsilon_decay_fraction" in agent_kwargs:
+        fraction = agent_kwargs.pop("epsilon_decay_fraction")
+        effective_rollout = rollout_steps or DEFAULT_ON_POLICY_ROLLOUT_STEPS
+        total_updates = max(1, steps_per_env // effective_rollout)
+        agent_kwargs["epsilon_decay_steps"] = max(1, int(fraction * total_updates))
+
     # Build run config with merged params: explicit > model defaults
     run_params: dict[str, Any] = {
         "seed": seed,

@@ -53,3 +53,17 @@ def test_off_policy_defaults():
     # DQN should NOT get rollout_steps
     config = create_config(env="cartpole-control", agent="dqn")
     assert config.run.rollout_steps is None
+
+
+def test_epsilon_decay_fraction_resolved():
+    # epsilon_decay_fraction should be converted to epsilon_decay_steps in agent config
+    config = create_config(
+        env="cartpole-control",
+        agent="pqn",
+        steps_per_env=1000,
+        rollout_steps=10,
+        epsilon_decay_fraction=0.2,
+    )
+    expected = max(1, int(0.2 * (1000 // 10)))  # 0.2 * 100 = 20
+    assert config.agent.epsilon_decay_steps == expected
+    assert not hasattr(config.agent, "epsilon_decay_fraction")

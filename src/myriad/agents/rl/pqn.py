@@ -66,7 +66,7 @@ class AgentParams:
         reward_scale: Internal scaling factor applied to rewards before computing returns.
         epsilon_start: Initial exploration rate.
         epsilon_end: Final exploration rate after decay.
-        epsilon_decay_steps: Number of steps to decay epsilon from start to end.
+        epsilon_decay_steps: Number of update steps to decay epsilon from start to end.
         max_grad_norm: Maximum gradient norm for clipping.
         num_epochs: Number of training epochs per rollout batch.
         num_minibatches: Number of minibatches per epoch.
@@ -390,7 +390,9 @@ def make_agent(
         lambda_: Lambda parameter for lambda-returns (0.0 = 1-step TD, 1.0 = Monte Carlo)
         epsilon_start: Initial exploration rate
         epsilon_end: Final exploration rate
-        epsilon_decay_steps: Steps to decay epsilon from start to end
+        epsilon_decay_steps: Number of update steps to decay epsilon from start to end.
+            When using :func:`~myriad.create_config`, pass ``epsilon_decay_fraction``
+            instead and the absolute step count is resolved automatically.
         max_grad_norm: Maximum gradient norm for clipping
         num_epochs: Number of training epochs per rollout
         num_minibatches: Number of minibatches per epoch
