@@ -3,8 +3,6 @@
 This module provides common initialization functions used by both training and evaluation.
 """
 
-from __future__ import annotations
-
 from myriad.agents import make_agent
 from myriad.agents.agent import Agent
 from myriad.configs.default import Config, EvalConfig
@@ -30,7 +28,12 @@ def initialize_environment_and_agent(
     """
     # Create the environment
     env_kwargs = get_factory_kwargs(config.env)
+    frame_stack_n = env_kwargs.pop("frame_stack_n", 0)
     env = make_env(config.env.name, **env_kwargs)
+    if frame_stack_n > 0:
+        from myriad.envs.wrappers import make_frame_stack_env
+
+        env = make_frame_stack_env(env, n_frames=frame_stack_n)
 
     # Create the agent
     agent_kwargs = get_factory_kwargs(config.agent)
