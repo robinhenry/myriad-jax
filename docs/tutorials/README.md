@@ -36,7 +36,7 @@ The documentation build does NOT re-execute notebooks in CI. This is because:
 ### GPU Requirements
 
 Some tutorials require GPU for reasonable execution times:
-- `basics/03_parallel_training.ipynb` - Parallel PQN training with varying batch sizes
+- `basics/03_parallelism.ipynb` - Parallel PQN training with varying batch sizes
 
 Run these on a machine with GPU before committing.
 

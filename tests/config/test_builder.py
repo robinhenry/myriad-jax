@@ -55,8 +55,10 @@ def test_off_policy_defaults():
     assert config.run.rollout_steps is None
 
 
-def test_epsilon_decay_fraction_resolved():
-    # epsilon_decay_fraction should be converted to epsilon_decay_steps in agent config
+def test_epsilon_decay_fraction_preserved():
+    # epsilon_decay_fraction is stored as-is in the config; resolution happens at
+    # initialization time (initialize_environment_and_agent) so both the Python API
+    # and YAML/Hydra paths go through a single conversion point.
     config = create_config(
         env="cartpole-control",
         agent="pqn",
@@ -64,6 +66,5 @@ def test_epsilon_decay_fraction_resolved():
         rollout_steps=10,
         epsilon_decay_fraction=0.2,
     )
-    expected = max(1, int(0.2 * 1000))  # 0.2 * 1000 = 200 env steps
-    assert config.agent.epsilon_decay_steps == expected
-    assert not hasattr(config.agent, "epsilon_decay_fraction")
+    assert config.agent.epsilon_decay_fraction == 0.2
+    assert not hasattr(config.agent, "epsilon_decay_steps")
