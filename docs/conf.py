@@ -62,7 +62,7 @@ nb_execution_raise_on_error = True  # Fail the build on notebook errors
 templates_path = ["_templates"]
 
 # Patterns to exclude
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/README.md"]
 
 # Master document
 master_doc = "index"
