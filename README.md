@@ -24,7 +24,7 @@ Myriad is a **playground to explore RL, traditional control, system identificati
 
 It's a **ready-to-go experimental platform**. You can use one of the already-implemented tasks, algorithms, or implement your own and simply plug them in. Myriad will handle the intricacies of JAX/GPU optimization, training/evaluation loops, hyperparameter tracking, metrics logging, and many more not-so-fun things — freeing time for the more fun science and engineering bits. 👩🏾‍🔬👨🏻‍🔬
 
-Last but not least, it yields results that are 100% reproducible. 🌟
+Last but not least, it yields results that are reproducible on the same GPU hardware. 🌟
 
 > *Interested in the story behind Myriad? Read our [Motivation & Philosophy](https://myriad-jax.readthedocs.io/en/latest/introduction/motivation_philosophy.html).*
 
@@ -34,7 +34,7 @@ Last but not least, it yields results that are 100% reproducible. 🌟
 
 * **🏎️ JAX JIT Optimization:** Myriad is *fast*, even on CPU.
 
-* **✅ 100% Reproducible:** Myriad is fully deterministic. Using the same initial random seed and configuration file will yield the same results → great for science.
+* **✅ Reproducible:** Same seed + config yields bit-identical results on the same GPU hardware. Minor numerical differences may occur across different GPU models or driver versions due to non-deterministic GPU kernel optimizations → great for science.
 
 * **🎲 Exact Stochastic Simulations:** native JAX implementation of the Gillespie Algorithm (aka SSA) for discrete, asynchronous molecular events.
 
