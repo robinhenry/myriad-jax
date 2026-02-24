@@ -126,5 +126,3 @@ def test_get_factory_kwargs_removes_name():
     config = AgentConfig(name="random")
     kwargs = get_factory_kwargs(config)
     assert "name" not in kwargs
-
-
