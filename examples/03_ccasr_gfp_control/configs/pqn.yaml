@@ -10,10 +10,8 @@
 #   update_epochs=4                    → agent.num_epochs=4
 #   learning_rate=1e-4                 → agent.learning_rate=1e-4
 #   eps_decay=0.3                      → epsilon_decay_steps=2197 (=floor(0.3×(29297÷4)) update steps)
+#   lr_linear_decay=true               → lr_decay_fraction=1.0, lr_end=1e-20
 #   frame_obs_stack_size=16            → env.frame_stack_n=16
-#
-# Known differences vs paper:
-#   - Paper uses lr_linear_decay=true (linear LR annealing); Myriad uses fixed RAdam.
 defaults:
   - _self_
 
@@ -33,7 +31,6 @@ env:
 
 agent:
   name: pqn
-  learning_rate: 1e-4
   epsilon_start: 1.0
   epsilon_end: 0.005
   epsilon_decay_steps: 2197   # 0.3 × floor(29297 ÷ 4) update steps
@@ -45,6 +42,9 @@ agent:
   max_grad_norm: 0.5
   num_epochs: 4
   num_minibatches: 8
+  learning_rate: 1e-4
+  lr_decay_fraction: 1.0  # decay LR linearly over full training run (paper: lr_linear_decay=true)
+  lr_end: 1e-20           # paper hard-codes end_value=1e-20
 
 wandb:
   enabled: false

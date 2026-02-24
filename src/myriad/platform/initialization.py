@@ -46,6 +46,18 @@ def initialize_environment_and_agent(
         if steps_per_env is not None:
             agent_kwargs["epsilon_decay_steps"] = max(1, int(fraction * steps_per_env))
 
+    # Resolve lr_decay_fraction → lr_decay_steps
+    if "lr_decay_fraction" in agent_kwargs:
+        fraction = agent_kwargs.pop("lr_decay_fraction")
+        steps_per_env = getattr(config.run, "steps_per_env", None)
+        rollout_steps = getattr(config.run, "rollout_steps", None)
+        num_minibatches = agent_kwargs.get("num_minibatches")
+        num_epochs = agent_kwargs.get("num_epochs")
+        if all(x is not None for x in [steps_per_env, rollout_steps, num_minibatches, num_epochs]):
+            num_updates = steps_per_env / rollout_steps
+            total_grad_steps = num_updates * num_minibatches * num_epochs
+            agent_kwargs["lr_decay_steps"] = max(1, int(fraction * total_grad_steps))
+
     # Auto-inject dt from environment config if agent doesn't have it
     if "dt" not in agent_kwargs:
         env_dt = getattr(env.config, "dt", None)

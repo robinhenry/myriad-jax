@@ -72,6 +72,8 @@ class AgentParams:
         num_minibatches: Number of minibatches per epoch.
         hidden_size: Hidden layer size for Q-network.
         num_layers: Number of hidden layers in Q-network.
+        lr_end: Final learning rate after linear decay (only used when lr_decay_steps > 0).
+        lr_decay_steps: Total optimizer gradient steps to decay LR over (0 = disabled).
     """
 
     action_space: Space
@@ -87,6 +89,8 @@ class AgentParams:
     num_minibatches: int
     hidden_size: int
     num_layers: int
+    lr_end: float
+    lr_decay_steps: int
 
 
 @struct.dataclass
@@ -133,9 +137,18 @@ def _init(
     q_params = q_network.init(key, sample_obs_array)
 
     # Create optimizer with gradient clipping
+    if params.lr_decay_steps > 0:
+        lr = optax.linear_schedule(
+            init_value=params.learning_rate,
+            end_value=params.lr_end,
+            transition_steps=params.lr_decay_steps,
+        )
+    else:
+        lr = params.learning_rate
+
     optimizer = optax.chain(
         optax.clip_by_global_norm(params.max_grad_norm),
-        optax.radam(params.learning_rate),
+        optax.radam(lr),
     )
 
     train_state = TrainState.create(
@@ -379,6 +392,8 @@ def make_agent(
     num_minibatches: int = 4,
     hidden_size: int = 128,
     num_layers: int = 2,
+    lr_end: float = 1e-20,
+    lr_decay_steps: int = 0,
 ) -> Agent:
     """Factory function to create a PQN agent.
 
@@ -398,6 +413,11 @@ def make_agent(
         num_minibatches: Number of minibatches per epoch
         hidden_size: Hidden layer size for Q-network
         num_layers: Number of hidden layers in Q-network
+        lr_end: Final learning rate after linear decay. Only used when ``lr_decay_steps > 0``.
+        lr_decay_steps: Total optimizer gradient steps to decay LR from ``learning_rate``
+            to ``lr_end`` (0 = disabled, fixed LR). When using :func:`~myriad.create_config`,
+            pass ``lr_decay_fraction`` instead and the absolute step count is resolved
+            automatically. Total gradient steps = ``num_updates × num_minibatches × num_epochs``.
 
     Returns:
         Agent instance with PQN implementation
@@ -416,6 +436,8 @@ def make_agent(
         num_minibatches=num_minibatches,
         hidden_size=hidden_size,
         num_layers=num_layers,
+        lr_end=lr_end,
+        lr_decay_steps=lr_decay_steps,
     )
 
     return Agent(
