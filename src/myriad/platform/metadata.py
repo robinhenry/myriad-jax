@@ -86,7 +86,7 @@ class RunMetadata:
         devices = jax.devices()
         backend = jax.default_backend()
         metadata["device_backend"] = backend
-        metadata["device_count"] = len(devices)
+        metadata["device_count"] = str(len(devices))
         metadata["device_architecture"] = platform.machine()
 
         # For CPU backend, get detailed CPU info

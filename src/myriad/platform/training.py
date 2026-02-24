@@ -60,7 +60,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
 
     # Build shared jitted primitives first
     eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
-    chunk_size = max(1, config.run.scan_chunk_size)
+    chunk_size = max(1, config.run.scan_chunk_size or 1)
 
     # Determine training mode and initialize accordingly
     use_rollout_training = config.run.rollout_steps is not None
