@@ -18,7 +18,7 @@ The documentation build does NOT re-execute notebooks in CI. This is because:
 
 2. **Execute notebook in-place:**
    ```bash
-   jupyter nbconvert --to notebook --execute 03_parallel_training.ipynb --inplace
+   jupyter nbconvert --to notebook --execute 03_parallelism.ipynb --inplace
    ```
 
    Or use Jupyter Lab/Notebook UI to run all cells.

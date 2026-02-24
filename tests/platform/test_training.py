@@ -1038,3 +1038,40 @@ def test_on_policy_vs_off_policy_same_total_steps():
     # Both should have same steps_per_env
     assert results_on.training_metrics.steps_per_env[-1] == 12
     assert results_off.training_metrics.steps_per_env[-1] == 12
+
+
+# ========================================================================================
+# eval_frequency=0 (disabled) Tests
+# ========================================================================================
+
+
+def test_eval_frequency_zero_disables_evaluation():
+    """eval_frequency=0 should complete training without running any evaluation."""
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 10,
+            "num_envs": 2,
+            "eval_frequency": 0,
+            "scan_chunk_size": 5,
+        }
+    )
+
+    results = training.train_and_evaluate(config)
+
+    # No evaluation should have occurred
+    assert len(results.eval_metrics.global_steps) == 0
+    # No training logs are emitted (eval boundaries are the logging trigger)
+    assert len(results.training_metrics.global_steps) == 0
+
+
+def test_eval_frequency_zero_auto_computes_chunk_size_to_steps_per_env():
+    """With eval_frequency=0 and no explicit scan_chunk_size, chunk size should default to steps_per_env."""
+    run_cfg = RunConfig(
+        steps_per_env=50,
+        num_envs=1,
+        eval_frequency=0,
+        eval_rollouts=2,
+        eval_max_steps=5,
+        seed=0,
+    )
+    assert run_cfg.scan_chunk_size == 50
