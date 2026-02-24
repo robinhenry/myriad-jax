@@ -9,8 +9,8 @@ import logging
 import os
 from pathlib import Path
 
-import jax
 import hydra
+import jax
 import wandb
 from omegaconf import DictConfig, OmegaConf
 

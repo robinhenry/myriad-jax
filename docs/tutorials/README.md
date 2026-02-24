@@ -18,7 +18,7 @@ The documentation build does NOT re-execute notebooks in CI. This is because:
 
 2. **Execute notebook in-place:**
    ```bash
-   jupyter nbconvert --to notebook --execute 03_parallel_training.ipynb --inplace
+   jupyter nbconvert --to notebook --execute 03_parallelism.ipynb --inplace
    ```
 
    Or use Jupyter Lab/Notebook UI to run all cells.
@@ -30,13 +30,13 @@ The documentation build does NOT re-execute notebooks in CI. This is because:
 ### CI Validation
 
 - CI checks that all notebooks have outputs (validates you executed locally)
-- CI does NOT re-execute notebooks (configured in `docs/conf.py:nb_execution_mode = "cache"`)
+- CI does NOT re-execute notebooks (configured in `docs/conf.py:nb_execution_mode = "off"`)
 - If you forget to execute, the validation workflow will fail with instructions
 
 ### GPU Requirements
 
 Some tutorials require GPU for reasonable execution times:
-- `basics/03_parallel_training.ipynb` - Parallel PQN training with varying batch sizes
+- `basics/03_parallelism.ipynb` - Parallel PQN training with varying batch sizes
 
 Run these on a machine with GPU before committing.
 

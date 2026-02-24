@@ -6,6 +6,7 @@
 
 01_classic_control.ipynb
 02_training_lifecycle.ipynb
+03_parallelism.ipynb
 ```
 
 Step-by-step introductions to Myriad's core workflows.
@@ -14,3 +15,4 @@ Step-by-step introductions to Myriad's core workflows.
 |----------|-------------|
 | [Evaluating Classic Controllers](01_classic_control.ipynb) | Evaluate non-learning agents on the Pendulum swing-up task |
 | [Training Lifecycle](02_training_lifecycle.ipynb) | Complete training workflow: baseline → train → analyze → persist → reproduce |
+| [Myriad Parallelism](03_parallelism.ipynb) | Reproduce PureJaxQL PQN results on Cartpole + illustrate GPU parallelism in Myriad |

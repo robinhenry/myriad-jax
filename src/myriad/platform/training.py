@@ -60,7 +60,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
 
     # Build shared jitted primitives first
     eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
-    chunk_size = max(1, config.run.scan_chunk_size)
+    chunk_size = max(1, config.run.scan_chunk_size or 1)
 
     # Determine training mode and initialize accordingly
     use_rollout_training = config.run.rollout_steps is not None
@@ -112,7 +112,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
 
             Args:
                 current_step: The current training step counter
-                frequency: The logging or eval frequency (0 or negative means disabled)
+                frequency: The logging or eval frequency (0 means disabled)
 
             Returns:
                 Number of steps until the next boundary
@@ -235,7 +235,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     # Always log the final step if it wasn't just logged
     # This ensures training_metrics.global_steps[-1] reflects actual completion
     total_env_steps = steps_completed * config.run.num_envs
-    if steps_completed % eval_frequency != 0:
+    if eval_frequency > 0 and steps_completed % eval_frequency != 0:
         session_logger.log_training_step(
             global_step=total_env_steps,
             steps_per_env=steps_completed,

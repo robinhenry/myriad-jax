@@ -1,10 +1,10 @@
 run:
   seed: 0
   num_envs: 32
-  steps_per_env: 20000    # 640K total timesteps (≈ purejaxql's 500K)
+  steps_per_env: 10000
   rollout_steps: 64
   eval_rollouts: 50
-  eval_frequency: 1280
+  eval_frequency: 640
 
 env:
   name: cartpole-control
@@ -20,7 +20,7 @@ agent:
   reward_scale: 0.1
   epsilon_start: 1.0
   epsilon_end: 0.2
-  epsilon_decay_steps: 63   # 20% of 312 total updates = purejaxql EPS_DECAY=0.2
+  epsilon_decay_fraction: 0.2
   hidden_size: 256
   num_layers: 2
 

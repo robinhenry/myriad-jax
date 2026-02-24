@@ -9,7 +9,7 @@ Default values follow the project philosophy:
 
 import warnings
 
-from pydantic import PositiveInt, model_validator
+from pydantic import NonNegativeInt, PositiveInt, model_validator
 
 from myriad.core.types import BaseModel
 
@@ -118,7 +118,7 @@ class RunConfig(EvalConfigBase):
     rollout_steps: PositiveInt | None = None  # for on-policy algorithms: steps per env before training
 
     # --- Evaluation & Logging ---
-    eval_frequency: PositiveInt = 1000  # log and evaluate every N steps per env
+    eval_frequency: NonNegativeInt = 1000  # log and evaluate every N steps per env (0 to disable)
 
     @property
     def total_timesteps(self) -> int:
@@ -137,7 +137,7 @@ class RunConfig(EvalConfigBase):
         On-policy algorithms collect full rollouts before updating. For clean boundary alignment,
         rollout_steps should divide evenly into eval_frequency.
         """
-        if self.rollout_steps is not None:
+        if self.rollout_steps is not None and self.eval_frequency > 0:
             if self.eval_frequency % self.rollout_steps != 0:
                 warnings.warn(
                     f"On-policy training: For optimal boundary alignment, rollout_steps ({self.rollout_steps}) "
@@ -158,7 +158,7 @@ class RunConfig(EvalConfigBase):
         For on-policy algorithms, training.py converts to cycles internally.
         """
         if self.scan_chunk_size is None:
-            self.scan_chunk_size = self.eval_frequency
+            self.scan_chunk_size = self.eval_frequency if self.eval_frequency > 0 else self.steps_per_env
         elif self.rollout_steps is not None and self.scan_chunk_size % self.rollout_steps != 0:
             warnings.warn(
                 f"On-policy training: scan_chunk_size ({self.scan_chunk_size}) is not divisible "
