@@ -1,0 +1,129 @@
+project: myriad-ccasr
+program: scripts/train_sweep.py
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
+method: bayes
+metric:
+  name: eval/episode_return/mean
+  goal: maximize
+early_terminate:
+  type: hyperband
+  # min_iter is in logged-metric iterations. With eval_frequency=3000 and
+  # steps_per_env=30000, each run logs 10 eval points total. min_iter=2 means
+  # the first cull can happen after 2 logged values (~20% of training).
+  min_iter: 2
+  eta: 3
+  s: 2
+
+parameters:
+  # === FIXED: Experiment identity ===
+  env.name:
+    value: ccasr-gfp-control
+  env.frame_stack_n:
+    value: 16
+  agent.name:
+    value: pqn
+
+  # === FIXED: Training budget ===
+  # steps_per_env × num_envs total env steps per run (e.g. 5k × 1024 ≈ 5M).
+  run.num_envs:
+    value: 1024   # patched per level by create_sweeps.py
+  run.steps_per_env:
+    value: 5000
+  run.rollout_steps:
+    distribution: categorical
+    values: [1, 4, 8]
+  run.eval_frequency:
+    value: 504
+  run.eval_rollouts:
+    value: 16
+  run.eval_max_steps:
+    value: 288
+
+  # === FIXED: PQN stable values ===
+  agent.epsilon_start:
+    value: 1.0
+  agent.reward_scale:
+    value: 0.1
+
+  # === SEEDS: 3 independent runs for statistical validity ===
+  # W&B Bayesian optimizer treats seed as a categorical parameter.
+  # Group by run.seed in the W&B UI to inspect variance across seeds.
+  run.seed:
+    distribution: categorical
+    values: [0, 1, 2]
+
+  # === SWEEP: PQN hyperparameters ===
+  agent.learning_rate:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-2
+
+  agent.gamma:
+    distribution: uniform
+    min: 0.95
+    max: 0.999
+
+  # Prior sweep used [0.1, 0.3, 0.5]. Upper bound raised to 0.7 to allow
+  # Bayesian exploration beyond known values without extreme untested territory.
+  agent.lambda_:
+    distribution: uniform
+    min: 0.1
+    max: 0.7
+
+  agent.epsilon_end:
+    distribution: log_uniform_values
+    min: 5.0e-4
+    max: 0.05
+
+  # Prior sweep used [0.1, 0.2, 0.3] → [3k, 6k, 9k] steps. Widened slightly.
+  # Resolved to epsilon_decay_steps = fraction × steps_per_env at init time.
+  agent.epsilon_decay_fraction:
+    distribution: uniform
+    min: 0.05
+    max: 0.4
+
+  agent.hidden_size:
+    distribution: categorical
+    values: [128, 256, 512]
+
+  # Prior sweep: [1, 2, 3]. Include 1 — single-layer networks worked well on ccasr.
+  agent.num_layers:
+    distribution: categorical
+    values: [1, 2, 3]
+
+  # Prior sweep: [4, 8, 16]. 2 epochs underfit; 16 can overfit on short rollouts.
+  agent.num_epochs:
+    distribution: categorical
+    values: [4, 8, 16]
+
+  agent.num_minibatches:
+    distribution: categorical
+    values: [4, 8, 16]
+
+  # Prior sweep fixed this at 0.5. Keep a narrow log range around that anchor.
+  agent.max_grad_norm:
+    distribution: log_uniform_values
+    min: 0.1
+    max: 2.0
+
+  # Fraction of total gradient steps to decay LR from learning_rate → lr_end.
+  # Resolved at init: lr_decay_steps = fraction × (steps_per_env/rollout_steps) × num_epochs × num_minibatches.
+  # Prior sweep decayed over the full run; [0.5, 1.0] explores partial and full decay.
+  agent.lr_decay_fraction:
+    distribution: uniform
+    min: 0.5
+    max: 1.0
+
+  # Final LR after decay. Decaying to 0 is standard; fixed here to keep search space manageable.
+  agent.lr_end:
+    value: 0.0
+
+  # === W&B tracking ===
+  wandb.mode:
+    value: online
+  wandb.group:
+    value: pqn_ccasr_1024envs   # patched per level by create_sweeps.py
