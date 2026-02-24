@@ -1,5 +1,7 @@
+import pytest
+
 from myriad.configs.builder import create_config, create_eval_config
-from myriad.configs.default import Config, EvalConfig
+from myriad.configs.default import Config, EvalConfig, config_to_eval_config
 
 
 def test_create_config_basic():
@@ -68,3 +70,46 @@ def test_epsilon_decay_fraction_preserved():
     )
     assert config.agent.epsilon_decay_fraction == 0.2
     assert not hasattr(config.agent, "epsilon_decay_steps")
+
+
+def test_total_timesteps():
+    config = create_config(env="cartpole-control", agent="dqn", num_envs=4, steps_per_env=500)
+    assert config.run.total_timesteps == 2000
+
+
+def test_kwarg_inferred_to_run_section():
+    # buffer_size is a RunConfig field — passing it as a kwarg should infer it to run
+    config = create_config(env="cartpole-control", agent="dqn", buffer_size=5000)
+    assert config.run.buffer_size == 5000
+
+
+def test_kwarg_as_nested_dict():
+    # Nested dict for a known section key (e.g. wandb={"project": ...})
+    config = create_config(env="cartpole-control", agent="dqn", wandb={"project": "test-project"})
+    assert config.wandb.project == "test-project"
+
+
+def test_config_to_eval_config():
+    config = create_config(env="cartpole-control", agent="dqn")
+    eval_cfg = config_to_eval_config(config)
+    assert isinstance(eval_cfg, EvalConfig)
+    assert eval_cfg.env.name == "cartpole-control"
+    assert eval_cfg.agent.name == "dqn"
+
+
+def test_on_policy_eval_frequency_alignment_warning():
+    # rollout_steps=7 does not divide eval_frequency=100
+    with pytest.warns(UserWarning, match="optimal boundary alignment"):
+        create_config(env="cartpole-control", agent="pqn", rollout_steps=7, steps_per_env=1000)
+
+
+def test_scan_chunk_size_rollout_mismatch_warning():
+    # scan_chunk_size=15 is not divisible by rollout_steps=10
+    with pytest.warns(UserWarning, match="not divisible"):
+        create_config(
+            env="cartpole-control",
+            agent="pqn",
+            rollout_steps=10,
+            steps_per_env=1000,
+            **{"run.scan_chunk_size": 15},
+        )
