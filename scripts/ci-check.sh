@@ -27,6 +27,21 @@ poetry run pytest tests/ --ignore=tests/examples -v
 echo "✓ Tests passed"
 echo ""
 
+echo "→ Checking tutorial notebooks have pre-executed outputs..."
+failed=0
+for notebook in $(find docs/tutorials -name "*.ipynb" -type f); do
+  output_count=$(python -c "import json; nb=json.load(open('$notebook')); print(sum(len(cell.get('outputs', [])) for cell in nb['cells']))")
+  if [ "$output_count" -eq 0 ]; then
+    echo "  ❌ $notebook has no outputs (run: jupyter nbconvert --to notebook --execute $notebook --inplace)"
+    failed=1
+  else
+    echo "  ✓ $notebook"
+  fi
+done
+[ $failed -eq 1 ] && exit 1
+echo "✓ All notebooks have pre-executed outputs"
+echo ""
+
 echo "→ Running example tests..."
 poetry run pytest tests/examples/ -m "not slow" -v
 echo "✓ Example tests passed"

@@ -30,7 +30,7 @@ The documentation build does NOT re-execute notebooks in CI. This is because:
 ### CI Validation
 
 - CI checks that all notebooks have outputs (validates you executed locally)
-- CI does NOT re-execute notebooks (configured in `docs/conf.py:nb_execution_mode = "cache"`)
+- CI does NOT re-execute notebooks (configured in `docs/conf.py:nb_execution_mode = "off"`)
 - If you forget to execute, the validation workflow will fail with instructions
 
 ### GPU Requirements
