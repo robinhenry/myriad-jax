@@ -51,15 +51,18 @@ myst_enable_extensions = [
 myst_heading_anchors = 3  # Auto-generate anchors for headings up to level 3
 
 # -- Notebook execution (myst-nb) -------------------------------------------
-nb_execution_mode = "force"  # Always re-execute so docs reflect current code
-nb_execution_timeout = 120  # Per-cell timeout in seconds
+# "off" means: render outputs stored in the .ipynb file, never re-execute.
+# Notebooks MUST be pre-executed locally before committing (GPU required for some).
+# The validate-notebooks CI workflow enforces that all notebooks have stored outputs.
+# See docs/tutorials/README.md for the local execution workflow.
+nb_execution_mode = "off"
 nb_execution_raise_on_error = True  # Fail the build on notebook errors
 
 # Templates path
 templates_path = ["_templates"]
 
 # Patterns to exclude
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "tutorials/README.md"]
 
 # Master document
 master_doc = "index"

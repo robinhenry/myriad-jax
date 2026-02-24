@@ -19,6 +19,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 site/
+.claude/
 
 # Hydra outputs
 outputs/

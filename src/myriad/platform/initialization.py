@@ -36,6 +36,13 @@ def initialize_environment_and_agent(
     agent_kwargs = get_factory_kwargs(config.agent)
     action_space = env.get_action_space(env.config)
 
+    # Resolve epsilon_decay_fraction → epsilon_decay_steps (mirrors create_config logic)
+    if "epsilon_decay_fraction" in agent_kwargs:
+        fraction = agent_kwargs.pop("epsilon_decay_fraction")
+        steps_per_env = getattr(config.run, "steps_per_env", None)
+        if steps_per_env is not None:
+            agent_kwargs["epsilon_decay_steps"] = max(1, int(fraction * steps_per_env))
+
     # Auto-inject dt from environment config if agent doesn't have it
     if "dt" not in agent_kwargs:
         env_dt = getattr(env.config, "dt", None)
@@ -62,7 +69,4 @@ def get_factory_kwargs(config: BaseModel) -> dict:
     kwargs = config.model_dump()
     assert isinstance(kwargs, dict)
     kwargs.pop("name")  # The name is used for lookup, not as a parameter
-    # batch_size is a platform parameter used for replay buffer sampling,
-    # not an agent construction parameter
-    kwargs.pop("batch_size", None)
     return kwargs

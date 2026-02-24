@@ -1,9 +1,20 @@
 """Notebook display helpers (not rendered in docs)."""
 
 import base64
+import logging
 from pathlib import Path
 
 from IPython.display import HTML
+
+
+def setup_logging() -> None:
+    """Configure logging for tutorial notebooks."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s %(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
+    )
 
 
 def side_by_side_videos(paths: list[Path], labels: list[str], width: int = 200) -> HTML:

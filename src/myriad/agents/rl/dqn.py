@@ -15,14 +15,15 @@ Reference: `CleanRL DQN <https://docs.cleanrl.dev/rl-algorithms/dqn/>`_
 
 from typing import Any, Tuple
 
-import chex
 import jax
 import jax.numpy as jnp
+import optax
 from flax import linen as nn, struct
 from flax.training.train_state import TrainState
+from jax import Array
 
 from myriad.core.spaces import Discrete, Space
-from myriad.core.types import Transition
+from myriad.core.types import Observation, PRNGKey, Transition
 from myriad.utils.observations import to_array
 
 from ..agent import Agent
@@ -35,7 +36,7 @@ class QNetwork(nn.Module):
     hidden_dims: tuple[int, ...] = (64, 64)
 
     @nn.compact
-    def __call__(self, x: chex.Array) -> chex.Array:
+    def __call__(self, x: Array) -> Array:
         """Forward pass to compute Q-values for all actions.
 
         Args:
@@ -88,12 +89,12 @@ class AgentState:
 
     train_state: TrainState
     target_params: Any
-    global_step: chex.Array
+    global_step: Array
 
 
 def _init(
-    key: chex.PRNGKey,
-    sample_obs: chex.Array,
+    key: PRNGKey,
+    sample_obs: Observation,
     params: AgentParams,
 ) -> AgentState:
     """Initialize the DQN agent.
@@ -111,7 +112,6 @@ def _init(
 
     if not isinstance(params.action_space, Discrete):
         raise ValueError("DQN only supports Discrete action spaces")
-
     action_dim = params.action_space.n
 
     # Initialize Q-network
@@ -119,8 +119,6 @@ def _init(
     q_params = q_network.init(key, sample_obs_array)
 
     # Create training state with optimizer
-    import optax
-
     optimizer = optax.adam(params.learning_rate)
     train_state = TrainState.create(
         apply_fn=q_network.apply,
@@ -139,18 +137,18 @@ def _init(
 
 
 def _select_action(
-    key: chex.PRNGKey,
-    obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
-    deterministic: bool = False,
-) -> Tuple[chex.Array, AgentState]:
+    deterministic: bool,
+) -> Tuple[Array, AgentState]:
     """Select action using epsilon-greedy policy.
 
     Args:
         key: Random key for exploration
         obs: Current observation (can be array or NamedTuple with .to_array() method)
-        agent_state: Current agent state
+        state: Current agent state
         params: Agent hyperparameters
         deterministic: If True, use greedy policy (epsilon=0). Default False.
 
@@ -164,12 +162,12 @@ def _select_action(
     epsilon_decayed = jnp.maximum(
         params.epsilon_end,
         params.epsilon_start
-        - (params.epsilon_start - params.epsilon_end) * agent_state.global_step / params.epsilon_decay_steps,
+        - (params.epsilon_start - params.epsilon_end) * state.global_step / params.epsilon_decay_steps,
     )
     epsilon = jax.lax.select(deterministic, jnp.array(0.0), epsilon_decayed)
 
     # Get Q-values
-    q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs_array)
+    q_values = state.train_state.apply_fn(state.train_state.params, obs_array)
 
     # Epsilon-greedy action selection
     key_explore, key_action = jax.random.split(key)
@@ -184,12 +182,12 @@ def _select_action(
     # Select based on epsilon
     action = jax.lax.select(explore, random_action, greedy_action)
 
-    return action, agent_state
+    return action, state
 
 
 def _update(
-    key: chex.PRNGKey,  # noqa: ARG001
-    agent_state: AgentState,
+    key: PRNGKey,
+    state: AgentState,
     batch: Transition,
     params: AgentParams,
 ) -> Tuple[AgentState, dict]:
@@ -197,7 +195,7 @@ def _update(
 
     Args:
         key: Random key (unused in DQN)
-        agent_state: Current agent state
+        state: Current agent state
         batch: Batch of transitions from replay buffer
         params: Agent hyperparameters
 
@@ -207,18 +205,14 @@ def _update(
 
     def loss_fn(q_params):
         """Compute TD loss for Q-network."""
-        # Convert observations to arrays if needed
-        obs_batch = to_array(batch.obs)
-        next_obs_batch = to_array(batch.next_obs)
-
         # Current Q-values: Q(s, a)
-        q_values = agent_state.train_state.apply_fn(q_params, obs_batch)
+        q_values = state.train_state.apply_fn(q_params, batch.obs)
         # Select Q-values for actions taken
         actions_expanded = jnp.asarray(batch.action)[:, None]
         q_values_selected = jnp.take_along_axis(q_values, actions_expanded, axis=1).squeeze(1)
 
         # Target Q-values: r + gamma * max_a' Q_target(s', a')
-        next_q_values = agent_state.train_state.apply_fn(agent_state.target_params, next_obs_batch)
+        next_q_values = state.train_state.apply_fn(state.target_params, batch.next_obs)
         next_q_max = jnp.max(next_q_values, axis=1)
 
         # TD target (no gradient through target)
@@ -234,18 +228,18 @@ def _update(
         return loss, {"td_error_mean": jnp.mean(jnp.abs(td_error)), "q_value_mean": jnp.mean(q_values_selected)}
 
     # Compute gradients and update
-    (loss, aux_metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(agent_state.train_state.params)
-    new_train_state = agent_state.train_state.apply_gradients(grads=grads)
+    (loss, aux_metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.train_state.params)
+    new_train_state = state.train_state.apply_gradients(grads=grads)
 
     # Update target network periodically
-    should_update_target = (agent_state.global_step.astype(jnp.int32) % params.target_network_frequency) == 0
+    should_update_target = (state.global_step.astype(jnp.int32) % params.target_network_frequency) == 0
 
     if params.tau == 1.0:
         # Hard update
         new_target_params = jax.lax.cond(
             should_update_target,
             lambda: jax.tree_util.tree_map(lambda x: x.copy(), new_train_state.params),
-            lambda: agent_state.target_params,
+            lambda: state.target_params,
         )
     else:
         # Soft update: target = tau * online + (1 - tau) * target
@@ -253,19 +247,19 @@ def _update(
             return jax.tree_util.tree_map(
                 lambda online, target: params.tau * online + (1.0 - params.tau) * target,
                 new_train_state.params,
-                agent_state.target_params,
+                state.target_params,
             )
 
         new_target_params = jax.lax.cond(
             should_update_target,
             soft_update,
-            lambda: agent_state.target_params,
+            lambda: state.target_params,
         )
 
     new_agent_state = AgentState(
         train_state=new_train_state,
         target_params=new_target_params,
-        global_step=agent_state.global_step + 1,
+        global_step=state.global_step + 1,
     )
 
     metrics = {

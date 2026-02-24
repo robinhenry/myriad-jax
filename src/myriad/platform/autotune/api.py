@@ -56,7 +56,7 @@ def _ensure_profiled(env: str, agent: str, cache: dict, hardware_id: str) -> dic
         logger.debug(f"  ⚡ Hardware... cached ({hardware_id})")
 
     if env not in cache["env_profiles"]:
-        logger.info(f"  ⚡ Environment ({env})... profiling (~10s)")
+        logger.info(f"  ⚡ Environment ({env})... profiling")
         cache = profile_env(env, cache)
         logger.info("     Saved to cache ✓")
         changed = True

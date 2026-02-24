@@ -39,6 +39,14 @@ def test_subcommand_help(runner, command):
     assert f"Usage: main {command}" in result.output
 
 
+@pytest.mark.parametrize("command", ["train", "sweep", "evaluate"])
+def test_auto_tune_flag_not_in_help(runner, command):
+    """--auto-tune should not appear in any command help (it was removed)."""
+    result = runner.invoke(main, [command, "--help"])
+    assert result.exit_code == 0
+    assert "--auto-tune" not in result.output
+
+
 def test_render_missing_args(runner):
     """Test render command fails when missing required arguments."""
     # Missing INPUT_PATH and --env

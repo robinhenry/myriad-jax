@@ -4,6 +4,7 @@ This module provides helpers to bridge Click/scripts and Hydra, ensuring
 consistent setup and configuration across all entry points.
 """
 
+import os
 import sys
 from typing import Callable
 
@@ -14,6 +15,7 @@ def run_with_hydra(
     runner_fn: Callable[[], None],
     script_name: str | None = None,
     args: list[str] | None = None,
+    auto_tune: bool = False,
 ) -> None:
     """Run a Hydra-decorated function with proper setup.
 
@@ -21,10 +23,14 @@ def run_with_hydra(
         runner_fn: The @hydra.main decorated function to run.
         script_name: Optional name for the script (used for sys.argv[0]).
         args: Optional list of command line arguments (overrides sys.argv).
+        auto_tune: If True, signal the runner to auto-tune scan_chunk_size.
     """
     # If args are provided (from Click), reconstruct sys.argv for Hydra
     if args is not None:
         sys.argv = [script_name or "myriad"] + list(args)
+
+    if auto_tune:
+        os.environ["MYRIAD_AUTO_TUNE"] = "1"
 
     # Apply global setup (logging, environment variables, etc.)
     setup_hydra()

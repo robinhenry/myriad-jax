@@ -5,7 +5,7 @@ import pytest
 from flax import struct
 
 from myriad.agents.agent import Agent
-from myriad.configs.default import AgentConfig, EnvConfig, EvalConfig, EvalRunConfig, WandbConfig
+from myriad.configs.default import AgentConfig, Config, EnvConfig, EvalConfig, EvalRunConfig, RunConfig, WandbConfig
 from myriad.core.spaces import Box
 from myriad.envs.environment import Environment
 from myriad.platform.initialization import get_factory_kwargs, initialize_environment_and_agent
@@ -128,7 +128,34 @@ def test_get_factory_kwargs_removes_name():
     assert "name" not in kwargs
 
 
-def test_get_factory_kwargs_removes_batch_size():
-    config = AgentConfig(name="random", batch_size=32)
-    kwargs = get_factory_kwargs(config)
-    assert "batch_size" not in kwargs
+def test_epsilon_decay_fraction_resolved(monkeypatch):
+    """epsilon_decay_fraction is converted to epsilon_decay_steps at init time."""
+    from myriad.agents import registration as agent_reg
+
+    captured_kwargs: dict = {}
+
+    def _capturing_make_fn(*, action_space, **kwargs):
+        captured_kwargs.update(kwargs)
+        return Agent(
+            params=_AgentParams(action_space=action_space),
+            init=_agent_init,
+            select_action=_agent_select_action,
+            update=_agent_update,
+        )
+
+    monkeypatch.setitem(
+        agent_reg._AGENT_REGISTRY,
+        "test-capturing-agent",
+        agent_reg.AgentInfo(name="test-capturing-agent", make_fn=_capturing_make_fn),
+    )
+
+    config = Config(
+        run=RunConfig(steps_per_env=1000),
+        agent=AgentConfig(name="test-capturing-agent", epsilon_decay_fraction=0.5),
+        env=EnvConfig(name="test-env-with-dt"),
+    )
+
+    initialize_environment_and_agent(config)
+
+    assert "epsilon_decay_fraction" not in captured_kwargs
+    assert captured_kwargs["epsilon_decay_steps"] == 500

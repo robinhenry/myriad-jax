@@ -1,0 +1,28 @@
+run:
+  seed: 0
+  num_envs: 32
+  steps_per_env: 10000
+  rollout_steps: 64
+  eval_rollouts: 50
+  eval_frequency: 640
+
+env:
+  name: cartpole-control
+
+agent:
+  name: pqn
+  learning_rate: 0.0001
+  max_grad_norm: 10.0
+  num_epochs: 4
+  num_minibatches: 16
+  gamma: 0.99
+  lambda_: 0.95
+  reward_scale: 0.1
+  epsilon_start: 1.0
+  epsilon_end: 0.2
+  epsilon_decay_fraction: 0.2
+  hidden_size: 256
+  num_layers: 2
+
+wandb:
+  enabled: false

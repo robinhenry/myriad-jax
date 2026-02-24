@@ -1,0 +1,45 @@
+name: Validate Notebooks
+
+on:
+  pull_request:
+    paths:
+      - 'docs/tutorials/**/*.ipynb'
+
+jobs:
+  check-notebook-outputs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check all tutorial notebooks have outputs
+        run: |
+          # Find all tutorial notebooks
+          NOTEBOOKS=$(find docs/tutorials -name "*.ipynb" -type f)
+
+          failed=0
+          for notebook in $NOTEBOOKS; do
+            output_count=$(python -c "import json; nb=json.load(open('$notebook')); print(sum(len(cell.get('outputs', [])) for cell in nb['cells']))")
+            if [ "$output_count" -eq 0 ]; then
+              echo "❌ $notebook has no outputs"
+              failed=1
+            else
+              echo "✓ $notebook has outputs ($output_count output cells)"
+            fi
+          done
+
+          if [ $failed -eq 1 ]; then
+            echo ""
+            echo "ERROR: Some notebooks missing outputs. Execute locally before committing:"
+            echo "  cd docs/tutorials/basics"
+            echo "  jupyter nbconvert --to notebook --execute <notebook>.ipynb --inplace"
+            echo ""
+            echo "See docs/tutorials/README.md for full instructions."
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All tutorial notebooks have pre-executed outputs"

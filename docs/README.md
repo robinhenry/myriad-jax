@@ -52,17 +52,6 @@ cd docs
 make clean
 ```
 
-## Documentation Structure
-
-- `conf.py`: Sphinx configuration
-- `index.md`: Documentation home page
-- `getting-started/`: Installation and quickstart guides
-- `user-guide/`: User-facing documentation
-- `api-reference/`: API documentation
-- `contributing/`: Contributor guides
-- `stylesheets/`: Custom CSS
-- `_build/`: Generated documentation (git-ignored)
-
 ## Theme
 
 The documentation uses the [Furo](https://pradyunsg.me/furo/) theme, which provides a clean, modern appearance with excellent readability.

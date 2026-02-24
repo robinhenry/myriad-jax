@@ -52,7 +52,7 @@ parameters:
     values: [1.0, 0.995, 0.99, 0.95]
 
   # Training configuration
-  agent.batch_size:
+  run.batch_size:
     distribution: categorical
     values: [32, 64, 128, 256]
 
@@ -77,9 +77,6 @@ parameters:
 
   run.eval_rollouts:
     value: 10
-
-  run.log_frequency:
-    value: 1000
 
   wandb.mode:
     value: online

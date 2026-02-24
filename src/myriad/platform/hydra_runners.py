@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 import hydra
+import jax
 import wandb
 from omegaconf import DictConfig, OmegaConf
 
@@ -18,12 +19,28 @@ from myriad.envs import get_env_info
 
 from .evaluation import evaluate
 from .logging.backends.disk import render_episodes_to_videos
+from .metadata import _get_detailed_device_info
 from .training import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
 logging.getLogger("jax._src.xla_bridge").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_auto_tune(cfg: DictConfig) -> None:
+    """Call suggest_scan_chunk_size and patch cfg.run.scan_chunk_size in-place."""
+    from myriad.platform.autotune import suggest_scan_chunk_size
+
+    buffer_size = getattr(cfg.run, "buffer_size", None)
+    chunk_size = suggest_scan_chunk_size(
+        num_envs=cfg.run.num_envs,
+        env=cfg.env.name,
+        agent=cfg.agent.name,
+        buffer_size=buffer_size,
+    )
+    OmegaConf.update(cfg, "run.scan_chunk_size", chunk_size, force_add=True)
+    logger.info(f"  Auto-tune: scan_chunk_size={chunk_size}")
 
 
 def _configure_logging() -> None:
@@ -46,6 +63,19 @@ def _fmt_fields(model: object) -> str:
     return " | ".join(f"{k}={v}" for k, v in non_defaults.items()) if non_defaults else "(defaults)"
 
 
+def _fmt_device_info() -> str:
+    """Format device backend and model for display (e.g. 'cpu | Intel Core i7 x4')."""
+    backend = jax.default_backend()
+    devices = jax.devices()
+    if backend == "cpu":
+        model = _get_detailed_device_info()
+    elif devices:
+        model = devices[0].device_kind
+    else:
+        model = "unknown"
+    return f"{backend} | {model} x{len(devices)}"
+
+
 def _format_eval_config(config: "EvalConfig") -> str:
     wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
     config_path = Path.cwd() / ".hydra" / "config.yaml"
@@ -55,6 +85,7 @@ def _format_eval_config(config: "EvalConfig") -> str:
         f"  Env   : {_fmt_fields(config.env)}",
         f"  Run   : {_fmt_fields(config.run)}",
         f"  W&B   : {wandb_status}",
+        f"  Device: {_fmt_device_info()}",
         f"  Config: {config_path}",
     ]
     return "\n".join(lines)
@@ -80,6 +111,7 @@ def _format_train_config(config: "Config") -> str:
         f"  Env   : {_fmt_fields(config.env)}",
         f"  Run   : {_fmt_fields(config.run)}",
         f"  W&B   : {wandb_status}",
+        f"  Device: {_fmt_device_info()}",
         f"  Config: {config_path}",
     ]
     return "\n".join(lines)
@@ -120,6 +152,8 @@ _CONFIG_PATH = _get_config_path()
 def train_main(cfg: DictConfig) -> None:
     """Main entry point for training, decorated by Hydra."""
     _configure_logging()
+    if os.environ.pop("MYRIAD_AUTO_TUNE", None):
+        _apply_auto_tune(cfg)
     # Convert Hydra configuration to Pydantic model for validation and typing
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
@@ -176,6 +210,8 @@ def sweep_main(cfg: DictConfig) -> None:
     3. Runs training with the combined configuration
     """
     _configure_logging()
+    if os.environ.pop("MYRIAD_AUTO_TUNE", None):
+        _apply_auto_tune(cfg)
     # Initialize W&B run - this will pull parameters from the sweep
     wandb.init()
 

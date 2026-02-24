@@ -16,7 +16,6 @@ run:
   eval_frequency: 10
   eval_rollouts: 16
   eval_max_steps: 500
-  log_frequency: 10
 
 # Environment overrides for sinewave tracking
 env:

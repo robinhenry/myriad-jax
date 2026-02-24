@@ -21,7 +21,7 @@ We need algorithms that can act on this massive, parallel data stream in real-ti
 
 2.  **Accelerate discovery:** when sim-to-real transfer is viable, train policies on 100k+ or millions of simulated variants and deploy them directly to hardware, potentially saving days or weeks of data gathering required for training.
 
-3.  **Standardize & reproduce experiments:** reproducing Myriad experiments *exactly* is as simple as providing the Myriad version number you used and the experiment configuration file (automatically saved).
+3.  **Standardize & reproduce experiments:** reproducing Myriad experiments is as simple as providing the Myriad version number you used and the experiment configuration file (automatically saved). Results are identical on the same GPU hardware; minor numerical differences may appear across different GPU models or driver versions due to non-deterministic GPU kernel optimizations.
 
 ## The Myriad Philosophy
 

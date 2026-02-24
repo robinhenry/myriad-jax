@@ -1,4 +1,4 @@
-"""Parallelized Q-Network (PQN) agent implementation using JAX and Flax.
+"""Parallelized Q-Network (PQN) with LayerNorm agent implementation using JAX and Flax.
 
 PQN is an on-policy value-based RL algorithm designed for massively parallel training.
 
@@ -15,15 +15,16 @@ Reference: `PureJaxQL <https://github.com/mttga/purejaxql>`_
 
 from typing import Tuple
 
-import chex
 import jax
 import jax.numpy as jnp
 import optax
 from flax import linen as nn, struct
 from flax.training.train_state import TrainState
+from jax import Array
 
 from myriad.core.spaces import Discrete, Space
-from myriad.core.types import Transition
+from myriad.core.types import Observation, PRNGKey, Transition
+from myriad.utils.observations import to_array
 
 from ..agent import Agent
 
@@ -36,7 +37,7 @@ class QNetwork(nn.Module):
     num_layers: int = 2
 
     @nn.compact
-    def __call__(self, x: chex.Array) -> chex.Array:
+    def __call__(self, x: Array) -> Array:
         """Forward pass to compute Q-values for all actions.
 
         Args:
@@ -65,7 +66,7 @@ class AgentParams:
         reward_scale: Internal scaling factor applied to rewards before computing returns.
         epsilon_start: Initial exploration rate.
         epsilon_end: Final exploration rate after decay.
-        epsilon_decay_steps: Number of steps to decay epsilon from start to end.
+        epsilon_decay_steps: Number of environment steps (per env) to decay epsilon from start to end.
         max_grad_norm: Maximum gradient norm for clipping.
         num_epochs: Number of training epochs per rollout batch.
         num_minibatches: Number of minibatches per epoch.
@@ -94,16 +95,16 @@ class AgentState:
 
     Attributes:
         train_state: Flax TrainState containing network params and optimizer state.
-        global_step: Number of update steps taken (used for epsilon decay).
+        global_step: Number of environment steps taken per env (used for epsilon decay).
     """
 
     train_state: TrainState
-    global_step: chex.Array
+    global_step: Array
 
 
 def _init(
-    key: chex.PRNGKey,
-    sample_obs: chex.Array,
+    key: PRNGKey,
+    sample_obs: Observation,
     params: AgentParams,
 ) -> AgentState:
     """Initialize the PQN agent.
@@ -116,9 +117,11 @@ def _init(
     Returns:
         Initial agent state containing network and optimizer
     """
+    # Convert observation to array if needed
+    sample_obs_array = to_array(sample_obs)
+
     if not isinstance(params.action_space, Discrete):
         raise ValueError("PQN only supports Discrete action spaces")
-
     action_dim = params.action_space.n
 
     # Initialize Q-network
@@ -127,12 +130,12 @@ def _init(
         hidden_size=params.hidden_size,
         num_layers=params.num_layers,
     )
-    q_params = q_network.init(key, sample_obs)
+    q_params = q_network.init(key, sample_obs_array)
 
     # Create optimizer with gradient clipping
     optimizer = optax.chain(
         optax.clip_by_global_norm(params.max_grad_norm),
-        optax.adam(params.learning_rate),
+        optax.radam(params.learning_rate),
     )
 
     train_state = TrainState.create(
@@ -148,34 +151,37 @@ def _init(
 
 
 def _select_action(
-    key: chex.PRNGKey,
-    obs: chex.Array,
-    agent_state: AgentState,
+    key: PRNGKey,
+    obs: Observation,
+    state: AgentState,
     params: AgentParams,
     deterministic: bool = False,
-) -> Tuple[chex.Array, AgentState]:
+) -> Tuple[Array, AgentState]:
     """Select action using epsilon-greedy policy.
 
     Args:
         key: Random key for exploration
         obs: Current observation
-        agent_state: Current agent state
+        state: Current agent state
         params: Agent hyperparameters
         deterministic: If True, use greedy policy (epsilon=0). Default False.
 
     Returns:
         Tuple of (action, unchanged agent_state)
     """
+    # Convert observation to array if needed
+    obs_array = to_array(obs)
+
     # Calculate current epsilon with linear decay (or use 0 if deterministic)
     epsilon_decayed = jnp.maximum(
         params.epsilon_end,
         params.epsilon_start
-        - (params.epsilon_start - params.epsilon_end) * agent_state.global_step / params.epsilon_decay_steps,
+        - (params.epsilon_start - params.epsilon_end) * state.global_step / params.epsilon_decay_steps,
     )
     epsilon = jax.lax.select(deterministic, jnp.array(0.0), epsilon_decayed)
 
     # Get Q-values
-    q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, obs)
+    q_values = state.train_state.apply_fn(state.train_state.params, obs_array)
 
     # Epsilon-greedy action selection
     key_explore, key_action = jax.random.split(key)
@@ -190,16 +196,16 @@ def _select_action(
     # Select based on epsilon
     action = jax.lax.select(explore, random_action, greedy_action)
 
-    return action, agent_state
+    return action, state
 
 
 def _compute_lambda_returns(
-    rewards: chex.Array,
-    dones: chex.Array,
-    next_q_max: chex.Array,
+    rewards: Array,
+    dones: Array,
+    next_q_max: Array,
     gamma: float,
     lambda_: float,
-) -> chex.Array:
+) -> Array:
     """Compute lambda-returns backward through trajectory.
 
     Uses the GAE-style recursive formula (matching PureJaxQL):
@@ -214,6 +220,7 @@ def _compute_lambda_returns(
         rewards: Rewards array of shape (num_steps,)
         dones: Done flags array of shape (num_steps,)
         next_q_max: Max Q-values for next states of shape (num_steps,)
+            next_q_max[t] = V(s_{t+1})
         gamma: Discount factor
         lambda_: Lambda parameter for mixing TD targets
 
@@ -221,46 +228,28 @@ def _compute_lambda_returns(
         Lambda-returns of shape (num_steps,)
     """
 
-    def scan_fn(lambda_returns_and_next_q, transition):
-        lambda_returns, next_q = lambda_returns_and_next_q
-        reward, done, transition_next_q = transition
+    def scan_fn(G_next, transition):
+        reward, done, v_next = transition  # v_next = V(s_{t+1}) for this step
+        target_bootstrap = reward + gamma * (1.0 - done) * v_next
+        delta = G_next - v_next
+        G = target_bootstrap + gamma * lambda_ * delta
+        G = (1.0 - done) * G + done * reward  # mask terminal steps
+        return G, G
 
-        # Bootstrap target: r + gamma * (1 - done) * V(s')
-        target_bootstrap = reward + gamma * (1.0 - done) * next_q
-
-        # TD error delta: G_{t+1} - V(s_{t+1})
-        delta = lambda_returns - next_q
-
-        # Lambda-return: bootstrap + gamma * lambda * delta
-        lambda_returns = target_bootstrap + gamma * lambda_ * delta
-
-        # Mask done states to just return the reward
-        lambda_returns = (1.0 - done) * lambda_returns + done * reward
-
-        # Update next_q for next iteration
-        next_q = transition_next_q
-
-        return (lambda_returns, next_q), lambda_returns
-
-    # Initialize with last step
-    init_lambda_returns = rewards[-1]
-    init_next_q = next_q_max[-1]
+    # Bootstrap final step correctly: G_{T-1} = r_{T-1} + gamma * (1-done) * V(s_T)
+    G_last = rewards[-1] + gamma * (1.0 - dones[-1]) * next_q_max[-1]
+    G_last = (1.0 - dones[-1]) * G_last + dones[-1] * rewards[-1]
 
     # Scan backward through trajectory (excluding last step)
+    # next_q_max[t] = V(s_{t+1}), so each step reads the correct v_next
     transitions = (rewards[:-1], dones[:-1], next_q_max[:-1])
+    _, Gs = jax.lax.scan(scan_fn, G_last, transitions, reverse=True)
 
-    _, lambda_returns_reversed = jax.lax.scan(scan_fn, (init_lambda_returns, init_next_q), transitions, reverse=True)
-
-    # Append the initial return and reverse to get forward order
-    # lambda_returns_reversed contains [G_0, G_1, ..., G_{T-1}] (from reverse scan)
-    # We need to append G_T at the end
-    lambda_returns = jnp.concatenate([lambda_returns_reversed, jnp.array([init_lambda_returns])])
-
-    return lambda_returns
+    return jnp.concatenate([Gs, jnp.array([G_last])])
 
 
 def _update(
-    key: chex.PRNGKey,
+    key: PRNGKey,
     agent_state: AgentState,
     batch: Transition,
     params: AgentParams,
@@ -279,27 +268,24 @@ def _update(
     Returns:
         Tuple of (new agent_state, metrics dict)
     """
-    # Compute next Q-values and max
+    # batch has shape (T, E, ...) from make_chunked_collector.
+    # Compute per-environment lambda-returns on the natural trajectory shape.
+    rewards = batch.reward * params.reward_scale  # (T, E)
+    dones = batch.done.astype(jnp.float32)  # (T, E)
+
+    # next_obs shape (T, E, obs_dim) — nn.Dense broadcasts over leading dims
     next_q_values = agent_state.train_state.apply_fn(agent_state.train_state.params, batch.next_obs)
-    next_q_max = jnp.max(next_q_values, axis=1)
+    next_q_max = jnp.max(next_q_values, axis=-1)  # (T, E)
 
-    # Compute lambda-returns
-    # Scale rewards (using tree_map to handle ArrayTree type, though rewards are typically arrays)
-    rewards = jax.tree_util.tree_map(lambda x: x * params.reward_scale, batch.reward)
-    dones = batch.done.astype(jnp.float32)
-    lambda_returns = _compute_lambda_returns(
-        rewards=rewards,
-        dones=dones,
-        next_q_max=next_q_max,
-        gamma=params.gamma,
-        lambda_=params.lambda_,
-    )
+    # _compute_lambda_returns uses purely element-wise ops and a scalar carry, so
+    # passing (T, E) arrays works directly — the scan carry is (E,) at each step.
+    lambda_returns = _compute_lambda_returns(rewards, dones, next_q_max, params.gamma, params.lambda_)
+    lambda_returns = jax.lax.stop_gradient(lambda_returns)  # (T, E)
 
-    # Stop gradient on targets
-    lambda_returns = jax.lax.stop_gradient(lambda_returns)
-
-    # Prepare data for multi-epoch training
-    batch_size = len(rewards)
+    # Flatten for minibatch training
+    flat = jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), batch)
+    lambda_returns_flat = lambda_returns.reshape(-1)  # (T*E,)
+    batch_size = lambda_returns_flat.shape[0]
     minibatch_size = batch_size // params.num_minibatches
 
     def train_epoch(carry, _):
@@ -317,9 +303,9 @@ def _update(
             mb_indices = jax.lax.dynamic_slice(perm, (start_idx,), (minibatch_size,))
 
             # Get minibatch data using gather
-            mb_obs = batch.obs[mb_indices]
-            mb_actions = batch.action[mb_indices]
-            mb_targets = lambda_returns[mb_indices]
+            mb_obs = flat.obs[mb_indices]
+            mb_actions = flat.action[mb_indices]
+            mb_targets = lambda_returns_flat[mb_indices]
 
             def loss_fn(q_params):
                 """Compute TD loss for Q-network."""
@@ -332,7 +318,7 @@ def _update(
 
                 # MSE loss against lambda-returns
                 td_error = q_values_selected - mb_targets
-                loss = jnp.mean(td_error**2)
+                loss = 0.5 * jnp.mean(td_error**2)
 
                 return loss, {
                     "td_error_mean": jnp.mean(jnp.abs(td_error)),
@@ -365,7 +351,7 @@ def _update(
     # Create new agent state
     new_agent_state = AgentState(
         train_state=new_train_state,
-        global_step=agent_state.global_step + 1,
+        global_step=agent_state.global_step + batch.obs.shape[0],
     )
 
     # Return metrics (average over epochs)
@@ -373,7 +359,7 @@ def _update(
         "loss": jnp.mean(epoch_losses),
         "td_error": jnp.mean(epoch_td_errors),
         "q_value": jnp.mean(epoch_q_values),
-        "lambda_return_mean": jnp.mean(lambda_returns),
+        "lambda_return_mean": jnp.mean(lambda_returns_flat),
     }
 
     return new_agent_state, metrics
@@ -404,7 +390,9 @@ def make_agent(
         lambda_: Lambda parameter for lambda-returns (0.0 = 1-step TD, 1.0 = Monte Carlo)
         epsilon_start: Initial exploration rate
         epsilon_end: Final exploration rate
-        epsilon_decay_steps: Steps to decay epsilon from start to end
+        epsilon_decay_steps: Number of environment steps (per env) to decay epsilon from start to end.
+            When using :func:`~myriad.create_config`, pass ``epsilon_decay_fraction``
+            instead and the absolute step count is resolved automatically.
         max_grad_norm: Maximum gradient norm for clipping
         num_epochs: Number of training epochs per rollout
         num_minibatches: Number of minibatches per epoch

@@ -45,9 +45,9 @@ def get_device_info() -> dict[str, Any]:
     if device_type == "gpu":
         try:
             # This is device-specific and may not work on all platforms
-            from jax.lib import xla_bridge
+            from jax.extend.backend import get_backend
 
-            backend = xla_bridge.get_backend()
+            backend = get_backend()
             if hasattr(backend, "get_memory_info"):
                 info["memory_info"] = backend.get_memory_info(devices[0])
         except Exception:

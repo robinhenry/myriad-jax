@@ -144,12 +144,8 @@ def make_chunked_collector(collection_step_fn: Callable, total_steps: int) -> Ca
             step_body, (key, agent_state, env_states), jnp.arange(total_steps)
         )
 
-        # Reshape: (total_steps, num_envs, ...) -> (total_steps * num_envs, ...)
-        full_rollout = jax.tree_util.tree_map(
-            lambda x: x.reshape(-1, *x.shape[2:]),
-            all_transitions,
-        )
-
-        return key, agent_state, env_states, full_rollout
+        # Return with natural (total_steps, num_envs, ...) shape so on-policy
+        # agents can compute per-environment returns without a reshape round-trip.
+        return key, agent_state, env_states, all_transitions
 
     return jax.jit(collect_rollout, donate_argnums=(0, 1, 2))

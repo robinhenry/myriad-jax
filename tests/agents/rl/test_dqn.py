@@ -48,7 +48,7 @@ def test_select_action(key, action_space: Discrete, agent: Agent, sample_obs):
 
     # Select action
     key, action_key = jax.random.split(key)
-    action, new_state = agent.select_action(action_key, sample_obs, agent_state, agent.params)
+    action, new_state = agent.select_action(action_key, sample_obs, agent_state, agent.params, deterministic=False)
 
     # Check action is valid
     assert action.shape == ()
@@ -56,7 +56,7 @@ def test_select_action(key, action_space: Discrete, agent: Agent, sample_obs):
     chex.assert_tree_no_nones(action)
 
 
-def test_select_action_deterministic_at_epsilon_zero(key, agent: Agent, sample_obs):
+def test_select_action_deterministic_at_epsilon_zero(key, sample_obs):
     """Test that action selection is deterministic when epsilon is zero."""
     # Create agent with no exploration
     agent_no_explore = make_agent(
@@ -71,11 +71,59 @@ def test_select_action_deterministic_at_epsilon_zero(key, agent: Agent, sample_o
 
     # Select actions with different keys
     key1, key2 = jax.random.split(key)
-    action1, _ = agent_no_explore.select_action(key1, sample_obs, agent_state, agent_no_explore.params)
-    action2, _ = agent_no_explore.select_action(key2, sample_obs, agent_state, agent_no_explore.params)
+    action1, _ = agent_no_explore.select_action(
+        key1, sample_obs, agent_state, agent_no_explore.params, deterministic=False
+    )
+    action2, _ = agent_no_explore.select_action(
+        key2, sample_obs, agent_state, agent_no_explore.params, deterministic=False
+    )
 
     # Should be same action (greedy)
     chex.assert_trees_all_close(action1, action2)
+
+
+def test_select_action_deterministic_flag(key, sample_obs):
+    """Test that deterministic=True returns greedy actions regardless of epsilon."""
+    # Create agent with high exploration (epsilon=1.0)
+    agent_with_explore = make_agent(
+        action_space=Discrete(n=2),
+        epsilon_start=1.0,
+        epsilon_end=1.0,
+    )
+
+    # Initialize agent
+    key, init_key = jax.random.split(key)
+    agent_state = agent_with_explore.init(init_key, sample_obs, agent_with_explore.params)
+
+    # Select actions with different keys but deterministic=True
+    key1, key2, key3 = jax.random.split(key, 3)
+    action1, _ = agent_with_explore.select_action(
+        key1, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action2, _ = agent_with_explore.select_action(
+        key2, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action3, _ = agent_with_explore.select_action(
+        key3, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+
+    # All actions should be identical (greedy) despite different keys and epsilon=1.0
+    chex.assert_trees_all_close(action1, action2)
+    chex.assert_trees_all_close(action1, action3)
+
+    # Verify actions are different when deterministic=False (with epsilon=1.0, should be random)
+    key4, key5 = jax.random.split(key)
+    action_random1, _ = agent_with_explore.select_action(
+        key4, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+    action_random2, _ = agent_with_explore.select_action(
+        key5, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+
+    # With epsilon=1.0, random actions may differ (though could be same by chance)
+    # Just verify they are valid actions
+    assert 0 <= action_random1 < 2
+    assert 0 <= action_random2 < 2
 
 
 def test_update(key, agent: Agent, sample_obs):

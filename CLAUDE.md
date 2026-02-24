@@ -63,8 +63,8 @@ Before writing complex JAX transformations (scan, cond, pmap), you MUST:
 2. Verify that logic does not trigger `TracerArrayConversionError` (python control flow).
 
 # Core Workflows
-- **Test:** `python -m pytest <files>` (Prefer single test files)
-- **Train:** `python scripts/train.py run.total_timesteps=1e6` (Hydra syntax)
+- **Test:** `.venv/bin/python -m pytest <files>` (Prefer single test files). Use `.venv/bin/python` directly — shell aliases like `va` don't work in non-interactive shells.
+- **Train:** `.venv/bin/python scripts/train.py run.total_timesteps=1e6` (Hydra syntax)
 - **Lint/Format:** `ruff check --fix src/ tests/` | `black src/ tests/`
 - **Type Check:** `mypy src/myriad/`
 

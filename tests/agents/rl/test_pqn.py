@@ -88,10 +88,55 @@ def test_select_action_deterministic_greedy(key, sample_obs, agent):
     agent_state = agent.init(key, sample_obs, agent.params)
 
     # Select action twice with same key
-    action1, _ = agent.select_action(key, sample_obs, agent_state, agent.params)
-    action2, _ = agent.select_action(key, sample_obs, agent_state, agent.params)
+    action1, _ = agent.select_action(key, sample_obs, agent_state, agent.params, deterministic=False)
+    action2, _ = agent.select_action(key, sample_obs, agent_state, agent.params, deterministic=False)
 
     assert action1 == action2
+
+
+def test_select_action_deterministic_flag(key, sample_obs, action_space):
+    """Test that deterministic=True returns greedy actions regardless of epsilon."""
+    # Create agent with high exploration (epsilon=1.0 always)
+    agent_with_explore = make_agent(
+        action_space=action_space,
+        epsilon_start=1.0,
+        epsilon_end=1.0,
+        epsilon_decay_steps=1,  # Won't decay
+    )
+
+    # Initialize agent
+    key, init_key = jax.random.split(key)
+    agent_state = agent_with_explore.init(init_key, sample_obs, agent_with_explore.params)
+
+    # Select actions with different keys but deterministic=True
+    key1, key2, key3 = jax.random.split(key, 3)
+    action1, _ = agent_with_explore.select_action(
+        key1, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action2, _ = agent_with_explore.select_action(
+        key2, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+    action3, _ = agent_with_explore.select_action(
+        key3, sample_obs, agent_state, agent_with_explore.params, deterministic=True
+    )
+
+    # All actions should be identical (greedy) despite different keys and epsilon=1.0
+    assert action1 == action2
+    assert action1 == action3
+
+    # Verify actions are different when deterministic=False (with epsilon=1.0, should be random)
+    key4, key5 = jax.random.split(key)
+    action_random1, _ = agent_with_explore.select_action(
+        key4, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+    action_random2, _ = agent_with_explore.select_action(
+        key5, sample_obs, agent_state, agent_with_explore.params, deterministic=False
+    )
+
+    # With epsilon=1.0, random actions may differ (though could be same by chance)
+    # Just verify they are valid actions
+    assert 0 <= action_random1 < action_space.n
+    assert 0 <= action_random2 < action_space.n
 
 
 def test_compute_lambda_returns():
@@ -116,21 +161,22 @@ def test_update(key, sample_obs, agent):
     """Test agent update with a batch of transitions."""
     agent_state = agent.init(key, sample_obs, agent.params)
 
-    # Create a batch of transitions (must be multiple of num_minibatches)
-    batch_size = 16  # Must be divisible by num_minibatches (4)
+    # Batch has shape (T, E, ...) as produced by make_chunked_collector.
+    # T*E must be divisible by num_minibatches (4), e.g. T=4, E=4.
+    T, E = 4, 4
     batch = Transition(
-        obs=jnp.tile(sample_obs, (batch_size, 1)),
-        action=jnp.zeros(batch_size, dtype=jnp.int32),
-        reward=jnp.ones(batch_size, dtype=jnp.float32),
-        next_obs=jnp.tile(sample_obs, (batch_size, 1)),
-        done=jnp.zeros(batch_size, dtype=jnp.bool_),
+        obs=jnp.tile(sample_obs, (T, E, 1)),
+        action=jnp.zeros((T, E), dtype=jnp.int32),
+        reward=jnp.ones((T, E), dtype=jnp.float32),
+        next_obs=jnp.tile(sample_obs, (T, E, 1)),
+        done=jnp.zeros((T, E), dtype=jnp.bool_),
     )
 
     # Update agent
     new_state, metrics = agent.update(key, agent_state, batch, agent.params)
 
     assert isinstance(new_state, AgentState)
-    assert new_state.global_step == agent_state.global_step + 1
+    assert new_state.global_step == agent_state.global_step + T  # increments by rollout_steps (env steps)
     assert "loss" in metrics
     assert "td_error" in metrics
     assert "q_value" in metrics
@@ -181,14 +227,15 @@ def test_jit_compilation(key, sample_obs, agent):
     action, _ = jitted_select(key, sample_obs, agent_state, params=agent.params)
     assert action.shape == ()
 
-    # JIT compile update
+    # JIT compile update — batch shape (T, E, ...) as from make_chunked_collector
+    T, E = 4, 4
     batch = Transition(
-        obs=jnp.tile(sample_obs, (16, 1)),
-        action=jnp.zeros(16, dtype=jnp.int32),
-        reward=jnp.ones(16, dtype=jnp.float32),
-        next_obs=jnp.tile(sample_obs, (16, 1)),
-        done=jnp.zeros(16, dtype=jnp.bool_),
+        obs=jnp.tile(sample_obs, (T, E, 1)),
+        action=jnp.zeros((T, E), dtype=jnp.int32),
+        reward=jnp.ones((T, E), dtype=jnp.float32),
+        next_obs=jnp.tile(sample_obs, (T, E, 1)),
+        done=jnp.zeros((T, E), dtype=jnp.bool_),
     )
     jitted_update = jax.jit(agent.update, static_argnames=["params"])
     new_state, metrics = jitted_update(key, agent_state, batch, params=agent.params)
-    assert new_state.global_step == agent_state.global_step + 1
+    assert new_state.global_step == agent_state.global_step + T  # increments by rollout_steps (env steps)
