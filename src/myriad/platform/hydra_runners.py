@@ -118,31 +118,18 @@ def _format_train_config(config: "Config") -> str:
 
 
 def _get_config_path() -> str:
-    """Get the absolute path to the configs directory with robust fallback logic.
+    """Get the absolute path to the configs directory.
 
     Priority:
-    1. Environment variable MYRIAD_CONFIG_PATH
-    2. A 'configs' directory in the current working directory (for development)
-    3. The 'configs' directory relative to this package source (for repository use)
+    1. Environment variable MYRIAD_CONFIG_PATH  (examples and scripts set this)
+    2. Package-internal configs shipped with myriad  (fallback for sweeps etc.)
     """
     # 1. Check environment variable
     if env_path := os.environ.get("MYRIAD_CONFIG_PATH"):
         return env_path
 
-    # 2. Try current working directory
-    cwd_configs = Path.cwd() / "configs"
-    if cwd_configs.exists() and cwd_configs.is_dir():
-        return str(cwd_configs)
-
-    # 3. Fall back to repository root (assuming standard myriad-jax layout)
-    # This module is at src/myriad/platform/hydra_runners.py
-    repo_root = Path(__file__).resolve().parents[3]
-    repo_configs = repo_root / "configs"
-    if repo_configs.exists() and repo_configs.is_dir():
-        return str(repo_configs)
-
-    # Last resort: return relative path and let Hydra attempt discovery
-    return "../configs"
+    # 2. Package-internal fallback: configs/ lives alongside this module
+    return str(Path(__file__).resolve().parent / "configs")
 
 
 _CONFIG_PATH = _get_config_path()

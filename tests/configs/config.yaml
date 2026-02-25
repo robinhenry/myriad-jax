@@ -1,0 +1,2 @@
+# @package _global_
+# Minimal Hydra entry point for tests. No defaults — configs must be explicit.
