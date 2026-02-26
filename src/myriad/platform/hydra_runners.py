@@ -7,12 +7,14 @@ duplication and maintain a single source of truth.
 
 import logging
 import os
+import signal
+import sys
 from pathlib import Path
 
 import hydra
 import jax
 import wandb
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 
 from myriad.configs.default import Config, EvalConfig
 from myriad.envs import get_env_info
@@ -126,7 +128,7 @@ def _get_config_path() -> str:
     """
     # 1. Check environment variable
     if env_path := os.environ.get("MYRIAD_CONFIG_PATH"):
-        return env_path
+        return str(Path(env_path).resolve())
 
     # 2. Package-internal fallback: configs/ lives alongside this module
     return str(Path(__file__).resolve().parent / "configs")
@@ -199,27 +201,35 @@ def sweep_main(cfg: DictConfig) -> None:
     _configure_logging()
     if os.environ.pop("MYRIAD_AUTO_TUNE", None):
         _apply_auto_tune(cfg)
-    # Initialize W&B run - this will pull parameters from the sweep
+    # Initialize W&B run — agent sets WANDB_SWEEP_ID so wandb.init() automatically
+    # picks up the sampled hyperparameters for this run.
     wandb.init()
 
-    # Update Hydra config with W&B sweep parameters
-    # W&B config keys use dots (e.g., "agent.learning_rate")
-    for key, value in wandb.config.items():
-        if "." in key:
-            # Handle nested keys like "agent.learning_rate"
-            parts = key.split(".")
-            config_part = cfg
-            for part in parts[:-1]:
-                if part not in config_part:
-                    config_part[part] = {}
-                config_part = config_part[part]
-            config_part[parts[-1]] = value
-        else:
-            cfg[key] = value
+    # Handle SIGTERM (sent by the W&B agent for hyperband early termination).
+    # Python's default SIGTERM handler kills the process immediately, skipping all
+    # cleanup. Catching SIGTERM and raising SystemExit lets context managers unwind
+    # normally; train_and_evaluate() treats SystemExit as an intentional stop and
+    # calls wandb.finish(exit_code=0) so W&B marks the run as "killed", not "crashed".
+    def _handle_sigterm(signum: int, frame: object) -> None:
+        sys.exit(128 + signum)  # conventional: 128 + signal number
 
-    # Also update the wandb section of config to ensure W&B integration works
-    cfg.wandb.enabled = True
-    cfg.wandb.mode = wandb.config.get("wandb.mode", "online")
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+
+    # Apply W&B sweep parameters to the Hydra config. Keys use dot notation
+    # (e.g. "agent.learning_rate"). Use open_dict to allow adding keys that are
+    # not pre-declared in the base config (Hydra 1.x locks the config into struct
+    # mode after composition, which would otherwise reject new keys).
+    with open_dict(cfg):
+        for key, value in wandb.config.items():
+            parts = key.split(".")
+            node = cfg
+            for part in parts[:-1]:
+                if part not in node:
+                    node[part] = {}
+                node = node[part]
+            node[parts[-1]] = value
+
+        cfg.wandb.enabled = True
 
     # Convert Hydra configuration to Pydantic model
     config_dict = OmegaConf.to_object(cfg)
@@ -227,8 +237,4 @@ def sweep_main(cfg: DictConfig) -> None:
 
     logger.info(_format_train_config(config))
 
-    # Call the runner with the configuration
     train_and_evaluate(config)
-
-    # Finish the W&B run
-    wandb.finish()

@@ -246,7 +246,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     session_logger.log_final(total_env_steps)
 
     # Get captured metrics and return complete results
-    training_metrics, eval_metrics = session_logger.finalize()
+    training_metrics, eval_metrics = session_logger.get_results()
 
     return TrainingResults(
         agent_state=agent_state,
@@ -284,6 +284,7 @@ def train_and_evaluate(config: Config) -> TrainingResults:
     # Config will be saved by results.save() to avoid duplicate I/O
     session_logger = SessionLogger.for_training(config, run_dir=run_dir)
 
+    exit_code = 0
     try:
         with RunMetadata(run_dir, run_type="training"):
             results = _run_training_loop(config, session_logger, run_dir)
@@ -292,9 +293,12 @@ def train_and_evaluate(config: Config) -> TrainingResults:
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
         logger.info(format_artifacts_tree(run_dir))
-
-        return results
-    except Exception:
-        # Ensure W&B is closed on error
-        session_logger.finalize()
+    except (KeyboardInterrupt, SystemExit):
+        raise  # intentional stop — exit_code stays 0
+    except BaseException:
+        exit_code = 1
         raise
+    finally:
+        session_logger.finalize(exit_code=exit_code)
+
+    return results

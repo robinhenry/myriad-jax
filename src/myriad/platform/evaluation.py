@@ -71,6 +71,7 @@ def evaluate(
     # Create unified logger (handles W&B init/close automatically)
     session_logger = SessionLogger.for_evaluation(config, run_dir=run_dir)
 
+    exit_code = 0
     try:
         with RunMetadata(run_dir, run_type="evaluation"):
             # Extract evaluation settings
@@ -153,8 +154,12 @@ def evaluate(
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
         logger.info(format_artifacts_tree(run_dir))
-
-        return results
-    except Exception:
-        session_logger.finalize()
+    except (KeyboardInterrupt, SystemExit):
+        raise  # intentional stop — exit_code stays 0
+    except BaseException:
+        exit_code = 1
         raise
+    finally:
+        session_logger.finalize(exit_code=exit_code)
+
+    return results

@@ -226,10 +226,10 @@ class WandbBackend:
         if self.use_wandb:
             wandb.log({"train/final_env_steps": float(total_env_steps)}, step=total_env_steps)  # type: ignore[union-attr]
 
-    def finish(self) -> None:
+    def finish(self, exit_code: int = 0) -> None:
         """Close the W&B run."""
         if self.use_wandb and wandb is not None:
-            wandb.finish()
+            wandb.finish(exit_code=exit_code)
 
 
 def init_wandb(config: Config | EvalConfig) -> Any | None:
@@ -251,6 +251,12 @@ def init_wandb(config: Config | EvalConfig) -> Any | None:
             "Install it with `pip install wandb` to proceed."
         )
         raise RuntimeError(message) from _wandb_import_error
+
+    # If a run is already active (e.g. sweep_main called wandb.init() to read
+    # wandb.config), reuse it and just update the logged config.
+    if wandb.run is not None:
+        wandb.run.config.update(config.model_dump())
+        return wandb.run
 
     init_kwargs: dict[str, Any] = _drop_none(
         {

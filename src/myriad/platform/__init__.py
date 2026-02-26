@@ -26,6 +26,13 @@ from .serialization import (
 )
 from .training import train_and_evaluate
 from .types import EvaluationMetrics, EvaluationResults, TrainingMetrics, TrainingResults
+from .wandb_helpers import (
+    config_from_wandb_run,
+    fetch_run,
+    fetch_sweep_runs,
+    fetch_top_k_runs,
+    runs_to_dataframe,
+)
 
 __all__ = [
     # Training and evaluation
@@ -52,6 +59,12 @@ __all__ = [
     "RESULTS_FILENAME",
     "RESULTS_EXTENSION",
     "METADATA_FILENAME",
+    # W&B helpers
+    "fetch_run",
+    "fetch_sweep_runs",
+    "fetch_top_k_runs",
+    "config_from_wandb_run",
+    "runs_to_dataframe",
     # Serialization
     "save_agent_state",
     "load_agent_state",

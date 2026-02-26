@@ -29,7 +29,9 @@ import click
 from .autotune import autotune
 from .evaluate import evaluate
 from .render import render
+from .seed_eval import seed_eval
 from .sweep import sweep
+from .sweep_create import sweep_create
 from .train import train
 
 
@@ -48,8 +50,10 @@ def main() -> None:
 main.add_command(train)
 main.add_command(evaluate)
 main.add_command(sweep)
+main.add_command(sweep_create)
+main.add_command(seed_eval)
 main.add_command(render)
 main.add_command(autotune)
 
 
-__all__ = ["main", "train", "evaluate", "sweep", "render", "autotune"]
+__all__ = ["main", "train", "evaluate", "sweep", "sweep_create", "seed_eval", "render", "autotune"]

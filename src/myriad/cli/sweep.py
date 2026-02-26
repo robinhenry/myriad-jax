@@ -42,7 +42,6 @@ def sweep(ctx: click.Context) -> None:
     For W&B sweep documentation, see: https://docs.wandb.ai/guides/sweeps
     For Hydra documentation, see: https://hydra.cc/
     """
-    # Execute the sweep runner with Hydra setup
     from myriad.platform.hydra_runners import sweep_main
     from myriad.platform.runner_utils import run_with_hydra
 

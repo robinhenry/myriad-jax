@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
-# Creates W&B sweeps for all num_envs levels and launches local agents.
-# Run from the repo root directory.
+# Runs a two-phase hyperparameter sweep for PQN on ccasr-gfp-control.
+# Run from any directory — paths are resolved relative to this script.
 #
 # Usage:
-#   ./examples/04_pqn_ccasr_sweep/run_sweep.sh
-#   WANDB_PROJECT=my-project NUM_AGENTS=2 ./examples/04_pqn_ccasr_sweep/run_sweep.sh
+#   ./run_sweep.sh
 #
 # Prerequisites:
-#   wandb login             # once, to authenticate
+#   pip install myriad-jax     # installs the `myriad` CLI
+#   wandb login                # once, to authenticate
 #   export WANDB_ENTITY=your-username-or-team
+#
+# Project name is taken from the 'project:' field in the sweep YAML.
 
 set -euo pipefail
 
-WANDB_PROJECT="${WANDB_PROJECT:-myriad-ccasr}"
-NUM_AGENTS="${NUM_AGENTS:-1}"   # parallel agents per sweep level
-EXAMPLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SWEEP_YAML="$SCRIPT_DIR/configs/pqn_ccasr_sweep.yaml"
+NUM_ENVS=1024
+BASE_GROUP="pqn_ccasr"
 
-echo "=== Creating sweeps ==="
-# Capture sweep IDs output by create_sweeps.py (one per num_envs level)
-mapfile -t SWEEP_IDS < <(
-    python "$EXAMPLE_DIR/create_sweeps.py" --project "$WANDB_PROJECT" \
-    | grep "wandb agent" | awk '{print $NF}'
-)
-
-echo ""
-echo "=== Launching ${NUM_AGENTS} agent(s) per sweep ==="
-for sweep_id in "${SWEEP_IDS[@]}"; do
-    echo "  Launching agents for $sweep_id"
-    for _ in $(seq 1 "$NUM_AGENTS"); do
-        wandb agent "$sweep_id" &
-    done
-done
+echo "=== Phase 1: creating sweep ==="
+SWEEP_ID=$(myriad sweep-create "$SWEEP_YAML" \
+    --base-group "$BASE_GROUP" \
+    --levels "$NUM_ENVS")
 
 echo ""
-echo "All agents running. Monitor at https://wandb.ai/${WANDB_ENTITY:-<your-entity>}/$WANDB_PROJECT"
-wait
+echo "=== Phase 1: running agent ==="
+MYRIAD_CONFIG_PATH="$SCRIPT_DIR/configs" wandb agent "$SWEEP_ID"
+
+echo ""
+echo "=== Phase 2: seed-eval ==="
+myriad seed-eval "$SWEEP_ID" \
+    --top-k 5 \
+    --seeds 0,1,2 \
+    --metric eval/episode_return/mean \
+    --group "${BASE_GROUP}_validated"

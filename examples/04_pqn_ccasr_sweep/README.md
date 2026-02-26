@@ -1,92 +1,58 @@
 # Example 04: PQN Hyperparameter Sweep on ccasr-gfp-control
 
-Bayesian hyperparameter optimization for PQN on the GFP control task, using W&B
-sweeps with Hyperband early stopping. The sweep is repeated across three parallelism
-levels (`num_envs` ∈ {512, 1024, 16384}) to characterize the tradeoff between
-population size and final policy quality.
+Bayesian hyperparameter search for PQN on the GFP control task, followed by
+statistical validation of the top configs. W&B Sweeps manages the search;
+Hyperband prunes poor runs early.
 
-## What this example does
+## Two-phase workflow
 
-Each `num_envs` level gets its own W&B sweep. Within each sweep:
+**Phase 1 — hyperparameter search.** All runs use a fixed seed (`seed=0`) so
+configs are compared on equal footing. Bayesian optimisation budget is spent
+entirely on hyperparameters.
 
-- **Bayesian optimization** proposes hyperparameter configurations, learning from
-  the performance of previous runs to focus budget on promising regions.
-- **Hyperband early stopping** culls poor configs at ~20% of training budget,
-  concentrating compute on configs that show early promise.
-- **3 seeds** are included as a categorical parameter. W&B treats seed like any
-  other categorical — promising configs naturally get sampled across all three seeds.
-  Group by `run.seed` in the W&B UI to inspect per-config variance.
-
-### Parameters swept
-
-See `configs/pqn_ccasr_sweep.yaml` for the full parameter list with distributions
-and ranges. `epsilon_decay_fraction` and `lr_decay_fraction` are resolved to absolute
-step counts at training time based on `steps_per_env`, `rollout_steps`, `num_epochs`,
-and `num_minibatches` — so the fractions remain meaningful across all `num_envs`
-levels and all sampled `rollout_steps` values.
-
-### Training budget
-
-Each run trains for `steps_per_env=5_000` steps per environment, giving
-`5_000 × num_envs` total environment steps (e.g. ~5M at 1024 envs, ~82M at 16384).
-Evaluations run every 500 steps/env, giving 10 eval points per run.
-
-## Files
-
-```
-04_pqn_ccasr_sweep/
-├── configs/
-│   └── pqn_ccasr_sweep.yaml   # W&B sweep definition (all parameters, 1024-env canonical)
-├── create_sweeps.py            # registers one W&B sweep per num_envs level
-├── run_sweep.sh                # convenience: create sweeps + launch local agents
-└── README.md
-```
+**Phase 2 — seed evaluation.** After the sweep finishes, `myriad seed-eval`
+queries W&B for the top-5 configs and re-runs each with seeds 0–2. Runs are
+grouped in W&B for mean ± std reporting.
 
 ## How to run
-
-### Prerequisites
 
 ```bash
 wandb login                         # authenticate once
 export WANDB_ENTITY=your-entity     # your W&B username or team
-```
 
-### 1. Create sweeps (registers with W&B, no training starts)
-
-```bash
-python examples/04_pqn_ccasr_sweep/create_sweeps.py --project myriad-ccasr
-# Output: one sweep ID per num_envs level
-```
-
-To create sweeps for specific levels only:
-
-```bash
-python examples/04_pqn_ccasr_sweep/create_sweeps.py --project myriad-ccasr --levels 512 1024
-```
-
-### 2. Launch agents
-
-Each agent runs one training job at a time. Launch one per available GPU:
-
-```bash
-wandb agent <sweep_id>
-```
-
-### All-in-one (create + launch local agents)
-
-```bash
-# Defaults: all 3 levels, 1 agent per level, project=myriad-ccasr
 ./examples/04_pqn_ccasr_sweep/run_sweep.sh
-
-# Custom:
-WANDB_PROJECT=my-project NUM_AGENTS=2 ./examples/04_pqn_ccasr_sweep/run_sweep.sh
 ```
 
-## Analyzing results
+The script runs both phases end-to-end: it creates a sweep, runs a local
+agent, then launches seed-eval automatically once the agent finishes. Edit
+`NUM_ENVS` at the top of the script to change parallelism level.
 
-In the W&B UI, filter runs by `wandb.group` to isolate a specific `num_envs` level.
-Group by `run.seed` to separate variance from hyperparameter signal.
+To register the sweep without launching an agent (e.g. to hand off to a cluster):
 
-The sweep objective is `eval/episode_return/mean` (logged every 500 steps/env,
-giving 10 eval points per run). Hyperband first culls at 2 logged values (~20% of
-training), so weak configs are killed early without wasting the full budget.
+```bash
+myriad sweep-create configs/pqn_ccasr_sweep.yaml \
+    --base-group pqn_ccasr \
+    --levels 1024
+# Prints the sweep ID. Then on the worker: wandb agent <sweep_id>
+```
+
+Run seed-eval manually after the sweep:
+
+```bash
+myriad seed-eval $WANDB_ENTITY/myriad-ccasr/<SWEEP_ID> \
+    --top-k 5 --seeds 0,1,2 \
+    --metric eval/episode_return/mean \
+    --group pqn_ccasr_validated
+```
+
+## Viewing results
+
+Open the `myriad-ccasr` project in W&B.
+
+**Phase 1:** Runs are tagged with group `pqn_ccasr_1024`. Use the
+parallel-coordinates plot to identify which hyperparameters drive
+`eval/episode_return/mean`.
+
+**Phase 2:** Filter by `job_type = seed-eval` to isolate validation runs. In
+the Groups view, each rank group (e.g. `pqn_ccasr_validated_rank0`) contains
+one run per seed; W&B shows mean ± std automatically.

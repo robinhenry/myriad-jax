@@ -24,7 +24,7 @@ class WandbConfig(BaseModel):
     """
 
     enabled: bool = True  # W&B enabled by default
-    project: str = "myriad"  # default project name
+    project: str | None = None  # W&B project name (None = W&B uses repo/script name)
     entity: str | None = None  # user or team name (user-specific)
     group: str | None = None  # experiment group (experiment-specific)
     job_type: str = "train"  # default job type
