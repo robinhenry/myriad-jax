@@ -21,6 +21,6 @@ run:
   eval_max_steps: 288
 
 wandb:
-  project: myriad-ccasr
+  project: myriad-ccasr-gfp-v1
   mode: online
   group: pqn_ccasr  # base name; myriad sweep-create appends _{level} per sweep

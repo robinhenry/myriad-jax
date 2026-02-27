@@ -33,5 +33,5 @@ echo "=== Phase 2: seed-eval ==="
 myriad seed-eval "$SWEEP_ID" \
     --top-k 5 \
     --seeds 0,1,2 \
-    --metric eval/episode_return/mean \
+    --metric eval/return/best \
     --group "${BASE_GROUP}_validated"

@@ -148,7 +148,6 @@ def evaluate(
                 save_episodes=save_episodes_to_disk_flag,
                 episode_save_count=save_count,
             )
-            session_logger.log_final(0)
 
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)

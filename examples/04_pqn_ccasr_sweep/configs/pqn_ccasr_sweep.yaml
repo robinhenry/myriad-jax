@@ -1,14 +1,14 @@
-project: myriad-ccasr
+project: myriad-ccasr-gfp-v1
 program: myriad
 command:
   - ${env}
   - ${program}
   - sweep
   - --config-name=pqn_ccasr
-run_cap: 20
+run_cap: 200
 method: bayes
 metric:
-  name: eval/episode_return/mean
+  name: eval/return/best
   goal: maximize
 early_terminate:
   type: hyperband

@@ -243,8 +243,6 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
             steps_this_chunk=steps_this_chunk,
         )
 
-    session_logger.log_final(total_env_steps)
-
     # Get captured metrics and return complete results
     training_metrics, eval_metrics = session_logger.get_results()
 

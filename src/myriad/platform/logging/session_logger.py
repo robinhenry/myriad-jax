@@ -80,7 +80,9 @@ class SessionLogger:
         wandb_run = init_wandb(config)
         if run_dir is None:
             run_dir = Path.cwd()  # Hydra sets this to the output dir
-        return cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
+        logger = cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
+        logger._wandb.log_run_summary(config)
+        return logger
 
     @classmethod
     def for_evaluation(cls, config: EvalConfig, run_dir: Path | None = None) -> "SessionLogger":
@@ -185,14 +187,6 @@ class SessionLogger:
         return episode_dir
 
     # --- Lifecycle ---
-
-    def log_final(self, total_env_steps: int) -> None:
-        """Log final training completion.
-
-        Args:
-            total_env_steps: Total environment steps completed
-        """
-        self._wandb.log_final(total_env_steps)
 
     def get_results(self) -> tuple[TrainingMetrics, EvaluationMetrics]:
         """Return captured metrics without closing the session."""
