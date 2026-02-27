@@ -12,16 +12,15 @@ import sys
 from pathlib import Path
 
 import hydra
-import jax
 import wandb
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from myriad.configs.default import Config, EvalConfig
 from myriad.envs import get_env_info
 
+from .display import format_eval_results
 from .evaluation import evaluate
 from .logging.backends.disk import render_episodes_to_videos
-from .metadata import _get_detailed_device_info
 from .training import train_and_evaluate
 
 # Suppress excessive JAX logging when running on CPU
@@ -52,73 +51,6 @@ def _configure_logging() -> None:
         handler.setFormatter(fmt)
 
 
-def _fmt_fields(model: object) -> str:
-    """Format non-default fields of a Pydantic model as 'key=value | key=value'."""
-    from pydantic import BaseModel
-
-    if not isinstance(model, BaseModel):
-        return str(model)
-    non_defaults = model.model_dump(exclude_defaults=True)
-    # Always include 'name' if present (it's required, has no default, but exclude_defaults may still miss it)
-    if hasattr(model, "name") and "name" not in non_defaults:
-        non_defaults = {"name": model.name} | non_defaults  # type: ignore[attr-defined]
-    return " | ".join(f"{k}={v}" for k, v in non_defaults.items()) if non_defaults else "(defaults)"
-
-
-def _fmt_device_info() -> str:
-    """Format device backend and model for display (e.g. 'cpu | Intel Core i7 x4')."""
-    backend = jax.default_backend()
-    devices = jax.devices()
-    if backend == "cpu":
-        model = _get_detailed_device_info()
-    elif devices:
-        model = devices[0].device_kind
-    else:
-        model = "unknown"
-    return f"{backend} | {model} x{len(devices)}"
-
-
-def _format_eval_config(config: "EvalConfig") -> str:
-    wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
-    config_path = Path.cwd() / ".hydra" / "config.yaml"
-    lines = [
-        f"Evaluating {config.agent.name} on {config.env.name}",
-        f"  Agent : {_fmt_fields(config.agent)}",
-        f"  Env   : {_fmt_fields(config.env)}",
-        f"  Run   : {_fmt_fields(config.run)}",
-        f"  W&B   : {wandb_status}",
-        f"  Device: {_fmt_device_info()}",
-        f"  Config: {config_path}",
-    ]
-    return "\n".join(lines)
-
-
-def _format_eval_results(results: object) -> str:
-    lines = [
-        "Evaluation results",
-        f"  Episodes     : {results.num_episodes}",  # type: ignore[attr-defined]
-        f"  Mean return  : {results.mean_return:.2f} ± {results.std_return:.2f}",  # type: ignore[attr-defined]
-        f"  Min / Max    : {results.min_return:.2f} / {results.max_return:.2f}",  # type: ignore[attr-defined]
-        f"  Mean length  : {results.mean_length:.2f} ± {results.std_length:.2f}",  # type: ignore[attr-defined]
-    ]
-    return "\n".join(lines)
-
-
-def _format_train_config(config: "Config") -> str:
-    wandb_status = "disabled" if (config.wandb is None or not config.wandb.enabled) else _fmt_fields(config.wandb)
-    config_path = Path.cwd() / ".hydra" / "config.yaml"
-    lines = [
-        f"Training {config.agent.name} on {config.env.name}",
-        f"  Agent : {_fmt_fields(config.agent)}",
-        f"  Env   : {_fmt_fields(config.env)}",
-        f"  Run   : {_fmt_fields(config.run)}",
-        f"  W&B   : {wandb_status}",
-        f"  Device: {_fmt_device_info()}",
-        f"  Config: {config_path}",
-    ]
-    return "\n".join(lines)
-
-
 def _get_config_path() -> str:
     """Get the absolute path to the configs directory.
 
@@ -147,8 +79,6 @@ def train_main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
 
-    logger.info(_format_train_config(config))
-
     train_and_evaluate(config)
 
 
@@ -160,12 +90,10 @@ def evaluate_main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_object(cfg)
     config = EvalConfig.model_validate(config_dict)
 
-    logger.info(_format_eval_config(config))
-
     # Run evaluation
     results = evaluate(config=config, return_episodes=False)
 
-    logger.info(_format_eval_results(results))
+    logger.info(format_eval_results(results))
 
     # Render videos if enabled
     if config.run.eval_render_videos and config.run.eval_episode_save_frequency > 0:
@@ -234,7 +162,5 @@ def sweep_main(cfg: DictConfig) -> None:
     # Convert Hydra configuration to Pydantic model
     config_dict = OmegaConf.to_object(cfg)
     config = Config.model_validate(config_dict)
-
-    logger.info(_format_train_config(config))
 
     train_and_evaluate(config)

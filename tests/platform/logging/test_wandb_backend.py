@@ -9,6 +9,7 @@ from myriad.platform.logging.backends import wandb as wandb_backend
 class _WandbStub:
     def __init__(self):
         self.init_kwargs: dict | None = None
+        self.run = None  # init_wandb checks wandb.run to detect an active run
 
     def init(self, **kwargs):
         self.init_kwargs = kwargs
@@ -54,7 +55,7 @@ def test_init_wandb_initializes_when_enabled(monkeypatch):
     run = wandb_backend.init_wandb(config)
     assert run == "stub-run"
     assert stub.init_kwargs is not None
-    assert stub.init_kwargs["config"]["run"]["seed"] == 0
+    assert stub.init_kwargs["config"]["run.seed"] == 0
 
 
 def test_init_wandb_raises_without_package(monkeypatch):

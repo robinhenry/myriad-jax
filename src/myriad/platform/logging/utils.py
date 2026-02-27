@@ -82,8 +82,8 @@ def build_train_payload(metrics_host: dict[str, Any]) -> dict[str, float]:
     payload: dict[str, float] = {}
     for name, history in metrics_host.items():
         if hasattr(history, "__getitem__") and len(history) > 0:
-            # Mean over the chunk rather than last value — reduces per-step noise
-            # for loss while remaining accurate for smooth monotone metrics (lr, epsilon).
-            value = float(np.nanmean(np.asarray(history, dtype=np.float64)))
+            # Mean over the chunk reduces per-step noise while remaining accurate
+            # for smooth monotone metrics (lr, epsilon).
+            value: Any = float(np.nanmean(np.asarray(history, dtype=np.float64)))
             payload.update(summarize_metric("train/", name, value))
     return payload

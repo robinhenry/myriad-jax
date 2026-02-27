@@ -17,6 +17,7 @@ import numpy as np
 from myriad.agents.agent import AgentState
 from myriad.configs.default import EvalConfig
 
+from .display import format_eval_config
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
 from .metadata import RunMetadata
@@ -64,6 +65,8 @@ def evaluate(
         - Optional trajectory data (if return_episodes=True)
         - Metadata (num_episodes, seed)
     """
+    logger.info(format_eval_config(config))
+
     # Get or create output directory
     run_dir = get_or_create_output_dir(None)
 

@@ -160,7 +160,10 @@ class WandbBackend:
         current_mean = eval_payload.get("eval/return/mean")
         if current_mean is not None and current_mean > self._best_eval_return:
             self._best_eval_return = current_mean
-            self.wandb_run.summary["eval/return/best"] = self._best_eval_return  # type: ignore[union-attr]
+            try:
+                self.wandb_run.summary["eval/return/best"] = self._best_eval_return  # type: ignore[union-attr]
+            except (AttributeError, TypeError):
+                pass
 
     def log_episodes(self, episode_dir: Path, global_step: int) -> None:
         """Log saved episodes to W&B as artifacts.

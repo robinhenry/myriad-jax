@@ -9,6 +9,7 @@ from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
 
+from .display import format_train_config
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
 from .metadata import RunMetadata
@@ -276,6 +277,8 @@ def train_and_evaluate(config: Config) -> TrainingResults:
         - config: Configuration used (for reproducibility)
         - final_env_state: Final environment states (can be used to resume training)
     """
+    logger.info(format_train_config(config))
+
     # Get or create output directory
     run_dir = get_or_create_output_dir(None)
 

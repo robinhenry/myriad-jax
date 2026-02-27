@@ -64,6 +64,9 @@ class _WandbStub:
     def log(self, payload: dict[str, float], step: int | None = None):
         self.logs.append((payload, step))
 
+    def define_metric(self, *args, **kwargs):
+        pass
+
     def finish(self, exit_code: int = 0):
         self.finish_called = True
 
@@ -362,15 +365,15 @@ def test_run_training_loop_with_wandb_logs(wandb_stub):
     training._run_training_loop(config, session_logger, Path.cwd())
 
     assert wandb_stub.init_kwargs is not None
-    assert wandb_stub.init_kwargs["config"]["run"]["seed"] == 0
+    assert wandb_stub.init_kwargs["config"]["run.seed"] == 0
     # train/global_env_steps and train/steps_per_env are removed; steps_per_env is now the x-axis
     assert any("train/loss" in payload for payload, _ in wandb_stub.logs)
-    # Eval payload now contains band-chart metrics under eval/episode_return/*
-    eval_logged = any(any("eval/episode_return" in name for name in payload) for payload, _ in wandb_stub.logs)
+    # Eval payload now contains band-chart metrics under eval/return/*
+    eval_logged = any(any("eval/return" in name for name in payload) for payload, _ in wandb_stub.logs)
     assert eval_logged is True
     # Verify eval uses steps_per_env as the WandB step (not global_env_steps).
     # With num_envs=2, global_env_steps would be 2x larger than steps_per_env.
-    eval_steps = [step for payload, step in wandb_stub.logs if any("eval/episode_return" in k for k in payload)]
+    eval_steps = [step for payload, step in wandb_stub.logs if any("eval/return" in k for k in payload)]
     assert eval_steps, "Expected at least one eval log"
     assert max(eval_steps) == config.run.steps_per_env  # final eval step == steps_per_env, not total_timesteps
     assert all(step <= config.run.steps_per_env for step in eval_steps)
