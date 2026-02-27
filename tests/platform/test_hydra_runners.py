@@ -9,12 +9,14 @@ import pytest
 from omegaconf import OmegaConf
 
 from myriad.configs.default import AgentConfig, EnvConfig, EvalConfig, EvalRunConfig, WandbConfig
+from myriad.platform.display import (
+    _fmt_fields,
+    format_eval_config as _format_eval_config,
+    format_eval_results as _format_eval_results,
+    format_train_config as _format_train_config,
+)
 from myriad.platform.hydra_runners import (
     _apply_auto_tune,
-    _fmt_fields,
-    _format_eval_config,
-    _format_eval_results,
-    _format_train_config,
     _get_config_path,
 )
 
