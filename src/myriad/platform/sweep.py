@@ -65,7 +65,7 @@ def create_wandb_sweeps(
         if project is None:
             raise ValueError("project must be specified either as an argument or in the YAML 'project' field")
 
-    sweep_levels: list[int | None] = list(levels) if levels is not None else [None]
+    sweep_levels: list[int | float | str | None] = list(levels) if levels is not None else [None]
     sweep_ids: list[str] = []
 
     for level in sweep_levels:

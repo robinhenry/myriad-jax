@@ -53,7 +53,12 @@ def initialize_environment_and_agent(
         rollout_steps = getattr(config.run, "rollout_steps", None)
         num_minibatches = agent_kwargs.get("num_minibatches")
         num_epochs = agent_kwargs.get("num_epochs")
-        if all(x is not None for x in [steps_per_env, rollout_steps, num_minibatches, num_epochs]):
+        if (
+            steps_per_env is not None
+            and rollout_steps is not None
+            and num_minibatches is not None
+            and num_epochs is not None
+        ):
             num_updates = steps_per_env / rollout_steps
             total_grad_steps = num_updates * num_minibatches * num_epochs
             agent_kwargs["lr_decay_steps"] = max(1, int(fraction * total_grad_steps))

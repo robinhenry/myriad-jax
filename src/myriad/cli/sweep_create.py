@@ -39,7 +39,7 @@ def sweep_create(
     yaml_path: str,
     project: str | None,
     level_param: str,
-    levels: tuple[int, ...],
+    levels: tuple[str, ...],
     base_group: str | None,
 ) -> None:
     """Register W&B sweep(s) from YAML_PATH.
