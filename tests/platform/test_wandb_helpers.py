@@ -6,6 +6,8 @@ import pytest
 import myriad.platform.wandb_helpers as wh
 from myriad.platform.wandb_helpers import (
     _flatten_dict,
+    _resolve_sweep_id,
+    _unflatten_dotted_keys,
     _unwrap_wandb_value,
     config_from_wandb_run,
     fetch_run,
@@ -20,26 +22,43 @@ from myriad.platform.wandb_helpers import (
 
 
 class _MockRun:
-    def __init__(self, run_id, name, state, config, summary):
+    def __init__(self, run_id, name, state, config, summary, *, project="test-project", entity="test-entity"):
         self.id = run_id
         self.name = name
         self.state = state
         self.config = config
         self.summary = summary
+        self.project = project
+        self.entity = entity
 
 
 class _WandbStub:
-    def __init__(self, *, run=None, sweep_runs=None):
+    def __init__(self, *, run=None, sweep_runs=None, projects=None, sweep_map=None):
         self._run = run
         self._sweep_runs = sweep_runs or []
+        # projects: list of project name strings (for _resolve_sweep_id)
+        self._projects = [type("Project", (), {"name": p})() for p in (projects or [])]
+        # sweep_map: {fqid: sweep_obj} — raise if absent, return stub if present
+        self._sweep_map = sweep_map or {}
 
     def Api(self):
         return self
 
+    @property
+    def default_entity(self):
+        return "test-entity"
+
+    def projects(self, _entity):
+        return self._projects
+
     def run(self, _run_id):
         return self._run
 
-    def sweep(self, _sweep_id):
+    def sweep(self, sweep_id):
+        if self._sweep_map:
+            if sweep_id not in self._sweep_map:
+                raise ValueError(f"sweep not found: {sweep_id}")
+            return self._sweep_map[sweep_id]
         return type("Sweep", (), {"runs": self._sweep_runs})()
 
 
@@ -86,6 +105,64 @@ def test_unwrap_nested():
 
 
 # ---------------------------------------------------------------------------
+# _unflatten_dotted_keys
+# ---------------------------------------------------------------------------
+
+
+def test_unflatten_no_dots():
+    assert _unflatten_dotted_keys({"a": 1, "b": 2}) == {"a": 1, "b": 2}
+
+
+def test_unflatten_simple_dots():
+    flat = {"env.name": "cartpole", "agent.lr": 0.001, "run.seed": 42}
+    assert _unflatten_dotted_keys(flat) == {
+        "env": {"name": "cartpole"},
+        "agent": {"lr": 0.001},
+        "run": {"seed": 42},
+    }
+
+
+def test_unflatten_deep_dots():
+    flat = {"a.b.c": 1}
+    assert _unflatten_dotted_keys(flat) == {"a": {"b": {"c": 1}}}
+
+
+def test_unflatten_mixed_flat_and_nested():
+    """Keys with and without dots should merge correctly under the same prefix."""
+    flat = {"agent.lr": 0.01, "agent.gamma": 0.99}
+    assert _unflatten_dotted_keys(flat) == {"agent": {"lr": 0.01, "gamma": 0.99}}
+
+
+# ---------------------------------------------------------------------------
+# _resolve_sweep_id
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_sweep_id_already_qualified():
+    assert _resolve_sweep_id("entity/project/abc123") == "entity/project/abc123"
+
+
+def test_resolve_sweep_id_ambiguous_raises():
+    with pytest.raises(ValueError, match="Ambiguous"):
+        _resolve_sweep_id("project/abc123")
+
+
+def test_resolve_sweep_id_bare_found(monkeypatch):
+    fq = "test-entity/my-project/abc123"
+    stub = _WandbStub(projects=["other-project", "my-project"], sweep_map={fq: object()})
+    monkeypatch.setattr(wh, "wandb", stub)
+    assert _resolve_sweep_id("abc123") == fq
+
+
+def test_resolve_sweep_id_bare_not_found(monkeypatch):
+    # sweep_map has an entry for a different ID so the stub raises for the target
+    stub = _WandbStub(projects=["p1", "p2"], sweep_map={"test-entity/p1/other": object()})
+    monkeypatch.setattr(wh, "wandb", stub)
+    with pytest.raises(ValueError, match="Could not find sweep"):
+        _resolve_sweep_id("missing123")
+
+
+# ---------------------------------------------------------------------------
 # _flatten_dict
 # ---------------------------------------------------------------------------
 
@@ -121,12 +198,48 @@ def test_config_from_wandb_run_plain():
     assert config.run.seed == 0
 
 
+def test_config_from_wandb_run_restores_project_from_run_metadata():
+    """wandb section is stripped before logging; project/entity must be recovered from run."""
+    run = _MockRun("r1", "run-1", "finished", _minimal_config_dict(), {}, project="my-project", entity="my-entity")
+    config = config_from_wandb_run(run)
+    assert config.wandb is not None
+    assert config.wandb.project == "my-project"
+    assert config.wandb.entity == "my-entity"
+
+
+def test_config_from_wandb_run_does_not_override_existing_project():
+    """If the config somehow already has a project, it should be kept."""
+    raw = _minimal_config_dict()
+    raw["wandb"] = {"project": "stored-project", "entity": "stored-entity"}
+    run = _MockRun("r1", "run-1", "finished", raw, {}, project="run-project", entity="run-entity")
+    config = config_from_wandb_run(run)
+    assert config.wandb is not None
+    assert config.wandb.project == "stored-project"
+    assert config.wandb.entity == "stored-entity"
+
+
 def test_config_from_wandb_run_unwraps_sweep_wrappers():
     raw = _minimal_config_dict()
     raw["run"]["seed"] = {"value": 7}
     run = _MockRun("r1", "run-1", "finished", raw, {})
     config = config_from_wandb_run(run)
     assert config.run.seed == 7
+
+
+def test_config_from_wandb_run_flat_dotted_keys():
+    """W&B sweep agents store config as flat dotted keys; these must be unflattened."""
+    base = _minimal_config_dict()
+    flat: dict = {}
+    for section, fields in base.items():
+        for k, v in fields.items():
+            flat[f"{section}.{k}"] = v
+    run = _MockRun("r1", "run-1", "finished", flat, {}, project="sweep-project", entity="sweep-entity")
+    config = config_from_wandb_run(run)
+    assert config.run.seed == 0
+    assert config.agent.name == "dummy"
+    assert config.env.name == "dummy"
+    assert config.wandb is not None
+    assert config.wandb.project == "sweep-project"
 
 
 # ---------------------------------------------------------------------------

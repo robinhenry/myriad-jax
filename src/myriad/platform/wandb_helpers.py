@@ -9,7 +9,7 @@ from typing import Any
 import polars as pl
 import wandb  # type: ignore[import]
 
-from myriad.configs.default import Config
+from myriad.configs.default import Config, WandbConfig
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -23,6 +23,74 @@ def _unwrap_wandb_value(obj: Any) -> Any:
             return _unwrap_wandb_value(obj["value"])
         return {k: _unwrap_wandb_value(v) for k, v in obj.items() if not k.startswith("_")}
     return obj
+
+
+def _unflatten_dotted_keys(d: dict[str, Any]) -> dict[str, Any]:
+    """Convert flat dot-separated keys into a nested dict.
+
+    W&B sweep agents store hyperparameters with dotted keys (e.g. ``agent.lr``)
+    rather than nested dicts.  This undoes that flattening so Pydantic can
+    validate the result as a ``Config``.
+
+    Already-nested values are merged in place, so a mix of flat and nested keys
+    is handled correctly.
+    """
+    out: dict[str, Any] = {}
+    for key, value in d.items():
+        parts = key.split(".")
+        node = out
+        for part in parts[:-1]:
+            if part not in node or not isinstance(node[part], dict):
+                node[part] = {}
+            node = node[part]
+        leaf = parts[-1]
+        # If value is itself a nested dict, recurse so inner dotted keys are also handled.
+        node[leaf] = _unflatten_dotted_keys(value) if isinstance(value, dict) else value
+    return out
+
+
+# ---------------------------------------------------------------------------
+# ID resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_sweep_id(sweep_id: str) -> str:
+    """Ensure a sweep ID is fully qualified as ``entity/project/sweep_id``.
+
+    W&B's API requires the full three-part path.  If ``sweep_id`` is already
+    fully qualified (contains exactly two ``/``), it is returned unchanged.
+    If it is a bare ID (no ``/``), the current entity's projects are searched
+    until a matching sweep is found.
+
+    Args:
+        sweep_id: A bare sweep ID (e.g. ``"abc123"``) or a fully-qualified
+            path (``"entity/project/abc123"``).
+
+    Returns:
+        Fully-qualified sweep ID as ``entity/project/sweep_id``.
+
+    Raises:
+        ValueError: If the ID cannot be resolved to any known sweep.
+    """
+    if sweep_id.count("/") == 2:
+        return sweep_id
+    if sweep_id.count("/") != 0:
+        raise ValueError(f"Ambiguous sweep ID '{sweep_id}'. " "Use the fully-qualified form: entity/project/sweep_id.")
+
+    api = wandb.Api()
+    entity = api.default_entity
+    for project in api.projects(entity):
+        candidate = f"{entity}/{project.name}/{sweep_id}"
+        try:
+            api.sweep(candidate)
+            return candidate
+        except Exception:
+            continue
+
+    raise ValueError(
+        f"Could not find sweep '{sweep_id}' in any project for entity '{entity}'. "
+        "Pass the fully-qualified form: entity/project/sweep_id."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +126,24 @@ def config_from_wandb_run(run: Any) -> Config:
     raw: dict[str, Any] = dict(run.config)
     normalised = _unwrap_wandb_value(raw)
     assert isinstance(normalised, dict)
-    return Config.model_validate(normalised)
+    nested = _unflatten_dotted_keys(normalised)
+    config = Config.model_validate(nested)
+
+    # The wandb section is intentionally stripped from run.config by _to_flat_config
+    # (it's run metadata, not experiment config). Restore project and entity from the
+    # run object so that seed-eval writes back to the same project.
+    if config.wandb is None:
+        config = config.model_copy(update={"wandb": WandbConfig(project=run.project, entity=run.entity)})
+    else:
+        updates: dict[str, Any] = {}
+        if config.wandb.project is None:
+            updates["project"] = run.project
+        if config.wandb.entity is None:
+            updates["entity"] = run.entity
+        if updates:
+            config = config.model_copy(update={"wandb": config.wandb.model_copy(update=updates)})
+
+    return config
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +162,7 @@ def fetch_sweep_runs(sweep_id: str, *, state: str | None = None) -> list[Any]:
     Returns:
         List of ``wandb.Run`` objects.
     """
-    sweep = wandb.Api().sweep(sweep_id)
+    sweep = wandb.Api().sweep(_resolve_sweep_id(sweep_id))
     if state is None:
         return list(sweep.runs)
     return [r for r in sweep.runs if r.state == state]
