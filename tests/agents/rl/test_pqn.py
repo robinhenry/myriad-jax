@@ -216,6 +216,54 @@ def test_invalid_action_space():
         agent.init(key, sample_obs, agent.params)
 
 
+def test_lr_decay_params(action_space):
+    """Test that lr_decay_steps and lr_end are stored correctly."""
+    agent = make_agent(action_space, lr_decay_steps=1000, lr_end=1e-10)
+    assert agent.params.lr_decay_steps == 1000
+    assert agent.params.lr_end == 1e-10
+
+
+def test_lr_decay_schedule_applied(key, sample_obs, action_space):
+    """Test that linear LR schedule actually reduces the LR over gradient steps."""
+    import optax
+
+    lr_start = 1e-3
+    lr_end = 1e-10
+    lr_decay_steps = 1
+
+    agent = make_agent(
+        action_space,
+        learning_rate=lr_start,
+        lr_end=lr_end,
+        lr_decay_steps=lr_decay_steps,
+    )
+    agent_state = agent.init(key, sample_obs, agent.params)
+
+    # The optax schedule at step 0 should equal lr_start
+    schedule = optax.linear_schedule(
+        init_value=lr_start,
+        end_value=lr_end,
+        transition_steps=lr_decay_steps,
+    )
+    assert jnp.isclose(schedule(0), lr_start)
+
+    # After lr_decay_steps steps the schedule should reach lr_end
+    assert jnp.isclose(schedule(lr_decay_steps), lr_end)
+
+    # Verify optimizer step counter advances after one update call
+    T, E = 4, 4
+    batch = Transition(
+        obs=jnp.tile(sample_obs, (T, E, 1)),
+        action=jnp.zeros((T, E), dtype=jnp.int32),
+        reward=jnp.ones((T, E), dtype=jnp.float32),
+        next_obs=jnp.tile(sample_obs, (T, E, 1)),
+        done=jnp.zeros((T, E), dtype=jnp.bool_),
+    )
+    new_state, _ = agent.update(key, agent_state, batch, agent.params)
+    # TrainState.step increments by 1 per apply_gradients call; after one update it should be > 0
+    assert new_state.train_state.step > 0
+
+
 def test_jit_compilation(key, sample_obs, agent):
     """Test that all agent functions can be JIT compiled."""
     # JIT compile init

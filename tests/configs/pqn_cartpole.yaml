@@ -1,0 +1,18 @@
+# @package _global_
+# Minimal PQN + CartPole config for use as a test base.
+agent:
+  name: pqn
+
+env:
+  name: cartpole-control
+
+run:
+  steps_per_env: 15625
+  num_envs: 32
+  rollout_steps: 2
+  eval_frequency: 10
+  eval_rollouts: 16
+  eval_max_steps: 500
+
+wandb:
+  enabled: false

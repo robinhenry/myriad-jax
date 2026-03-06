@@ -17,6 +17,7 @@ import numpy as np
 from myriad.agents.agent import AgentState
 from myriad.configs.default import EvalConfig
 
+from .display import format_eval_config
 from .initialization import initialize_environment_and_agent
 from .logging import SessionLogger
 from .metadata import RunMetadata
@@ -64,6 +65,8 @@ def evaluate(
         - Optional trajectory data (if return_episodes=True)
         - Metadata (num_episodes, seed)
     """
+    logger.info(format_eval_config(config))
+
     # Get or create output directory
     run_dir = get_or_create_output_dir(None)
 
@@ -71,6 +74,7 @@ def evaluate(
     # Create unified logger (handles W&B init/close automatically)
     session_logger = SessionLogger.for_evaluation(config, run_dir=run_dir)
 
+    exit_code = 0
     try:
         with RunMetadata(run_dir, run_type="evaluation"):
             # Extract evaluation settings
@@ -147,14 +151,17 @@ def evaluate(
                 save_episodes=save_episodes_to_disk_flag,
                 episode_save_count=save_count,
             )
-            session_logger.log_final(0)
 
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)
 
         logger.info(format_artifacts_tree(run_dir))
-
-        return results
-    except Exception:
-        session_logger.finalize()
+    except (KeyboardInterrupt, SystemExit):
+        raise  # intentional stop — exit_code stays 0
+    except BaseException:
+        exit_code = 1
         raise
+    finally:
+        session_logger.finalize(exit_code=exit_code)
+
+    return results

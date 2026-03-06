@@ -1,0 +1,26 @@
+# @package _global_
+# Fixed training config for the PQN ccasr sweep.
+# Swept hyperparameters are injected on top of this by the W&B agent.
+
+agent:
+  name: pqn
+  epsilon_start: 1.0
+  reward_scale: 0.1
+  lr_end: 0.0
+
+env:
+  name: ccasr-gfp-control
+  frame_stack_n: 16
+
+run:
+  seed: 0
+  num_envs: 1024  # overridden per level by `myriad sweep-create --levels ...`
+  steps_per_env: 5040
+  eval_frequency: 504
+  eval_rollouts: 16
+  eval_max_steps: 288
+
+wandb:
+  project: myriad-ccasr-gfp-v1
+  mode: online
+  group: pqn_ccasr  # base name; myriad sweep-create appends _{level} per sweep

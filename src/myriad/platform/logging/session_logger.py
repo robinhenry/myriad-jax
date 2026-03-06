@@ -37,7 +37,8 @@ class SessionLogger:
         >>> logger = SessionLogger.for_training(config)
         >>> logger.log_training_step(...)
         >>> logger.log_evaluation(..., save_episodes=True)
-        >>> training_metrics, eval_metrics = logger.finalize()
+        >>> training_metrics, eval_metrics = logger.get_results()
+        >>> logger.finalize()
     """
 
     def __init__(
@@ -79,7 +80,9 @@ class SessionLogger:
         wandb_run = init_wandb(config)
         if run_dir is None:
             run_dir = Path.cwd()  # Hydra sets this to the output dir
-        return cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
+        logger = cls(wandb_run=wandb_run, run_dir=run_dir, seed=config.run.seed)
+        logger._wandb.log_run_summary(config)
+        return logger
 
     @classmethod
     def for_evaluation(cls, config: EvalConfig, run_dir: Path | None = None) -> "SessionLogger":
@@ -185,22 +188,18 @@ class SessionLogger:
 
     # --- Lifecycle ---
 
-    def log_final(self, total_env_steps: int) -> None:
-        """Log final training completion.
+    def get_results(self) -> tuple[TrainingMetrics, EvaluationMetrics]:
+        """Return captured metrics without closing the session."""
+        return self._memory.get_results()
+
+    def finalize(self, exit_code: int = 0) -> None:
+        """Close the W&B run.
 
         Args:
-            total_env_steps: Total environment steps completed
+            exit_code: 0 for clean/intentional exit (finished, killed by sweep agent,
+                user-stopped), 1 for unexpected failure (OOM, crash).
         """
-        self._wandb.log_final(total_env_steps)
-
-    def finalize(self) -> tuple[TrainingMetrics, EvaluationMetrics]:
-        """Finalize session: close W&B and return captured metrics.
-
-        Returns:
-            Tuple of (training_metrics, eval_metrics)
-        """
-        self._wandb.finish()
-        return self._memory.get_results()
+        self._wandb.finish(exit_code=exit_code)
 
     # --- Video Rendering ---
 

@@ -1,0 +1,3 @@
+# @package _global_
+# Myriad package-internal Hydra entry point. No defaults — always pass a config explicitly,
+# either via MYRIAD_CONFIG_PATH + --config-name, or as parameter overrides.

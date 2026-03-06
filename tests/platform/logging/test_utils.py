@@ -19,19 +19,18 @@ def test_prepare_metrics_host_handles_invalid_inputs():
     assert utils.prepare_metrics_host({"loss": jnp.ones(3)}, 0) == {}
 
 
-def test_build_train_payload_uses_last_value():
+def test_build_train_payload_uses_mean_for_scalars():
     metrics_host = {"loss": np.array([0.2, 0.4], dtype=np.float32)}
     payload = utils.build_train_payload(metrics_host)
-    assert payload == {"train/loss": pytest.approx(0.4)}
+    assert payload == {"train/loss": pytest.approx(0.3)}
 
 
-def test_build_train_payload_expands_vector_metric():
+def test_build_train_payload_collapses_vector_metric_to_mean():
+    # All agent metrics are pre-reduced scalars; if a 2D array somehow arrives,
+    # nanmean collapses it fully to a single scalar (no mean/std/min/max expansion).
     metrics_host = {"advantage": np.array([[1.0, 3.0], [2.0, 6.0]], dtype=np.float32)}
     payload = utils.build_train_payload(metrics_host)
-    assert payload["train/advantage/mean"] == pytest.approx(4.0)
-    assert payload["train/advantage/std"] == pytest.approx(2.0)
-    assert payload["train/advantage/max"] == pytest.approx(6.0)
-    assert payload["train/advantage/min"] == pytest.approx(2.0)
+    assert payload == {"train/advantage": pytest.approx(3.0)}
 
 
 def test_summarize_metric_supports_scalar_and_bool():

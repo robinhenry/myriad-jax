@@ -1,0 +1,77 @@
+project: myriad-ccasr-gfp-v1
+program: myriad
+command:
+  - ${env}
+  - ${program}
+  - sweep
+  - --config-name=pqn_ccasr
+run_cap: 200
+method: bayes
+metric:
+  name: eval/return/best
+  goal: maximize
+early_terminate:
+  type: hyperband
+  # min_iter is in logged-metric iterations. With eval_frequency=504 and
+  # steps_per_env=5040, each run logs 10 eval points total. min_iter=2 means
+  # the first cull can happen after 2 logged values (~20% of training).
+  min_iter: 2
+  eta: 3
+  s: 2
+
+parameters:
+  # === SWEEP: PQN hyperparameters ===
+  run.rollout_steps:
+    distribution: categorical
+    values: [1, 4, 8]
+
+  agent.learning_rate:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-2
+
+  agent.gamma:
+    distribution: uniform
+    min: 0.95
+    max: 0.999
+
+  agent.lambda_:
+    distribution: uniform
+    min: 0.1
+    max: 0.7
+
+  agent.epsilon_end:
+    distribution: log_uniform_values
+    min: 5.0e-4
+    max: 0.05
+
+  agent.epsilon_decay_fraction:
+    distribution: uniform
+    min: 0.05
+    max: 0.4
+
+  agent.hidden_size:
+    distribution: categorical
+    values: [128, 256, 512]
+
+  agent.num_layers:
+    distribution: categorical
+    values: [1, 2, 3]
+
+  agent.num_epochs:
+    distribution: categorical
+    values: [4, 8, 16]
+
+  agent.num_minibatches:
+    distribution: categorical
+    values: [4, 8, 16]
+
+  agent.max_grad_norm:
+    distribution: log_uniform_values
+    min: 0.1
+    max: 2.0
+
+  agent.lr_decay_fraction:
+    distribution: uniform
+    min: 0.5
+    max: 1.0

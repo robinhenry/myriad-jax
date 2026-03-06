@@ -34,7 +34,7 @@ def summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
         value: Metric value (scalar or array)
 
     Returns:
-        Dictionary of scalar statistics (mean, std, min, max for arrays)
+        Dictionary of scalar statistics: mean, std, min, max for arrays; bare scalar otherwise.
     """
     try:
         array = np.asarray(value)
@@ -65,10 +65,8 @@ def summarize_metric(prefix: str, name: str, value: Any) -> dict[str, float]:
     return {
         f"{prefix}{name}/mean": mean,
         f"{prefix}{name}/std": std,
-        f"{prefix}{name}/mean-std": mean - std,
-        f"{prefix}{name}/mean+std": mean + std,
-        f"{prefix}{name}/max": float(np.nanmax(array)),
         f"{prefix}{name}/min": float(np.nanmin(array)),
+        f"{prefix}{name}/max": float(np.nanmax(array)),
     }
 
 
@@ -84,6 +82,8 @@ def build_train_payload(metrics_host: dict[str, Any]) -> dict[str, float]:
     payload: dict[str, float] = {}
     for name, history in metrics_host.items():
         if hasattr(history, "__getitem__") and len(history) > 0:
-            value = history[-1]
+            # Mean over the chunk reduces per-step noise while remaining accurate
+            # for smooth monotone metrics (lr, epsilon).
+            value: Any = float(np.nanmean(np.asarray(history, dtype=np.float64)))
             payload.update(summarize_metric("train/", name, value))
     return payload

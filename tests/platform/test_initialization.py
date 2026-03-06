@@ -159,3 +159,81 @@ def test_epsilon_decay_fraction_resolved(monkeypatch):
 
     assert "epsilon_decay_fraction" not in captured_kwargs
     assert captured_kwargs["epsilon_decay_steps"] == 500
+
+
+def test_lr_decay_fraction_resolved(monkeypatch):
+    """lr_decay_fraction is converted to lr_decay_steps at init time."""
+    from myriad.agents import registration as agent_reg
+
+    captured_kwargs: dict = {}
+
+    def _capturing_make_fn(*, action_space, **kwargs):
+        captured_kwargs.update(kwargs)
+        return Agent(
+            params=_AgentParams(action_space=action_space),
+            init=_agent_init,
+            select_action=_agent_select_action,
+            update=_agent_update,
+        )
+
+    monkeypatch.setitem(
+        agent_reg._AGENT_REGISTRY,
+        "test-capturing-agent-lr",
+        agent_reg.AgentInfo(name="test-capturing-agent-lr", make_fn=_capturing_make_fn),
+    )
+
+    # lr_decay_steps = fraction * (steps_per_env / rollout_steps) * num_epochs * num_minibatches
+    # = 0.5 * (1000/10) * 4 * 2 = 0.5 * 100 * 8 = 400
+    config = Config(
+        run=RunConfig(
+            steps_per_env=1000,
+            rollout_steps=10,
+            eval_frequency=100,
+            eval_rollouts=1,
+            eval_max_steps=5,
+        ),
+        agent=AgentConfig(
+            name="test-capturing-agent-lr",
+            lr_decay_fraction=0.5,
+            num_minibatches=2,
+            num_epochs=4,
+        ),
+        env=EnvConfig(name="test-env-with-dt"),
+    )
+
+    initialize_environment_and_agent(config)
+
+    assert "lr_decay_fraction" not in captured_kwargs
+    assert captured_kwargs["lr_decay_steps"] == 400
+
+
+def test_frame_stack_n_wraps_environment(monkeypatch):
+    """frame_stack_n > 0 should apply the FrameStackWrapper to the environment."""
+    from myriad.agents import registration as agent_reg
+
+    monkeypatch.setitem(
+        agent_reg._AGENT_REGISTRY,
+        "test-agent-frame-stack",
+        agent_reg.AgentInfo(
+            name="test-agent-frame-stack",
+            make_fn=lambda *, action_space, **__: Agent(
+                params=_AgentParams(action_space=action_space),
+                init=_agent_init,
+                select_action=_agent_select_action,
+                update=_agent_update,
+            ),
+        ),
+    )
+
+    config = EvalConfig(
+        run=EvalRunConfig(seed=0, eval_rollouts=1, eval_max_steps=5),
+        agent=AgentConfig(name="test-agent-frame-stack"),
+        env=EnvConfig(name="test-env-with-dt", frame_stack_n=3),
+        wandb=WandbConfig(enabled=False),
+    )
+
+    env, agent, _ = initialize_environment_and_agent(config)
+
+    # Stacked obs shape should be (n_frames * base_obs_dim,) = (3 * 2,) = (6,)
+    obs_shape = env.get_obs_shape(env.config)
+    assert obs_shape == (6,)

@@ -25,6 +25,30 @@ def _drop_none(values: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
 
 
+def _to_flat_config(config: Config | EvalConfig) -> dict[str, Any]:
+    """Flatten a nested config dict to dot-notation keys for W&B.
+
+    Converts {"agent": {"learning_rate": 0.001}} to {"agent.learning_rate": 0.001},
+    matching the flat dotted-key format the W&B sweep agent uses. Excludes the
+    "wandb" sub-config (meta-config, not experiment config).
+    """
+    raw = config.model_dump()
+    raw.pop("wandb", None)
+    return _flatten_config(raw)
+
+
+def _flatten_config(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Recursively flatten a nested dict to dot-separated keys."""
+    out: dict[str, Any] = {}
+    for key, value in d.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(_flatten_config(value, full_key))
+        else:
+            out[full_key] = value
+    return out
+
+
 class WandbBackend:
     """Backend for logging to Weights & Biases.
 
@@ -42,6 +66,28 @@ class WandbBackend:
         """
         self.wandb_run = wandb_run
         self.use_wandb = wandb_run is not None and wandb is not None
+        self._best_eval_return: float = float("-inf")
+
+        if self.use_wandb:
+            # Declare steps/env as the x-axis for all train/* and eval/* charts.
+            # hidden=True prevents it from appearing as its own noise chart in the UI.
+            wandb.define_metric("steps/env", hidden=True)  # type: ignore[union-attr]
+            wandb.define_metric("train/*", step_metric="steps/env")  # type: ignore[union-attr]
+            wandb.define_metric("eval/*", step_metric="steps/env")  # type: ignore[union-attr]
+            # eval metrics are two levels deep; W&B only supports single-level glob suffixes.
+            wandb.define_metric("eval/return/*", step_metric="steps/env")  # type: ignore[union-attr]
+            wandb.define_metric("eval/length/*", step_metric="steps/env")  # type: ignore[union-attr]
+            # Secondary metrics: always logged but hidden by default to keep charts clean.
+            for _metric in [
+                "eval/return/std",
+                "eval/return/min",
+                "eval/return/max",
+                "eval/length/std",
+                "eval/length/min",
+                "eval/length/max",
+                "eval/termination_rate",
+            ]:
+                wandb.define_metric(_metric, step_metric="steps/env", hidden=True)  # type: ignore[union-attr]
 
     @property
     def local_dir(self) -> Path | None:
@@ -60,37 +106,36 @@ class WandbBackend:
     def log_training(
         self,
         metrics_host: dict[str, Any],
-        global_step: int,
+        _global_step: int,
         steps_per_env: int,
     ) -> None:
         """Send training metrics to W&B.
 
         Args:
             metrics_host: Raw metrics dictionary
-            global_step: Global environment steps
-            steps_per_env: Steps per individual environment
+            _global_step: Unused; kept for API compatibility with callers
+            steps_per_env: Steps per individual environment (used as W&B x-axis step)
         """
         if not self.use_wandb:
             return
 
         train_payload = build_train_payload(metrics_host)
         if train_payload:
-            train_payload["train/global_env_steps"] = float(global_step)
-            train_payload["train/steps_per_env"] = float(steps_per_env)
-            wandb.log(train_payload, step=global_step)  # type: ignore[union-attr]
+            train_payload["steps/env"] = steps_per_env
+            wandb.log(train_payload, step=steps_per_env)  # type: ignore[union-attr]
 
     def log_evaluation(
         self,
         eval_results: dict[str, Any],
-        global_step: int,
+        _global_step: int,
         steps_per_env: int,
     ) -> None:
         """Send evaluation metrics to W&B.
 
         Args:
             eval_results: Dictionary with 'episode_return', 'episode_length', 'dones'
-            global_step: Global environment steps
-            steps_per_env: Steps per individual environment
+            _global_step: Unused; kept for API compatibility with callers
+            steps_per_env: Steps per individual environment (used as W&B x-axis step)
         """
         if not self.use_wandb:
             return
@@ -102,20 +147,27 @@ class WandbBackend:
         eval_dones = eval_results.get("dones")
 
         if eval_returns is not None:
-            eval_payload.update(summarize_metric("eval/", "episode_return", eval_returns))
+            eval_payload.update(summarize_metric("eval/", "return", eval_returns))
 
         if eval_lengths is not None:
-            eval_payload.update(summarize_metric("eval/", "episode_length", eval_lengths))
+            eval_payload.update(summarize_metric("eval/", "length", eval_lengths))
 
         if eval_dones is not None:
-            termination_rate = float(np.asarray(eval_dones, dtype=np.float32).mean())
-            eval_payload["eval/termination_rate"] = termination_rate
-            eval_payload["eval/non_termination_rate"] = float(1.0 - termination_rate)
+            eval_payload["eval/termination_rate"] = float(np.asarray(eval_dones, dtype=np.float32).mean())
 
         if eval_payload:
-            eval_payload["eval/global_env_steps"] = float(global_step)
-            eval_payload["eval/steps_per_env"] = float(steps_per_env)
-            wandb.log(eval_payload, step=global_step)  # type: ignore[union-attr]
+            eval_payload["steps/env"] = steps_per_env
+            wandb.log(eval_payload, step=steps_per_env)  # type: ignore[union-attr]
+
+        # Track best-ever mean eval return as a summary key. Sweep agents and the
+        # runs table use this instead of the last logged value.
+        current_mean = eval_payload.get("eval/return/mean")
+        if current_mean is not None and current_mean > self._best_eval_return:
+            self._best_eval_return = current_mean
+            try:
+                self.wandb_run.summary["eval/return/best"] = self._best_eval_return  # type: ignore[union-attr]
+            except (AttributeError, TypeError):
+                pass
 
     def log_episodes(self, episode_dir: Path, global_step: int) -> None:
         """Log saved episodes to W&B as artifacts.
@@ -217,19 +269,35 @@ class WandbBackend:
         except Exception as e:
             print(f"Warning: Failed to log videos to W&B: {e}")
 
-    def log_final(self, total_env_steps: int) -> None:
-        """Send final completion metrics to W&B.
+    def log_run_summary(self, config: Config) -> None:
+        """Write key config values to W&B summary for easy runs-table visibility.
+
+        Values written to wandb.run.summary appear as columns in the W&B runs table
+        by default, making it easy to filter/sort runs by config parameters.
 
         Args:
-            total_env_steps: Total environment steps completed
+            config: Training configuration
         """
-        if self.use_wandb:
-            wandb.log({"train/final_env_steps": float(total_env_steps)}, step=total_env_steps)  # type: ignore[union-attr]
+        if not self.use_wandb or self.wandb_run is None:
+            return
+        try:
+            self.wandb_run.summary.update(
+                {
+                    "cfg/num_envs": config.run.num_envs,
+                    "cfg/steps_per_env": config.run.steps_per_env,
+                    "cfg/rollout_steps": config.run.rollout_steps,
+                    "cfg/eval_rollouts": config.run.eval_rollouts,
+                    "cfg/agent": config.agent.name,
+                    "cfg/env": config.env.name,
+                }
+            )
+        except (AttributeError, TypeError):
+            pass  # Gracefully skip if wandb_run doesn't support summary (e.g. in tests)
 
-    def finish(self) -> None:
+    def finish(self, exit_code: int = 0) -> None:
         """Close the W&B run."""
         if self.use_wandb and wandb is not None:
-            wandb.finish()
+            wandb.finish(exit_code=exit_code)
 
 
 def init_wandb(config: Config | EvalConfig) -> Any | None:
@@ -252,6 +320,16 @@ def init_wandb(config: Config | EvalConfig) -> Any | None:
         )
         raise RuntimeError(message) from _wandb_import_error
 
+    # If a run is already active (e.g. sweep_main called wandb.init() to read
+    # wandb.config), reuse it and add only the keys the sweep agent didn't set.
+    # Sweep-controlled keys are locked and will warn if we try to overwrite them.
+    if wandb.run is not None:
+        existing = set(dict(wandb.run.config).keys())
+        new_keys = {k: v for k, v in _to_flat_config(config).items() if k not in existing}
+        if new_keys:
+            wandb.run.config.update(new_keys)
+        return wandb.run
+
     init_kwargs: dict[str, Any] = _drop_none(
         {
             "project": wandb_config.project,
@@ -269,6 +347,6 @@ def init_wandb(config: Config | EvalConfig) -> Any | None:
     if wandb_config.tags:
         init_kwargs["tags"] = list(wandb_config.tags)
 
-    init_kwargs["config"] = config.model_dump()
+    init_kwargs["config"] = _to_flat_config(config)
 
     return wandb.init(**init_kwargs)

@@ -3,8 +3,6 @@
 This module provides common initialization functions used by both training and evaluation.
 """
 
-from __future__ import annotations
-
 from myriad.agents import make_agent
 from myriad.agents.agent import Agent
 from myriad.configs.default import Config, EvalConfig
@@ -30,7 +28,12 @@ def initialize_environment_and_agent(
     """
     # Create the environment
     env_kwargs = get_factory_kwargs(config.env)
+    frame_stack_n = env_kwargs.pop("frame_stack_n", 0)
     env = make_env(config.env.name, **env_kwargs)
+    if frame_stack_n > 0:
+        from myriad.envs.wrappers import make_frame_stack_env
+
+        env = make_frame_stack_env(env, n_frames=frame_stack_n)
 
     # Create the agent
     agent_kwargs = get_factory_kwargs(config.agent)
@@ -42,6 +45,23 @@ def initialize_environment_and_agent(
         steps_per_env = getattr(config.run, "steps_per_env", None)
         if steps_per_env is not None:
             agent_kwargs["epsilon_decay_steps"] = max(1, int(fraction * steps_per_env))
+
+    # Resolve lr_decay_fraction → lr_decay_steps
+    if "lr_decay_fraction" in agent_kwargs:
+        fraction = agent_kwargs.pop("lr_decay_fraction")
+        steps_per_env = getattr(config.run, "steps_per_env", None)
+        rollout_steps = getattr(config.run, "rollout_steps", None)
+        num_minibatches = agent_kwargs.get("num_minibatches")
+        num_epochs = agent_kwargs.get("num_epochs")
+        if (
+            steps_per_env is not None
+            and rollout_steps is not None
+            and num_minibatches is not None
+            and num_epochs is not None
+        ):
+            num_updates = steps_per_env / rollout_steps
+            total_grad_steps = num_updates * num_minibatches * num_epochs
+            agent_kwargs["lr_decay_steps"] = max(1, int(fraction * total_grad_steps))
 
     # Auto-inject dt from environment config if agent doesn't have it
     if "dt" not in agent_kwargs:

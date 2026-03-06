@@ -10,7 +10,8 @@ Usage:
     logger = SessionLogger.for_training(config)
     logger.log_training_step(global_step, steps_per_env, metrics_history, steps_this_chunk)
     logger.log_evaluation(global_step, steps_per_env, eval_results, save_episodes=True)
-    training_metrics, eval_metrics = logger.finalize()
+    training_metrics, eval_metrics = logger.get_results()
+    logger.finalize()  # or logger.finalize(exit_code=1) on error
 
     # For evaluation-only
     logger = SessionLogger.for_evaluation(config)

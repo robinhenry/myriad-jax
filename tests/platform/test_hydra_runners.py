@@ -9,12 +9,14 @@ import pytest
 from omegaconf import OmegaConf
 
 from myriad.configs.default import AgentConfig, EnvConfig, EvalConfig, EvalRunConfig, WandbConfig
+from myriad.platform.display import (
+    _fmt_fields,
+    format_eval_config as _format_eval_config,
+    format_eval_results as _format_eval_results,
+    format_train_config as _format_train_config,
+)
 from myriad.platform.hydra_runners import (
     _apply_auto_tune,
-    _fmt_fields,
-    _format_eval_config,
-    _format_eval_results,
-    _format_train_config,
     _get_config_path,
 )
 
@@ -192,3 +194,34 @@ class TestGetConfigPath:
         result = _get_config_path()
         # Should resolve to an existing path (repo configs/ dir)
         assert Path(result).exists() or result == "../configs"
+
+
+class TestConfigureLogging:
+    def test_sets_custom_formatter_on_handlers(self):
+        """_configure_logging should install timestamp+level formatter on root handlers."""
+        import logging
+
+        from myriad.platform.hydra_runners import _configure_logging
+
+        handler = logging.StreamHandler()
+        logging.root.addHandler(handler)
+        try:
+            _configure_logging()
+            assert handler.formatter is not None
+            assert "%(asctime)s" in handler.formatter._fmt
+            assert "%(levelname)s" in handler.formatter._fmt
+        finally:
+            logging.root.removeHandler(handler)
+
+
+class TestFormatEvalConfigWithPath:
+    def test_config_path_appears_in_output(self):
+        """format_eval_config with config_path should include the path in the output."""
+        config = EvalConfig(
+            agent=AgentConfig(name="random"),
+            env=EnvConfig(name="cartpole-control"),
+            run=EvalRunConfig(),
+            wandb=WandbConfig(enabled=False),
+        )
+        result = _format_eval_config(config, config_path="/some/config/path.yaml")
+        assert "/some/config/path.yaml" in result

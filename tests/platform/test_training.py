@@ -55,6 +55,7 @@ class _WandbStub:
         self.init_kwargs: dict | None = None
         self.logs: list[tuple[dict[str, float], int | None]] = []
         self.finish_called = False
+        self.run = None  # init_wandb checks `wandb.run is not None` to detect active runs
 
     def init(self, **kwargs):
         self.init_kwargs = kwargs
@@ -63,7 +64,10 @@ class _WandbStub:
     def log(self, payload: dict[str, float], step: int | None = None):
         self.logs.append((payload, step))
 
-    def finish(self):
+    def define_metric(self, *args, **kwargs):
+        pass
+
+    def finish(self, exit_code: int = 0):
         self.finish_called = True
 
 
@@ -361,13 +365,20 @@ def test_run_training_loop_with_wandb_logs(wandb_stub):
     training._run_training_loop(config, session_logger, Path.cwd())
 
     assert wandb_stub.init_kwargs is not None
-    assert wandb_stub.init_kwargs["config"]["run"]["seed"] == 0
-    assert any("train/global_env_steps" in payload for payload, _ in wandb_stub.logs)
-    eval_logged = any(any("eval/episode_return" in name for name in payload) for payload, _ in wandb_stub.logs)
+    assert wandb_stub.init_kwargs["config"]["run.seed"] == 0
+    # train/global_env_steps and train/steps_per_env are removed; steps_per_env is now the x-axis
+    assert any("train/loss" in payload for payload, _ in wandb_stub.logs)
+    # Eval payload now contains band-chart metrics under eval/return/*
+    eval_logged = any(any("eval/return" in name for name in payload) for payload, _ in wandb_stub.logs)
     assert eval_logged is True
-    final_payload, final_step = wandb_stub.logs[-1]
-    assert final_payload == {"train/final_env_steps": float(config.run.total_timesteps)}
-    assert final_step == config.run.total_timesteps
+    # Verify eval uses steps_per_env as the WandB step (not global_env_steps).
+    # With num_envs=2, global_env_steps would be 2x larger than steps_per_env.
+    eval_steps = [step for payload, step in wandb_stub.logs if any("eval/return" in k for k in payload)]
+    assert eval_steps, "Expected at least one eval log"
+    assert max(eval_steps) == config.run.steps_per_env  # final eval step == steps_per_env, not total_timesteps
+    assert all(step <= config.run.steps_per_env for step in eval_steps)
+    # train/final_env_steps is removed — run completion is captured by wandb.finish()
+    assert not any("train/final_env_steps" in payload for payload, _ in wandb_stub.logs)
 
 
 def test_train_and_evaluate_calls_finish(wandb_stub):
@@ -1075,3 +1086,87 @@ def test_eval_frequency_zero_auto_computes_chunk_size_to_steps_per_env():
         seed=0,
     )
     assert run_cfg.scan_chunk_size == 50
+
+
+# ========================================================================================
+# Error handling in train_and_evaluate
+# ========================================================================================
+
+
+def test_train_and_evaluate_reraises_base_exception(monkeypatch):
+    """train_and_evaluate() should re-raise unexpected exceptions after finalization."""
+    config = _create_config(run_overrides={"steps_per_env": 2, "eval_frequency": 2})
+
+    class _Boom(Exception):
+        pass
+
+    monkeypatch.setattr(training, "_run_training_loop", lambda *a, **kw: (_ for _ in ()).throw(_Boom("oops")))
+
+    with pytest.raises(_Boom):
+        training.train_and_evaluate(config)
+
+
+def test_train_and_evaluate_reraises_keyboard_interrupt(monkeypatch):
+    """train_and_evaluate() should re-raise KeyboardInterrupt without treating it as error."""
+    config = _create_config(run_overrides={"steps_per_env": 2, "eval_frequency": 2})
+
+    monkeypatch.setattr(
+        training,
+        "_run_training_loop",
+        lambda *a, **kw: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        training.train_and_evaluate(config)
+
+
+# ========================================================================================
+# Final log when steps_completed does not land on eval_frequency boundary
+# ========================================================================================
+
+
+def test_final_training_log_emitted_when_steps_not_on_boundary():
+    """When steps_per_env is not divisible by eval_frequency, a final log should be emitted."""
+    # steps_per_env=9, eval_frequency=4 → logs at 4, 8, and a final log at 9
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 9,
+            "num_envs": 1,
+            "eval_frequency": 4,
+            "scan_chunk_size": 4,
+            "buffer_size": 16,
+            "batch_size": 2,
+        }
+    )
+
+    results = training.train_and_evaluate(config)
+
+    # Training should reach exactly 9 steps per env
+    assert results.training_metrics.steps_per_env[-1] == 9
+    # Should have 3 log entries: at steps 4, 8, and the final at 9
+    assert len(results.training_metrics.steps_per_env) == 3
+    assert results.training_metrics.steps_per_env == [4, 8, 9]
+
+
+def test_episode_saves_during_training(tmp_path, monkeypatch):
+    """Training with eval_episode_save_frequency > 0 should save episodes to disk."""
+    monkeypatch.chdir(tmp_path)
+
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 4,
+            "num_envs": 1,
+            "eval_frequency": 4,
+            "scan_chunk_size": 4,
+            "eval_episode_save_frequency": 4,
+            "eval_episode_save_count": 1,
+            "eval_rollouts": 1,
+        }
+    )
+
+    results = training.train_and_evaluate(config)
+
+    # Episodes directory should have been created
+    assert results.run_dir is not None
+    episodes_dir = results.run_dir / "episodes"
+    assert episodes_dir.exists()
