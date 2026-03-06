@@ -1086,3 +1086,87 @@ def test_eval_frequency_zero_auto_computes_chunk_size_to_steps_per_env():
         seed=0,
     )
     assert run_cfg.scan_chunk_size == 50
+
+
+# ========================================================================================
+# Error handling in train_and_evaluate
+# ========================================================================================
+
+
+def test_train_and_evaluate_reraises_base_exception(monkeypatch):
+    """train_and_evaluate() should re-raise unexpected exceptions after finalization."""
+    config = _create_config(run_overrides={"steps_per_env": 2, "eval_frequency": 2})
+
+    class _Boom(Exception):
+        pass
+
+    monkeypatch.setattr(training, "_run_training_loop", lambda *a, **kw: (_ for _ in ()).throw(_Boom("oops")))
+
+    with pytest.raises(_Boom):
+        training.train_and_evaluate(config)
+
+
+def test_train_and_evaluate_reraises_keyboard_interrupt(monkeypatch):
+    """train_and_evaluate() should re-raise KeyboardInterrupt without treating it as error."""
+    config = _create_config(run_overrides={"steps_per_env": 2, "eval_frequency": 2})
+
+    monkeypatch.setattr(
+        training,
+        "_run_training_loop",
+        lambda *a, **kw: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        training.train_and_evaluate(config)
+
+
+# ========================================================================================
+# Final log when steps_completed does not land on eval_frequency boundary
+# ========================================================================================
+
+
+def test_final_training_log_emitted_when_steps_not_on_boundary():
+    """When steps_per_env is not divisible by eval_frequency, a final log should be emitted."""
+    # steps_per_env=9, eval_frequency=4 → logs at 4, 8, and a final log at 9
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 9,
+            "num_envs": 1,
+            "eval_frequency": 4,
+            "scan_chunk_size": 4,
+            "buffer_size": 16,
+            "batch_size": 2,
+        }
+    )
+
+    results = training.train_and_evaluate(config)
+
+    # Training should reach exactly 9 steps per env
+    assert results.training_metrics.steps_per_env[-1] == 9
+    # Should have 3 log entries: at steps 4, 8, and the final at 9
+    assert len(results.training_metrics.steps_per_env) == 3
+    assert results.training_metrics.steps_per_env == [4, 8, 9]
+
+
+def test_episode_saves_during_training(tmp_path, monkeypatch):
+    """Training with eval_episode_save_frequency > 0 should save episodes to disk."""
+    monkeypatch.chdir(tmp_path)
+
+    config = _create_config(
+        run_overrides={
+            "steps_per_env": 4,
+            "num_envs": 1,
+            "eval_frequency": 4,
+            "scan_chunk_size": 4,
+            "eval_episode_save_frequency": 4,
+            "eval_episode_save_count": 1,
+            "eval_rollouts": 1,
+        }
+    )
+
+    results = training.train_and_evaluate(config)
+
+    # Episodes directory should have been created
+    assert results.run_dir is not None
+    episodes_dir = results.run_dir / "episodes"
+    assert episodes_dir.exists()

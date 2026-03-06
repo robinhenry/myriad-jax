@@ -361,3 +361,32 @@ class TestEvaluateIntegration:
         # Should work just like EvalConfig
         assert results.num_episodes == test_training_config.run.eval_rollouts
         assert results.episodes is not None
+
+
+class TestEvaluateErrorHandling:
+    """Tests for error handling in evaluate()."""
+
+    def test_base_exception_is_reraised(self, test_eval_config, monkeypatch):
+        """evaluate() should re-raise unexpected exceptions after cleanup."""
+        from myriad.platform import evaluation as eval_module
+
+        class _Boom(Exception):
+            pass
+
+        monkeypatch.setattr(eval_module, "initialize_environment_and_agent", lambda _: (_ for _ in ()).throw(_Boom()))
+
+        with pytest.raises(_Boom):
+            evaluate(test_eval_config)
+
+    def test_keyboard_interrupt_is_reraised(self, test_eval_config, monkeypatch):
+        """evaluate() should re-raise KeyboardInterrupt without treating it as an error."""
+        from myriad.platform import evaluation as eval_module
+
+        monkeypatch.setattr(
+            eval_module,
+            "initialize_environment_and_agent",
+            lambda _: (_ for _ in ()).throw(KeyboardInterrupt()),
+        )
+
+        with pytest.raises(KeyboardInterrupt):
+            evaluate(test_eval_config)

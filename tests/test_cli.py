@@ -114,3 +114,218 @@ def test_render_directory(runner, tmp_path, caplog):
             assert result.exit_code == 0
             assert "Found 3 episode(s) to render" in caplog.text
             assert mock_render.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# sweep-create CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_sweep_create_help(runner):
+    """sweep-create --help should show usage info."""
+    result = runner.invoke(main, ["sweep-create", "--help"])
+    assert result.exit_code == 0
+    assert "YAML_PATH" in result.output
+
+
+def test_sweep_create_single_sweep(runner, tmp_path):
+    """sweep-create with a single sweep should print the sweep ID to stdout."""
+    from unittest.mock import patch
+
+    import yaml
+
+    sweep_yaml = tmp_path / "sweep.yaml"
+    sweep_yaml.write_text(yaml.dump({"method": "random", "parameters": {}}))
+
+    with patch("myriad.platform.sweep.create_wandb_sweeps", return_value=["ent/proj/abc123"]):
+        result = runner.invoke(main, ["sweep-create", str(sweep_yaml), "--project", "my-project"])
+
+    assert result.exit_code == 0
+    assert "ent/proj/abc123" in result.output
+
+
+def test_sweep_create_with_levels(runner, tmp_path):
+    """sweep-create --levels should print one sweep ID per level to stdout."""
+    from unittest.mock import patch
+
+    import yaml
+
+    sweep_yaml = tmp_path / "sweep.yaml"
+    sweep_yaml.write_text(yaml.dump({"method": "random", "parameters": {}}))
+
+    with patch(
+        "myriad.platform.sweep.create_wandb_sweeps",
+        return_value=["ent/proj/s1", "ent/proj/s2"],
+    ):
+        result = runner.invoke(
+            main,
+            [
+                "sweep-create",
+                str(sweep_yaml),
+                "--project",
+                "my-project",
+                "--levels",
+                "512",
+                "--levels",
+                "1024",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert "ent/proj/s1" in result.output
+    assert "ent/proj/s2" in result.output
+
+
+def test_sweep_create_error_exits_nonzero(runner, tmp_path):
+    """sweep-create should exit with code 1 on RuntimeError from create_wandb_sweeps."""
+    from unittest.mock import patch
+
+    import yaml
+
+    sweep_yaml = tmp_path / "sweep.yaml"
+    sweep_yaml.write_text(yaml.dump({"method": "random", "parameters": {}}))
+
+    with patch(
+        "myriad.platform.sweep.create_wandb_sweeps",
+        side_effect=RuntimeError("wandb sweep failed"),
+    ):
+        result = runner.invoke(main, ["sweep-create", str(sweep_yaml), "--project", "p"])
+
+    assert result.exit_code == 1
+
+
+def test_sweep_create_project_from_yaml(runner, tmp_path):
+    """sweep-create without --project should still work when YAML has 'project' field."""
+    from unittest.mock import patch
+
+    import yaml
+
+    sweep_yaml = tmp_path / "sweep.yaml"
+    sweep_yaml.write_text(yaml.dump({"method": "random", "project": "yaml-proj", "parameters": {}}))
+
+    with patch(
+        "myriad.platform.sweep.create_wandb_sweeps",
+        return_value=["ent/yaml-proj/s1"],
+    ) as mock_create:
+        result = runner.invoke(main, ["sweep-create", str(sweep_yaml)])
+
+    assert result.exit_code == 0
+    # project arg should be None (falling back to YAML)
+    assert mock_create.call_args[0][1] is None
+
+
+def test_sweep_create_parses_float_and_str_levels(runner, tmp_path):
+    """sweep-create should parse float and non-numeric string level values correctly."""
+    from unittest.mock import patch
+
+    import yaml
+
+    sweep_yaml = tmp_path / "sweep.yaml"
+    sweep_yaml.write_text(yaml.dump({"method": "random", "parameters": {}}))
+
+    captured_levels: list = []
+
+    def fake_create(yaml_path, project, *, levels=None, **kwargs):
+        if levels:
+            captured_levels.extend(levels)
+        return [f"ent/proj/s{i}" for i in range(len(levels or [None]))]
+
+    with patch("myriad.platform.sweep.create_wandb_sweeps", side_effect=fake_create):
+        result = runner.invoke(
+            main,
+            [
+                "sweep-create",
+                str(sweep_yaml),
+                "--project",
+                "p",
+                "--levels",
+                "1.5",  # float
+                "--levels",
+                "small",  # string
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert 1.5 in captured_levels
+    assert "small" in captured_levels
+
+
+# ---------------------------------------------------------------------------
+# seed-eval CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_seed_eval_help(runner):
+    """seed-eval --help should show usage info."""
+    result = runner.invoke(main, ["seed-eval", "--help"])
+    assert result.exit_code == 0
+    assert "SWEEP_ID" in result.output
+
+
+def test_seed_eval_invokes_run_seed_eval(runner):
+    """seed-eval should call run_seed_eval with correct parsed arguments."""
+    from unittest.mock import patch
+
+    with patch("myriad.platform.seed_eval.run_seed_eval") as mock_run:
+        result = runner.invoke(
+            main,
+            [
+                "seed-eval",
+                "ent/proj/abc123",
+                "--top-k",
+                "2",
+                "--seeds",
+                "0,1",
+                "--metric",
+                "eval/return",
+                "--group",
+                "test_group",
+                "--mode",
+                "disabled",
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+    call_args, call_kwargs = mock_run.call_args
+    assert call_args[0] == "ent/proj/abc123"
+    assert call_args[1] == 2  # top_k
+    assert call_args[2] == [0, 1]  # seeds
+
+
+def test_seed_eval_minimize_flag(runner):
+    """--minimize flag should pass maximize=False to run_seed_eval."""
+    from unittest.mock import patch
+
+    with patch("myriad.platform.seed_eval.run_seed_eval") as mock_run:
+        result = runner.invoke(
+            main,
+            [
+                "seed-eval",
+                "ent/proj/abc123",
+                "--group",
+                "g",
+                "--mode",
+                "disabled",
+                "--minimize",
+            ],
+        )
+
+    assert result.exit_code == 0
+    _, call_kwargs = mock_run.call_args
+    assert call_kwargs["maximize"] is False
+
+
+def test_seed_eval_default_maximize(runner):
+    """Without --minimize, run_seed_eval should receive maximize=True."""
+    from unittest.mock import patch
+
+    with patch("myriad.platform.seed_eval.run_seed_eval") as mock_run:
+        result = runner.invoke(
+            main,
+            ["seed-eval", "ent/proj/abc123", "--group", "g", "--mode", "disabled"],
+        )
+
+    assert result.exit_code == 0
+    _, call_kwargs = mock_run.call_args
+    assert call_kwargs["maximize"] is True
