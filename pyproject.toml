@@ -1,6 +1,6 @@
 [project]
 name = "myriad-jax"
-version = "0.1.0"  # placeholder - version picked up from release tag
+dynamic = ["version"]
 description = "JAX-native platform for massively parallel control, system identification, and active learning of uncertain, stochastic systems."
 authors = [
     { name = "Robin Henry", email = "robin.henry012@gmail.com" },
