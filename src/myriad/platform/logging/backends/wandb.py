@@ -34,15 +34,19 @@ def _to_flat_config(config: Config | EvalConfig) -> dict[str, Any]:
     """
     raw = config.model_dump()
     raw.pop("wandb", None)
+    return _flatten_config(raw)
 
-    flat: dict[str, Any] = {}
-    for section, values in raw.items():
-        if isinstance(values, dict):
-            for key, value in values.items():
-                flat[f"{section}.{key}"] = value
+
+def _flatten_config(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Recursively flatten a nested dict to dot-separated keys."""
+    out: dict[str, Any] = {}
+    for key, value in d.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(_flatten_config(value, full_key))
         else:
-            flat[section] = values
-    return flat
+            out[full_key] = value
+    return out
 
 
 class WandbBackend:

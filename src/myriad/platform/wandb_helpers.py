@@ -45,8 +45,22 @@ def _unflatten_dotted_keys(d: dict[str, Any]) -> dict[str, Any]:
             node = node[part]
         leaf = parts[-1]
         # If value is itself a nested dict, recurse so inner dotted keys are also handled.
-        node[leaf] = _unflatten_dotted_keys(value) if isinstance(value, dict) else value
+        unflattened = _unflatten_dotted_keys(value) if isinstance(value, dict) else value
+        # Deep-merge if the existing leaf is also a dict, to avoid overwriting siblings.
+        if isinstance(unflattened, dict) and isinstance(node.get(leaf), dict):
+            _deep_merge(node[leaf], unflattened)
+        else:
+            node[leaf] = unflattened
     return out
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> None:
+    """Recursively merge *override* into *base* in-place."""
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +193,7 @@ def fetch_top_k_runs(
 
     Args:
         sweep_id: Fully-qualified sweep ID (``entity/project/sweep_id``).
-        metric: W&B summary metric name to rank by (e.g. ``eval/episode_return/mean``).
+        metric: W&B summary metric name to rank by (e.g. ``eval/return/best``).
         top_k: Number of top runs to return.
         maximize: If True, sort descending (higher is better). If False, ascending.
 

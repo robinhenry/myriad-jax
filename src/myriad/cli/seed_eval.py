@@ -14,7 +14,7 @@ import click
 )
 @click.option(
     "--metric",
-    default="eval/episode_return/mean",
+    default="eval/return/best",
     show_default=True,
     help="W&B summary metric used to rank Phase 1 runs.",
 )
@@ -56,7 +56,7 @@ def seed_eval(
     Example (full Phase 2):
       myriad seed-eval entity/myriad-ccasr/abc123 \\
           --top-k 5 --seeds 0,1,2,3,4 \\
-          --metric eval/episode_return/mean \\
+          --metric eval/return/best \\
           --group pqn_ccasr_validated
     """
     seed_list = [int(s.strip()) for s in seeds.split(",")]

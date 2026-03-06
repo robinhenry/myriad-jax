@@ -148,7 +148,7 @@ def make_frame_stack_env(env: Environment, n_frames: int) -> Environment:
     def _reset(key, params, config):
         obs, inner_state = env.reset(key, params, config)
         obs_flat = to_array(obs).reshape(obs_dim)
-        buffer = jnp.concatenate([jnp.zeros((n_frames - 1, obs_dim)), obs_flat[None]], axis=0)
+        buffer = jnp.concatenate([jnp.zeros((n_frames - 1, obs_dim), dtype=obs_flat.dtype), obs_flat[None]], axis=0)
         return buffer.reshape(-1), FrameStackState(env_state=inner_state, obs_buffer=buffer)
 
     def _step(key, state, action, params, config):
