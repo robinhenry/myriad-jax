@@ -23,13 +23,13 @@ from jax import Array
 from myriad.core.spaces import Discrete
 from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
+from myriad.utils import filter_kwargs
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState
 from .base import (
     BaseCcasrGfpTaskConfig,
     TaskConfig,
     check_termination,
-    filter_kwargs,
     get_action_space as _get_action_space,
     sample_initial_physics,
     step_physics_interval,

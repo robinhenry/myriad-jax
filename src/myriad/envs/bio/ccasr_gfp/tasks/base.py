@@ -1,6 +1,5 @@
 """Shared utilities for CcaS-CcaR + GFP gene circuit task wrappers."""
 
-import dataclasses
 from typing import NamedTuple
 
 import chex
@@ -12,18 +11,6 @@ from myriad.core.spaces import Discrete
 from myriad.core.types import PRNGKey
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, step_physics
-
-
-def filter_kwargs(kwargs: dict, cls: type) -> dict:
-    """Return only the kwargs whose names match fields of the given dataclass.
-
-    Uses dataclass field introspection so routing stays in sync with the class
-    definition automatically — no manually maintained field-name sets needed.
-
-    Works with both standard dataclasses and flax.struct.dataclass.
-    """
-    fields = {f.name for f in dataclasses.fields(cls)}
-    return {k: v for k, v in kwargs.items() if k in fields}
 
 
 class CcasrGfpControlObs(NamedTuple):

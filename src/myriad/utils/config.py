@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 from typing import Type, TypeVar
 
@@ -5,6 +6,18 @@ import yaml
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def filter_kwargs(kwargs: dict, cls: type) -> dict:
+    """Return only the kwargs whose names match fields of the given dataclass.
+
+    Uses dataclass field introspection so routing stays in sync with the class
+    definition automatically — no manually maintained field-name sets needed.
+
+    Works with both standard dataclasses and flax.struct.dataclass.
+    """
+    fields = {f.name for f in dataclasses.fields(cls)}
+    return {k: v for k, v in kwargs.items() if k in fields}
 
 
 def load_config(path: str | Path, config_cls: Type[T]) -> T:

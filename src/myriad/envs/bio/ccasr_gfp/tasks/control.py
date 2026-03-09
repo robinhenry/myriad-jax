@@ -18,6 +18,7 @@ from jax import Array
 from myriad.core.spaces import Discrete
 from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
+from myriad.utils import filter_kwargs
 
 from ..physics import PhysicsConfig, PhysicsParams, PhysicsState
 from .base import (
@@ -25,7 +26,6 @@ from .base import (
     CcasrGfpControlObs,
     TaskConfig,
     check_termination,
-    filter_kwargs,
     generate_constant_target,
     generate_sinewave_target,
     get_action_space as _get_action_space,

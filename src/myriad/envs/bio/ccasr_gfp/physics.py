@@ -129,16 +129,13 @@ class PhysicsParams:
 
     These are the kinetic parameters that vary between cells (domain randomization)
     or are unknown and must be inferred (system identification).
-
-    Defaults preserve the kinetics previously hardcoded in PhysicsConfig, so existing
-    control tasks using PhysicsParams() are unaffected.
     """
 
-    nu: float = 0.01  # Protein dilution rate (1/min)
-    Kh: float = 90.0  # CcaR Hill half-max concentration
-    nh: float = 3.6  # CcaR Hill cooperativity coefficient
-    Kf: float = 30.0  # GFP self-activation half-max concentration
-    nf: float = 3.6  # GFP self-activation Hill coefficient
+    nu: Array = 0.01  # Protein dilution rate (1/min)
+    Kh: Array = 90.0  # CcaR Hill half-max concentration
+    nh: Array = 3.6  # CcaR Hill cooperativity coefficient
+    Kf: Array = 30.0  # GFP self-activation half-max concentration
+    nf: Array = 3.6  # GFP self-activation Hill coefficient
 
 
 def compute_propensities(
@@ -248,6 +245,8 @@ def step_physics(
     """
     target_time = interval_start + config.timestep_minutes
 
+    # run_gillespie_loop expects a 3-arg (state, action, config) callable.
+    # Close over params here rather than widening the generic loop interface.
     def _propensities(s, a, c):
         return compute_propensities(s, a, c, params)
 
