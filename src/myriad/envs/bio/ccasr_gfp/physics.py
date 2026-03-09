@@ -131,11 +131,11 @@ class PhysicsParams:
     or are unknown and must be inferred (system identification).
     """
 
-    nu: float | Array = 0.01  # Protein dilution rate (1/min)
-    Kh: float | Array = 90.0  # CcaR Hill half-max concentration
-    nh: float | Array = 3.6  # CcaR Hill cooperativity coefficient
-    Kf: float | Array = 30.0  # GFP self-activation half-max concentration
-    nf: float | Array = 3.6  # GFP self-activation Hill coefficient
+    nu: Array = struct.field(default_factory=lambda: jnp.array(0.01))  # Protein dilution rate (1/min)
+    Kh: Array = struct.field(default_factory=lambda: jnp.array(90.0))  # CcaR Hill half-max
+    nh: Array = struct.field(default_factory=lambda: jnp.array(3.6))  # CcaR Hill cooperativity
+    Kf: Array = struct.field(default_factory=lambda: jnp.array(30.0))  # GFP self-activation half-max
+    nf: Array = struct.field(default_factory=lambda: jnp.array(3.6))  # GFP Hill coefficient
 
 
 def compute_propensities(
