@@ -38,8 +38,6 @@ class TestControlTaskConfig:
         """Test that default config has sensible values."""
         config = ControlTaskConfig()
 
-        assert config.physics.eta > 0
-        assert config.physics.nu > 0
         assert config.task.max_steps > 0
         assert config.task.F_obs_normalizer > 0
         assert config.target_type in ["constant", "sinewave"]

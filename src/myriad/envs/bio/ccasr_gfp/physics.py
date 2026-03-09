@@ -106,80 +106,75 @@ class PhysicsState(NamedTuple):
 
 @struct.dataclass
 class PhysicsConfig:
-    """Static physics constants for the gene circuit system.
+    """Static structural constants for the gene circuit system.
 
     These are compile-time constants passed as static_argnames to jit.
-    Changing these values requires recompilation but enables better optimization.
+    They define the experimental platform and circuit architecture — values
+    that never change between cells or experiments.
 
-    Default values from the CDC 2025 paper implementation.
+    Kinetic parameters (nu, Kh, nh, Kf, nf) belong in PhysicsParams because
+    they vary between cells and are the targets of system identification.
     """
 
-    # Production and dilution rates
-    eta: float = 1.0  # CcaSR (H) production rate (1/min)
-    nu: float = 0.01  # Protein dilution rate (1/min)
-
-    # Promoter dynamics for H-induced F production
-    a: float = 1.0  # Maximum promoter activity (1/min)
-    Kh: float = 90.0  # Half-maximal H concentration
-    nh: float = 3.6  # Hill coefficient for H cooperativity
-
-    # Self-activation dynamics for F-induced F production
-    Kf: float = 30.0  # Half-maximal F concentration
-    nf: float = 3.6  # Hill coefficient for F cooperativity
-
-    # Time discretization
+    # Time discretization (set by measurement interval)
     timestep_minutes: float = 5.0  # Physical timestep (minutes)
 
-    # Gillespie algorithm parameters
-    max_gillespie_steps: int = 10000  # Safety limit for Gillespie loop per step
+    # Gillespie algorithm safety cap
+    max_gillespie_steps: int = 10000  # Maximum reactions per timestep
 
 
 @struct.dataclass
 class PhysicsParams:
-    """Dynamic physics parameters for domain randomization.
+    """Dynamic physics parameters — vmappable over parameter space.
 
-    These can be randomized per episode to create diverse dynamics.
-    Currently empty but maintained for protocol consistency.
+    These are the kinetic parameters that vary between cells (domain randomization)
+    or are unknown and must be inferred (system identification).
+
+    Defaults match PhysicsConfig so control tasks using PhysicsParams() are unaffected.
     """
 
-    ...
+    nu: float = 0.01  # Protein dilution rate (1/min)
+    Kh: float = 90.0  # CcaR Hill half-max concentration
+    nh: float = 3.6  # CcaR Hill cooperativity coefficient
+    Kf: float = 30.0  # GFP self-activation half-max concentration
+    nf: float = 3.6  # GFP self-activation Hill coefficient
 
 
 def compute_propensities(
     state: PhysicsState,
     action: Array,
     config: PhysicsConfig,
+    params: PhysicsParams,
 ) -> Array:
     """Compute reaction propensities (rates) for all five reactions.
 
     Args:
         state: Current physical state (time, H, F)
         action: Discrete action {0, 1} representing light input U
-        config: Static physics constants
+        config: Static structural constants (eta, a)
+        params: Kinetic parameters (nu, Kh, nh, Kf, nf) — vmappable
 
     Returns:
         Array of 5 propensities for reactions [R1, R2, R3, R4, R5]
     """
     H = state.H
     F = state.F
-    U = action  # Light input is directly the action
+    U = action
 
     # Reaction 1: CcaSR activation (∅ → H)
-    r1 = config.eta * U
+    r1 = U
 
     # Reaction 2: CcaSR deactivation (H → ∅)
-    r2 = config.nu * H
+    r2 = params.nu * H
 
     # Reaction 3: F creation from H (∅ → F)
-    # Hill function: 0.5 * a * H^nh / (Kh^nh + H^nh)
-    r3 = 0.5 * config.a * hill_function(H, config.Kh, config.nh)
+    r3 = 0.5 * hill_function(H, params.Kh, params.nh)
 
     # Reaction 4: F self-activation (∅ → F)
-    # Hill function: 0.5 * a * F^nf / (Kf^nf + F^nf)
-    r4 = 0.5 * config.a * hill_function(F, config.Kf, config.nf)
+    r4 = 0.5 * hill_function(F, params.Kf, params.nf)
 
     # Reaction 5: F dilution (F → ∅)
-    r5 = config.nu * F
+    r5 = params.nu * F
 
     return jnp.array([r1, r2, r3, r4, r5])
 
@@ -252,6 +247,9 @@ def step_physics(
     """
     target_time = interval_start + config.timestep_minutes
 
+    def _propensities(s, a, c):
+        return compute_propensities(s, a, c, params)
+
     final_state, next_reaction_time = run_gillespie_loop(
         key=key,
         initial_state=state,
@@ -259,7 +257,7 @@ def step_physics(
         config=config,
         target_time=target_time,
         max_steps=config.max_gillespie_steps,
-        compute_propensities_fn=compute_propensities,
+        compute_propensities_fn=_propensities,
         apply_reaction_fn=apply_reaction,
         get_time_fn=lambda s: s.time,
         update_time_fn=lambda s, t: s._replace(time=t),
@@ -269,15 +267,3 @@ def step_physics(
 
     # Store the pending reaction time for the next step
     return final_state._replace(next_reaction_time=next_reaction_time)
-
-
-def create_physics_params(**kwargs) -> PhysicsParams:
-    """Factory function to create PhysicsParams.
-
-    Args:
-        **kwargs: Reserved for future domain randomization parameters
-
-    Returns:
-        PhysicsParams instance
-    """
-    return PhysicsParams()
