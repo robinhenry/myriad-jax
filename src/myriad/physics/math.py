@@ -6,8 +6,8 @@ from jax import Array
 
 def hill_function(
     x: Array,
-    K: float,
-    n: float,
+    K: float | Array,
+    n: float | Array,
 ) -> Array:
     """Compute the Hill function for cooperative binding/regulation.
 

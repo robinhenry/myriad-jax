@@ -131,11 +131,11 @@ class PhysicsParams:
     or are unknown and must be inferred (system identification).
     """
 
-    nu: Array = 0.01  # Protein dilution rate (1/min)
-    Kh: Array = 90.0  # CcaR Hill half-max concentration
-    nh: Array = 3.6  # CcaR Hill cooperativity coefficient
-    Kf: Array = 30.0  # GFP self-activation half-max concentration
-    nf: Array = 3.6  # GFP self-activation Hill coefficient
+    nu: float | Array = 0.01  # Protein dilution rate (1/min)
+    Kh: float | Array = 90.0  # CcaR Hill half-max concentration
+    nh: float | Array = 3.6  # CcaR Hill cooperativity coefficient
+    Kf: float | Array = 30.0  # GFP self-activation half-max concentration
+    nf: float | Array = 3.6  # GFP self-activation Hill coefficient
 
 
 def compute_propensities(
