@@ -1,5 +1,5 @@
 from .bio.ccasr_gfp.rendering import render_frame as render_ccasr_gfp_frame
-from .bio.ccasr_gfp.tasks import control as ccasr_gfp_control
+from .bio.ccasr_gfp.tasks import control as ccasr_gfp_control, sysid as ccasr_gfp_sysid
 from .classic.cartpole.rendering import render_cartpole_frame_from_obs
 from .classic.cartpole.tasks import control as cartpole_control
 from .classic.pendulum.rendering import render_pendulum_frame_from_obs
@@ -30,6 +30,11 @@ register_env(
     ccasr_gfp_control.make_env,
     ccasr_gfp_control.ControlTaskConfig,
     render_frame_fn=render_ccasr_gfp_frame,
+)
+register_env(
+    "ccasr-gfp-sysid",
+    ccasr_gfp_sysid.make_env,
+    ccasr_gfp_sysid.SysIdTaskConfig,
 )
 
 __all__ = [
