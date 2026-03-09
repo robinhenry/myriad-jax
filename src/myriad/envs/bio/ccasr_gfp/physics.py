@@ -141,7 +141,6 @@ class PhysicsParams:
 def compute_propensities(
     state: PhysicsState,
     action: Array,
-    config: PhysicsConfig,
     params: PhysicsParams,
 ) -> Array:
     """Compute reaction propensities (rates) for all five reactions.
@@ -149,7 +148,6 @@ def compute_propensities(
     Args:
         state: Current physical state (time, H, F)
         action: Discrete action {0, 1} representing light input U
-        config: Static structural constants (timestep_minutes, max_gillespie_steps)
         params: Kinetic parameters (nu, Kh, nh, Kf, nf) — vmappable
 
     Returns:
@@ -246,7 +244,7 @@ def step_physics(
     target_time = interval_start + config.timestep_minutes
 
     def _propensities(s, a):
-        return compute_propensities(s, a, config, params)
+        return compute_propensities(s, a, params)
 
     final_state, next_reaction_time = run_gillespie_loop(
         key=key,
