@@ -48,22 +48,22 @@ def test_physics_params_defaults(params: PhysicsParams):
     assert params.nf > 0  # GFP Hill cooperativity
 
 
-def test_propensities_all_positive(config: PhysicsConfig, params: PhysicsParams):
+def test_propensities_all_positive(params: PhysicsParams):
     """Test that propensities are always non-negative."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     for action in [0, 1]:
-        propensities = compute_propensities(state, jnp.array(action), config, params)
+        propensities = compute_propensities(state, jnp.array(action), params)
         assert jnp.all(propensities >= 0), f"Propensities should be non-negative, got {propensities}"
         assert propensities.shape == (5,), "Should have 5 reactions"
 
 
-def test_propensities_light_dependence(config: PhysicsConfig, params: PhysicsParams):
+def test_propensities_light_dependence(params: PhysicsParams):
     """Test that CcaSR activation depends on light input (action)."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
-    prop_dark = compute_propensities(state, jnp.array(0), config, params)
-    prop_light = compute_propensities(state, jnp.array(1), config, params)
+    prop_dark = compute_propensities(state, jnp.array(0), params)
+    prop_light = compute_propensities(state, jnp.array(1), params)
 
     # Reaction 1 (CcaSR activation) should be higher with light on
     assert prop_light[0] > prop_dark[0], "Light should increase CcaSR activation"
@@ -71,15 +71,15 @@ def test_propensities_light_dependence(config: PhysicsConfig, params: PhysicsPar
     assert jnp.allclose(prop_light[1:], prop_dark[1:])
 
 
-def test_propensities_concentration_dependence(config: PhysicsConfig, params: PhysicsParams):
+def test_propensities_concentration_dependence(params: PhysicsParams):
     """Test that propensities depend on protein concentrations."""
     action = jnp.array(1)
 
     state_low = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
     state_high = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
 
-    prop_low = compute_propensities(state_low, action, config, params)
-    prop_high = compute_propensities(state_high, action, config, params)
+    prop_low = compute_propensities(state_low, action, params)
+    prop_high = compute_propensities(state_high, action, params)
 
     # Reaction 2 (H deactivation) should scale with H
     assert prop_high[1] > prop_low[1], "H deactivation should increase with H"
@@ -255,10 +255,9 @@ def test_parameter_sensitivity_kh():
     """Lower Kh → higher F production from H (Kh is a kinetic param in PhysicsParams)."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(90.0), F=jnp.array(30.0))
     action = jnp.array(1)
-    config = PhysicsConfig()
 
-    prop_low_kh = compute_propensities(state, action, config, PhysicsParams(Kh=60.0))
-    prop_high_kh = compute_propensities(state, action, config, PhysicsParams(Kh=120.0))
+    prop_low_kh = compute_propensities(state, action, PhysicsParams(Kh=60.0))
+    prop_high_kh = compute_propensities(state, action, PhysicsParams(Kh=120.0))
 
     assert prop_low_kh[2] > prop_high_kh[2]
 
