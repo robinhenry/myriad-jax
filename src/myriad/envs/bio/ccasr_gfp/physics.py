@@ -130,7 +130,8 @@ class PhysicsParams:
     These are the kinetic parameters that vary between cells (domain randomization)
     or are unknown and must be inferred (system identification).
 
-    Defaults match PhysicsConfig so control tasks using PhysicsParams() are unaffected.
+    Defaults preserve the kinetics previously hardcoded in PhysicsConfig, so existing
+    control tasks using PhysicsParams() are unaffected.
     """
 
     nu: float = 0.01  # Protein dilution rate (1/min)
@@ -151,7 +152,7 @@ def compute_propensities(
     Args:
         state: Current physical state (time, H, F)
         action: Discrete action {0, 1} representing light input U
-        config: Static structural constants (eta, a)
+        config: Static structural constants (timestep_minutes, max_gillespie_steps)
         params: Kinetic parameters (nu, Kh, nh, Kf, nf) — vmappable
 
     Returns:

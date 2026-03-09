@@ -14,6 +14,7 @@ Reward is zero; the inference algorithm is the agent, and its objective
 
 from typing import Any, NamedTuple
 
+import chex
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -84,6 +85,7 @@ class SysIdObs(NamedTuple):
 
     @classmethod
     def from_array(cls, arr: Array) -> "SysIdObs":
+        chex.assert_shape(arr, (1,))
         return cls(F_normalized=arr[0])  # type: ignore
 
 
