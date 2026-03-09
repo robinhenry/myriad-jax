@@ -245,16 +245,13 @@ def step_physics(
     """
     target_time = interval_start + config.timestep_minutes
 
-    # run_gillespie_loop expects a 3-arg (state, action, config) callable.
-    # Close over params here rather than widening the generic loop interface.
-    def _propensities(s, a, c):
-        return compute_propensities(s, a, c, params)
+    def _propensities(s, a):
+        return compute_propensities(s, a, config, params)
 
     final_state, next_reaction_time = run_gillespie_loop(
         key=key,
         initial_state=state,
         action=action,
-        config=config,
         target_time=target_time,
         max_steps=config.max_gillespie_steps,
         compute_propensities_fn=_propensities,

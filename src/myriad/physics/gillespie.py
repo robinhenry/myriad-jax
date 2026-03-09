@@ -51,10 +51,9 @@ def run_gillespie_loop(
     key: PRNGKey,
     initial_state: Any,
     action: Array,
-    config: Any,
     target_time: float | Array,
     max_steps: int,
-    compute_propensities_fn: Callable[[Any, Array, Any], Array],
+    compute_propensities_fn: Callable[[Any, Array], Array],
     apply_reaction_fn: Callable[[Any, Array], Any],
     get_time_fn: Callable[[Any], Array],
     update_time_fn: Callable[[Any, float | Array], Any],
@@ -88,11 +87,12 @@ def run_gillespie_loop(
     Args:
         key: RNG key for stochastic sampling
         initial_state: Starting state (environment-specific structure)
-        action: Current control input passed to propensity function
-        config: Configuration object with rate constants
+        action: Current control input passed to propensity function and used
+            directly for pending-reaction invalidation when the action changes
         target_time: Simulate until this time (typically interval end)
         max_steps: Safety limit to prevent infinite loops
-        compute_propensities_fn: $(x, u, \\theta) \\to [a_1, ..., a_M]$
+        compute_propensities_fn: $(x, u) \\to [a_1, ..., a_M]$; caller closes
+            over any additional constants (config, params, etc.)
         apply_reaction_fn: $(x, j) \\to x'$ applies reaction $j$
         get_time_fn: Extracts time from state
         update_time_fn: Sets time in state
@@ -130,7 +130,7 @@ def run_gillespie_loop(
     initial_time = get_time_fn(initial_state)
     key, key_init = jax.random.split(key)
     needs_sample = jnp.isinf(pending_reaction_time)
-    initial_propensities = compute_propensities_fn(initial_state, action, config)
+    initial_propensities = compute_propensities_fn(initial_state, action)
     sampled_tau = sample_tau(key_init, initial_propensities)
     next_reaction_time = jnp.where(needs_sample, initial_time + sampled_tau, pending_reaction_time)
 
@@ -154,7 +154,7 @@ def run_gillespie_loop(
         state = update_time_fn(state, next_rxn_time)
 
         # Compute propensities for current (pre-reaction) state
-        propensities = compute_propensities_fn(state, action, config)
+        propensities = compute_propensities_fn(state, action)
 
         # Sample and apply reaction
         reaction_idx = sample_reaction(key_reaction, propensities)
@@ -162,7 +162,7 @@ def run_gillespie_loop(
 
         # Compute propensities for new (post-reaction) state and sample next tau
         # Note: propensities change because state changed
-        new_propensities = compute_propensities_fn(state, action, config)
+        new_propensities = compute_propensities_fn(state, action)
         tau = sample_tau(key_time, new_propensities)
         new_next_rxn_time = get_time_fn(state) + tau
 
