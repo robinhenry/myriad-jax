@@ -18,9 +18,11 @@ from jax import Array
 from myriad.core.spaces import Discrete
 from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
+from myriad.utils import filter_kwargs
 
-from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, create_physics_params, step_physics
+from ..physics import PhysicsConfig, PhysicsParams, PhysicsState
 from .base import (
+    BaseCcasrGfpTaskConfig,
     CcasrGfpControlObs,
     TaskConfig,
     check_termination,
@@ -28,6 +30,7 @@ from .base import (
     generate_sinewave_target,
     get_action_space as _get_action_space,
     sample_initial_physics,
+    step_physics_interval,
 )
 
 
@@ -48,14 +51,8 @@ class ControlTaskState(NamedTuple):
 
 
 @struct.dataclass
-class ControlTaskConfig:
-    """Configuration for the CcaS-CcaR control task.
-
-    Composed of physics config and task config for clean separation.
-    """
-
-    physics: PhysicsConfig = struct.field(default_factory=PhysicsConfig)
-    task: TaskConfig = struct.field(default_factory=TaskConfig)
+class ControlTaskConfig(BaseCcasrGfpTaskConfig):
+    """Configuration for the CcaS-CcaR control task."""
 
     # Target generation
     target_type: str = "constant"  # "constant" or "sinewave"
@@ -73,11 +70,6 @@ class ControlTaskConfig:
     def dt(self) -> float:
         """Timestep duration in minutes."""
         return self.physics.timestep_minutes
-
-    @property
-    def max_steps(self) -> int:
-        """Required by EnvironmentConfig protocol."""
-        return self.task.max_steps
 
 
 @struct.dataclass
@@ -110,27 +102,14 @@ def _step(
         done: Termination flag (1.0 if done, 0.0 otherwise)
         info: Dict with current protein levels for logging
     """
-    # Step the pure physics using Gillespie algorithm
-    # Pass previous action and interval start for action-toggle handling
     key_physics, key_target = jax.random.split(key)
-    interval_start = state.t * config.physics.timestep_minutes
-    next_physics = step_physics(
-        key_physics,
-        state.physics,
-        action,
-        params.physics,
-        config.physics,
-        previous_action=state.U,
-        interval_start=interval_start,
+    next_physics, t_next = step_physics_interval(
+        key_physics, state.physics, state.t, state.U, action, params.physics, config.physics
     )
 
-    # Increment timestep
-    t_next = state.t + 1
-
-    # Generate next target trajectory
-    F_target_next = jax.lax.cond(
-        config.target_type == "sinewave",
-        lambda: generate_sinewave_target(
+    # config.target_type is static — resolve at trace time with plain if/else
+    if config.target_type == "sinewave":
+        F_target_next = generate_sinewave_target(
             key_target,
             t_next,
             config.n_horizon,
@@ -138,9 +117,9 @@ def _step(
             config.sinewave_period_minutes,
             config.sinewave_amplitude,
             config.sinewave_vshift,
-        ),
-        lambda: generate_constant_target(config.n_horizon, config.F_target_constant),
-    )
+        )
+    else:
+        F_target_next = generate_constant_target(config.n_horizon, config.F_target_constant)
 
     # Check termination
     done = check_termination(t_next, config.task)
@@ -188,10 +167,9 @@ def _reset(
     # Sample initial physics state (zero concentrations)
     physics = sample_initial_physics(key_physics)
 
-    # Generate initial target trajectory
-    F_target = jax.lax.cond(
-        config.target_type == "sinewave",
-        lambda: generate_sinewave_target(
+    # config.target_type is static — resolve at trace time with plain if/else
+    if config.target_type == "sinewave":
+        F_target = generate_sinewave_target(
             key_target,
             jnp.array(0),
             config.n_horizon,
@@ -199,9 +177,9 @@ def _reset(
             config.sinewave_period_minutes,
             config.sinewave_amplitude,
             config.sinewave_vshift,
-        ),
-        lambda: generate_constant_target(config.n_horizon, config.F_target_constant),
-    )
+        )
+    else:
+        F_target = generate_constant_target(config.n_horizon, config.F_target_constant)
 
     # Initialize U=0 (no light). First action toggle (if any) will reset time to 0.
     state = ControlTaskState(physics=physics, t=jnp.array(0), U=jnp.array(0), F_target=F_target)
@@ -294,30 +272,22 @@ def make_env(
         >>> env = make_env(target_type="sinewave", sinewave_period_minutes=600.0)
     """
     if config is None:
-        # Parse kwargs into nested config structure
-        physics_fields = {"eta", "nu", "a", "Kh", "nh", "Kf", "nf", "timestep_minutes", "max_gillespie_steps"}
-        task_fields = {"max_steps", "F_obs_normalizer"}
-        control_fields = {
-            "target_type",
-            "n_horizon",
-            "F_target_constant",
-            "sinewave_period_minutes",
-            "sinewave_amplitude",
-            "sinewave_vshift",
+        # Distribute flat kwargs to the appropriate nested config dataclass.
+        # filter_kwargs introspects dataclass fields, so routing stays in sync
+        # automatically when fields are added or removed.
+        control_kwargs = {
+            k: v
+            for k, v in filter_kwargs(kwargs, ControlTaskConfig).items()
+            if k not in {"physics", "task"}  # nested — handled separately below
         }
-
-        physics_kwargs = {k: v for k, v in kwargs.items() if k in physics_fields}
-        task_kwargs = {k: v for k, v in kwargs.items() if k in task_fields}
-        control_kwargs = {k: v for k, v in kwargs.items() if k in control_fields}
-
         config = ControlTaskConfig(
-            physics=PhysicsConfig(**physics_kwargs) if physics_kwargs else PhysicsConfig(),
-            task=TaskConfig(**task_kwargs) if task_kwargs else TaskConfig(),
+            physics=PhysicsConfig(**filter_kwargs(kwargs, PhysicsConfig)),
+            task=TaskConfig(**filter_kwargs(kwargs, TaskConfig)),
             **control_kwargs,
         )
 
     if params is None:
-        params = ControlTaskParams(physics=create_physics_params())
+        params = ControlTaskParams(physics=PhysicsParams(**filter_kwargs(kwargs, PhysicsParams)))
 
     return Environment(
         step=step,

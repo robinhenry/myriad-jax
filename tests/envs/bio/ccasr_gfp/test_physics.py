@@ -34,34 +34,36 @@ def params():
 
 
 def test_physics_config_defaults(config: PhysicsConfig):
-    """Test that default physics config has biologically reasonable values."""
-    assert config.eta > 0  # Production rate
-    assert config.nu > 0  # Dilution rate
-    assert config.a > 0  # Promoter activity
-    assert config.Kh > 0  # Hill coefficient
-    assert config.nh > 0  # Hill cooperativity
-    assert config.Kf > 0  # Self-activation Hill coefficient
-    assert config.nf > 0  # Self-activation cooperativity
+    """Test that default physics config has sensible structural constants."""
     assert config.timestep_minutes > 0
     assert config.max_gillespie_steps > 0
 
 
-def test_propensities_all_positive(config: PhysicsConfig):
+def test_physics_params_defaults(params: PhysicsParams):
+    """Test that default kinetic parameters are biologically reasonable."""
+    assert params.nu > 0  # Dilution rate
+    assert params.Kh > 0  # CcaR Hill half-max
+    assert params.nh > 0  # CcaR Hill cooperativity
+    assert params.Kf > 0  # GFP self-activation half-max
+    assert params.nf > 0  # GFP Hill cooperativity
+
+
+def test_propensities_all_positive(params: PhysicsParams):
     """Test that propensities are always non-negative."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
     for action in [0, 1]:
-        propensities = compute_propensities(state, jnp.array(action), config)
+        propensities = compute_propensities(state, jnp.array(action), params)
         assert jnp.all(propensities >= 0), f"Propensities should be non-negative, got {propensities}"
         assert propensities.shape == (5,), "Should have 5 reactions"
 
 
-def test_propensities_light_dependence(config: PhysicsConfig):
+def test_propensities_light_dependence(params: PhysicsParams):
     """Test that CcaSR activation depends on light input (action)."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(50.0), F=jnp.array(30.0))
 
-    prop_dark = compute_propensities(state, jnp.array(0), config)
-    prop_light = compute_propensities(state, jnp.array(1), config)
+    prop_dark = compute_propensities(state, jnp.array(0), params)
+    prop_light = compute_propensities(state, jnp.array(1), params)
 
     # Reaction 1 (CcaSR activation) should be higher with light on
     assert prop_light[0] > prop_dark[0], "Light should increase CcaSR activation"
@@ -69,15 +71,15 @@ def test_propensities_light_dependence(config: PhysicsConfig):
     assert jnp.allclose(prop_light[1:], prop_dark[1:])
 
 
-def test_propensities_concentration_dependence(config: PhysicsConfig):
+def test_propensities_concentration_dependence(params: PhysicsParams):
     """Test that propensities depend on protein concentrations."""
     action = jnp.array(1)
 
     state_low = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(10.0), F=jnp.array(5.0))
     state_high = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(100.0), F=jnp.array(50.0))
 
-    prop_low = compute_propensities(state_low, action, config)
-    prop_high = compute_propensities(state_high, action, config)
+    prop_low = compute_propensities(state_low, action, params)
+    prop_high = compute_propensities(state_high, action, params)
 
     # Reaction 2 (H deactivation) should scale with H
     assert prop_high[1] > prop_low[1], "H deactivation should increase with H"
@@ -249,30 +251,15 @@ def test_physics_vmap_compatibility(params: PhysicsParams, config: PhysicsConfig
     assert jnp.all(jnp.isfinite(next_states.F))
 
 
-@pytest.mark.parametrize(
-    "param,value_low,value_high,reaction_idx,expected_higher",
-    [
-        ("Kh", 60.0, 120.0, 2, "low"),  # Lower Kh → higher F production from H
-        ("eta", 0.5, 2.0, 0, "high"),  # Higher eta → higher H production
-    ],
-)
-def test_parameter_sensitivity(
-    param: str, value_low: float, value_high: float, reaction_idx: int, expected_higher: str
-):
-    """Test that changing parameters affects reaction propensities as expected."""
+def test_parameter_sensitivity_kh():
+    """Lower Kh → higher F production from H (Kh is a kinetic param in PhysicsParams)."""
     state = PhysicsState.create(time=jnp.array(0.0), H=jnp.array(90.0), F=jnp.array(30.0))
     action = jnp.array(1)
 
-    config_low = PhysicsConfig(**{param: value_low})
-    config_high = PhysicsConfig(**{param: value_high})
+    prop_low_kh = compute_propensities(state, action, PhysicsParams(Kh=60.0))
+    prop_high_kh = compute_propensities(state, action, PhysicsParams(Kh=120.0))
 
-    prop_low = compute_propensities(state, action, config_low)
-    prop_high = compute_propensities(state, action, config_high)
-
-    if expected_higher == "low":
-        assert prop_low[reaction_idx] > prop_high[reaction_idx]
-    else:
-        assert prop_high[reaction_idx] > prop_low[reaction_idx]
+    assert prop_low_kh[2] > prop_high_kh[2]
 
 
 @pytest.mark.parametrize("action", [0, 1])

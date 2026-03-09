@@ -10,7 +10,7 @@ from jax import Array
 from myriad.core.spaces import Discrete
 from myriad.core.types import PRNGKey
 
-from ..physics import PhysicsState
+from ..physics import PhysicsConfig, PhysicsParams, PhysicsState, step_physics
 
 
 class CcasrGfpControlObs(NamedTuple):
@@ -61,6 +61,50 @@ class TaskConfig:
 
     max_steps: int = 288  # 288 steps * 5 min/step = 24 hours
     F_obs_normalizer: float = 80.0  # Normalization constant for F observations
+
+
+@struct.dataclass
+class BaseCcasrGfpTaskConfig:
+    """Shared config fields for all CcaS-CcaR task wrappers.
+
+    Provides physics config, task config, and the max_steps protocol property
+    in one place so individual task configs don't repeat them.
+    """
+
+    physics: PhysicsConfig = struct.field(default_factory=PhysicsConfig)
+    task: TaskConfig = struct.field(default_factory=TaskConfig)
+
+    @property
+    def max_steps(self) -> int:
+        """Required by EnvironmentConfig protocol."""
+        return self.task.max_steps
+
+
+def step_physics_interval(
+    key: PRNGKey,
+    physics: PhysicsState,
+    t: Array,
+    prev_action: Array,
+    action: Array,
+    params: PhysicsParams,
+    config: PhysicsConfig,
+) -> tuple[PhysicsState, Array]:
+    """Step physics forward one interval and return (next_physics, t + 1).
+
+    Centralises the interval_start calculation and step_physics call that
+    every task _step function would otherwise duplicate.
+    """
+    interval_start = t * config.timestep_minutes
+    next_physics = step_physics(
+        key,
+        physics,
+        action,
+        params,
+        config,
+        previous_action=prev_action,
+        interval_start=interval_start,
+    )
+    return next_physics, t + 1
 
 
 def check_termination(t: Array, task_config: TaskConfig) -> Array:
