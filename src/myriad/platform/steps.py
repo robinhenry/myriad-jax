@@ -9,6 +9,7 @@ All functions here are pure and designed to be jitted for maximum performance.
 
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import Any, Callable, NamedTuple
 
@@ -25,6 +26,8 @@ from myriad.utils import to_array
 
 from .initialization import make_params_batch
 from .types import TrainingEnvState
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Masking Primitives
@@ -142,6 +145,7 @@ def make_train_step_fn(
     replay_buffer: ReplayBuffer | None,
     num_envs: int,
     params_batch: Any = None,
+    seed: int = 0,
 ) -> Callable:
     """Factory to create a jitted, vmapped training step function.
 
@@ -149,7 +153,12 @@ def make_train_step_fn(
     and agent updates for off-policy training.
     """
     if params_batch is None:
-        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(0))
+        if env.sample_params_fn is not None:
+            logger.warning(
+                "env has a params prior but params_batch was not supplied; "
+                "pass an explicit params_batch (or seed=) for reproducible sampling"
+            )
+        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(seed))
     env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     @partial(jax.jit, static_argnames=["batch_size"])
@@ -186,6 +195,7 @@ def make_collection_step_fn(
     env: Environment,
     num_envs: int,
     params_batch: Any = None,
+    seed: int = 0,
 ) -> Callable:
     """Factory to create a single-step collection function for on-policy algorithms.
 
@@ -193,7 +203,12 @@ def make_collection_step_fn(
     It's designed to be used with make_chunked_collector for efficient rollout collection.
     """
     if params_batch is None:
-        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(0))
+        if env.sample_params_fn is not None:
+            logger.warning(
+                "env has a params prior but params_batch was not supplied; "
+                "pass an explicit params_batch (or seed=) for reproducible sampling"
+            )
+        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(seed))
     env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     def collection_step(
@@ -214,6 +229,7 @@ def make_eval_rollout_fn(
     eval_rollouts: int,
     eval_max_steps: int,
     params_batch: Any = None,
+    seed: int = 0,
 ) -> Callable:
     """Factory to create a jitted evaluation rollout function.
 
@@ -227,13 +243,21 @@ def make_eval_rollout_fn(
         eval_max_steps: Maximum steps per episode
         params_batch: Batched params with leading (eval_rollouts,) dimension.
             Constructed via make_params_batch(); each eval env gets its own slice.
-            If None, env.params is broadcast-replicated across all eval envs.
+            If None, env.params is broadcast-replicated (or sampled with ``seed``
+            when a prior is set).
+        seed: RNG seed used to sample params_batch when params_batch is None and
+            env.sample_params_fn is set. Ignored otherwise.
 
     Returns:
         Function (key, agent_state, return_episodes=False) -> (key, metrics_dict)
     """
     if params_batch is None:
-        params_batch = make_params_batch(env, eval_rollouts, jax.random.PRNGKey(0))
+        if env.sample_params_fn is not None:
+            logger.warning(
+                "env has a params prior but params_batch was not supplied; "
+                "pass an explicit params_batch (or seed=) for reproducible sampling"
+            )
+        params_batch = make_params_batch(env, eval_rollouts, jax.random.PRNGKey(seed))
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, 0, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, 0, None))
     # Vectorized observation conversion ensures platform always operates on arrays
