@@ -55,10 +55,10 @@ class TestMakeParamsBatch:
 
 
 class TestDomainRandomizedStep:
-    """Verify that distinct params actually produce distinct rewards after one step."""
+    """Verify that distinct params produce diverging dynamics (not just distinct rewards)."""
 
     def test_varying_params_vary_dynamics(self):
-        """With randomized params each env should diverge from the others over time."""
+        """With randomized params, GFP trajectories should diverge across envs over time."""
         env = make_env("ccasr-gfp-sysid", nu_scale=0.5, Kh_scale=0.5)
         N = 8
         key = jax.random.PRNGKey(0)
@@ -69,7 +69,7 @@ class TestDomainRandomizedStep:
         reset_keys = jax.random.split(reset_key, N)
         obs_batch, state_batch = jax.vmap(env.reset, in_axes=(0, 0, None))(reset_keys, params_batch, env.config)
 
-        # Run 10 steps
+        # Run 20 steps
         actions = jnp.ones((N,), dtype=jnp.int32)
 
         def scan_step(carry, _):
@@ -82,6 +82,6 @@ class TestDomainRandomizedStep:
             return (next_state, rng), info["F"]
 
         (_, _), F_traces = jax.lax.scan(scan_step, (state_batch, step_key), None, length=20)
-        # Shape: (20, N) — final GFP values should differ across envs
+        # Shape: (20, N) — GFP values should differ across envs due to distinct kinetic params
         final_F = F_traces[-1]
         assert not jnp.all(final_F == final_F[0]), "All envs produced identical F — params may not be varying"

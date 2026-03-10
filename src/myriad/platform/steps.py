@@ -23,6 +23,7 @@ from myriad.core.types import PRNGKey, Transition
 from myriad.envs.environment import Environment
 from myriad.utils import to_array
 
+from .initialization import make_params_batch
 from .types import TrainingEnvState
 
 # =============================================================================
@@ -140,13 +141,15 @@ def make_train_step_fn(
     env: Environment,
     replay_buffer: ReplayBuffer | None,
     num_envs: int,
-    params_batch: Any,
+    params_batch: Any = None,
 ) -> Callable:
     """Factory to create a jitted, vmapped training step function.
 
     This function wraps the common env stepping logic with replay buffer handling
     and agent updates for off-policy training.
     """
+    if params_batch is None:
+        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(0))
     env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     @partial(jax.jit, static_argnames=["batch_size"])
@@ -182,13 +185,15 @@ def make_collection_step_fn(
     agent: Agent,
     env: Environment,
     num_envs: int,
-    params_batch: Any,
+    params_batch: Any = None,
 ) -> Callable:
     """Factory to create a single-step collection function for on-policy algorithms.
 
     This creates a step function that collects one transition without performing agent updates.
     It's designed to be used with make_chunked_collector for efficient rollout collection.
     """
+    if params_batch is None:
+        params_batch = make_params_batch(env, num_envs, jax.random.PRNGKey(0))
     env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     def collection_step(
@@ -208,7 +213,7 @@ def make_eval_rollout_fn(
     env: Environment,
     eval_rollouts: int,
     eval_max_steps: int,
-    params_batch: Any,
+    params_batch: Any = None,
 ) -> Callable:
     """Factory to create a jitted evaluation rollout function.
 
@@ -222,10 +227,13 @@ def make_eval_rollout_fn(
         eval_max_steps: Maximum steps per episode
         params_batch: Batched params with leading (eval_rollouts,) dimension.
             Constructed via make_params_batch(); each eval env gets its own slice.
+            If None, env.params is broadcast-replicated across all eval envs.
 
     Returns:
         Function (key, agent_state, return_episodes=False) -> (key, metrics_dict)
     """
+    if params_batch is None:
+        params_batch = make_params_batch(env, eval_rollouts, jax.random.PRNGKey(0))
     vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, 0, None))
     vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, 0, None))
     # Vectorized observation conversion ensures platform always operates on arrays
@@ -236,7 +244,7 @@ def make_eval_rollout_fn(
     @partial(jax.jit, static_argnames=["return_episodes"])
     def eval_rollout(
         key: PRNGKey, agent_state: AgentState, return_episodes: bool = False
-    ) -> tuple[PRNGKey, dict[str, Array]]:
+    ) -> tuple[PRNGKey, dict[str, Any]]:
         # Reset evaluation environments
         key, reset_key = jax.random.split(key)
         reset_keys = jax.random.split(reset_key, num_eval_envs)

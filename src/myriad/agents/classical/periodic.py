@@ -19,9 +19,6 @@ from myriad.core.types import Observation
 from ..agent import Agent
 from .open_loop import AgentParams, AgentState, make_agent as _make_open_loop_agent
 
-# Re-export so callers can do `from myriad.agents.classical.periodic import AgentState`
-__all__ = ["AgentParams", "AgentState", "make_agent"]
-
 
 def make_agent(action_space: Space, pulse_width: int = 24, **_kwargs) -> Agent[AgentState, AgentParams, Observation]:
     """Create a periodic (ON/OFF) open-loop agent.
@@ -34,6 +31,11 @@ def make_agent(action_space: Space, pulse_width: int = 24, **_kwargs) -> Agent[A
     Returns:
         Agent that emits 1 for ``pulse_width`` steps then 0 for ``pulse_width``
         steps, repeating indefinitely.
+
+    Raises:
+        ValueError: If ``pulse_width`` is less than 1.
     """
+    if pulse_width < 1:
+        raise ValueError(f"pulse_width must be >= 1, got {pulse_width}")
     schedule = jnp.array([1] * pulse_width + [0] * pulse_width, dtype=jnp.int32)
     return _make_open_loop_agent(action_space, schedule)

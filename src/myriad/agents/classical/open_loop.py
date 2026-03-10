@@ -84,6 +84,12 @@ def make_agent(action_space: Space, schedule: Array) -> Agent[AgentState, AgentP
 
     Returns:
         Agent that returns ``schedule[step % len(schedule)]`` at each call.
+
+    Raises:
+        ValueError: If ``schedule`` is empty or not 1-D.
     """
+    schedule = jnp.asarray(schedule)
+    if schedule.ndim != 1 or schedule.shape[0] == 0:
+        raise ValueError(f"schedule must be a non-empty 1-D array, got shape {schedule.shape}")
     params = AgentParams(action_space=action_space, schedule=schedule)
     return Agent(params=params, init=_init, select_action=_select_action, update=_update)

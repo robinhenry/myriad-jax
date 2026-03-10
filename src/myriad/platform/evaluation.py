@@ -104,9 +104,12 @@ def evaluate(
             # Build per-env params batch (deterministic if no prior, randomized if prior set)
             params_batch = make_params_batch(env, eval_rollouts, params_key)
 
-            # Initialize agent state if not provided
+            # Initialize agent state if not provided.
+            # Use the first slice of params_batch so the init observation is consistent
+            # with the sampled eval parameters (matters when a prior is active).
             if agent_state is None:
-                obs, _ = env.reset(env_key, env.params, env.config)
+                init_params = jax.tree_util.tree_map(lambda x: x[0], params_batch)
+                obs, _ = env.reset(env_key, init_params, env.config)
                 agent_state = agent.init(agent_key, obs, agent.params)
 
             # Create and run evaluation rollout

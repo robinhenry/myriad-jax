@@ -8,11 +8,11 @@ authors = [
 readme = "README.md"
 
 [tool.poetry]
-version = "0.0.0"
 packages = [
     { include = "myriad", from = "src" },
 ]
 exclude = ["tests", "tests.*"]
+version = "0.0.0"
 
 [tool.poetry.scripts]
 myriad = "myriad.cli:main"
