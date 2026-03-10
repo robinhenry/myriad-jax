@@ -31,3 +31,7 @@ data/
 
 # Sphinx documentation build
 docs/_build/
+
+# Local design/scratch files
+SYSID_DESIGN.md
+sysid_trajectories.png
