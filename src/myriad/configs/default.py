@@ -34,6 +34,20 @@ class WandbConfig(BaseModel):
     tags: tuple[str, ...] = ()  # default to no tags
 
 
+class InferrerConfig(BaseModel):
+    """Schema for the Inferrer's configuration.
+
+    This config allows extra fields to support inferrer-specific parameters.
+    For example: ODE-HMC needs num_warmup/num_samples, SMC-ABC needs n_particles, etc.
+    """
+
+    model_config = {"extra": "allow"}
+
+    name: str
+    frequency: PositiveInt = 12
+    """Run inference every *frequency* environment steps (default: 12 = hourly at 5-min steps)."""
+
+
 class AgentConfig(BaseModel):
     """Schema for the Agent's configuration.
 
@@ -197,8 +211,8 @@ class EvalConfig(BaseModel):
     """Schema for evaluation-only runs.
 
     Matches the structure of Config (training) for consistency:
-    - Config has: run, agent, env, wandb
-    - EvalConfig has: run, agent, env, wandb (same structure!)
+    - Config has: run, agent, env, inferrer, wandb
+    - EvalConfig has: run, agent, env, inferrer, wandb (same structure!)
 
     The key difference: EvalConfig.run is EvalRunConfig (eval params only),
     while Config.run is RunConfig (training + eval params).
@@ -208,12 +222,14 @@ class EvalConfig(BaseModel):
     - Pre-trained models
     - Baseline comparisons
     - Debugging and visualization
+    - System identification (with an inferrer)
     """
 
     # --- Component Configs ---
     run: EvalRunConfig  # Nested run config (matches Config structure)
     agent: AgentConfig
     env: EnvConfig
+    inferrer: InferrerConfig | None = None  # None = no inference
 
     # --- Logging (optional) ---
     wandb: WandbConfig | None = None  # None = disabled (provide WandbConfig to enable)
