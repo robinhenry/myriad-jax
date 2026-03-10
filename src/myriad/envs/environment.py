@@ -25,7 +25,7 @@ If your environment doesn't need dynamic parameters, :class:`EnvironmentParams`
 can be empty, but keep the structure for protocol consistency.
 """
 
-from typing import Any, Generic, NamedTuple, Protocol, TypeVar
+from typing import Any, Callable, Generic, NamedTuple, Protocol, TypeVar
 
 from jax import Array
 
@@ -262,3 +262,7 @@ class Environment(NamedTuple, Generic[S, C, P, Obs]):
     # Pure, jitted environment functions
     reset: ResetFn[S, P, C, Obs]
     step: StepFn[S, P, C, Obs]
+
+    # Optional: sample a fresh P from a prior (enables per-env domain randomization)
+    # If None, env.params is replicated across all parallel envs (backward compatible).
+    sample_params_fn: Callable[[PRNGKey], P] | None = None

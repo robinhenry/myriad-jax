@@ -17,7 +17,7 @@ from myriad.core.spaces import Box, Space
 from myriad.core.types import BaseModel
 from myriad.envs.environment import Environment
 from myriad.platform import steps, training
-from myriad.platform.initialization import get_factory_kwargs
+from myriad.platform.initialization import get_factory_kwargs, make_params_batch
 from myriad.platform.logging import SessionLogger
 from myriad.platform.logging.backends import wandb as wandb_backend
 from myriad.platform.training import TrainingEnvState
@@ -206,9 +206,10 @@ def _create_training_setup(num_envs: int = 2) -> _TrainingSetup:
     agent = _make_test_agent(env.get_action_space(env.config))
     replay_buffer = ReplayBuffer(buffer_size=8)
 
-    key_run, key_env, key_agent, key_buffer = jax.random.split(jax.random.PRNGKey(1234), 4)
+    key_run, key_env, key_agent, key_buffer, key_params = jax.random.split(jax.random.PRNGKey(1234), 5)
+    params_batch = make_params_batch(env, num_envs, key_params)
     env_keys = jax.random.split(key_env, num_envs)
-    obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
+    obs, env_states = jax.vmap(env.reset, in_axes=(0, 0, None))(env_keys, params_batch, env.config)
     training_env_state = TrainingEnvState(env_state=env_states, obs=obs)
 
     obs_host = np.asarray(jax.device_get(obs))
@@ -216,7 +217,7 @@ def _create_training_setup(num_envs: int = 2) -> _TrainingSetup:
     agent_state = agent.init(key_agent, obs_sample, agent.params)
     sample_transition = steps.make_sample_transition(key_buffer, obs_sample, env.get_action_space(env.config))
     buffer_state = replay_buffer.init(sample_transition)
-    train_step_fn = steps.make_train_step_fn(agent, env, replay_buffer, num_envs)
+    train_step_fn = steps.make_train_step_fn(agent, env, replay_buffer, num_envs, params_batch)
 
     return _TrainingSetup(
         key=key_run,
@@ -301,8 +302,9 @@ def test_make_eval_rollout_fn_returns_episode_metrics(training_setup_factory):
     """Evaluation rollout should produce return, length, and done flags."""
     state = training_setup_factory(num_envs=2)
     config = _create_config()
+    eval_params_batch = make_params_batch(state.env, config.run.eval_rollouts, jax.random.PRNGKey(99))
     eval_rollout = steps.make_eval_rollout_fn(
-        state.agent, state.env, config.run.eval_rollouts, config.run.eval_max_steps
+        state.agent, state.env, config.run.eval_rollouts, config.run.eval_max_steps, eval_params_batch
     )
     key_out, metrics = eval_rollout(state.key, state.agent_state)
 

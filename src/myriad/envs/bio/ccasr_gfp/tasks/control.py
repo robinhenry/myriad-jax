@@ -20,7 +20,7 @@ from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
 from myriad.utils import filter_kwargs
 
-from ..physics import PhysicsConfig, PhysicsParams, PhysicsState
+from ..physics import PhysicsConfig, PhysicsParams, PhysicsParamsPrior, PhysicsState
 from .base import (
     BaseCcasrGfpTaskConfig,
     CcasrGfpControlObs,
@@ -77,6 +77,16 @@ class ControlTaskParams:
     """Parameters for the control task."""
 
     physics: PhysicsParams = struct.field(default_factory=PhysicsParams)
+
+
+@struct.dataclass
+class ControlTaskParamsPrior:
+    """Prior distribution over control task parameters."""
+
+    physics: PhysicsParamsPrior = struct.field(default_factory=PhysicsParamsPrior)
+
+    def sample(self, key: "PRNGKey") -> ControlTaskParams:
+        return ControlTaskParams(physics=self.physics.sample(key))
 
 
 def _step(
@@ -253,6 +263,7 @@ def get_action_space(config: ControlTaskConfig) -> Discrete:
 def make_env(
     config: ControlTaskConfig | None = None,
     params: ControlTaskParams | None = None,
+    params_prior: ControlTaskParamsPrior | None = None,
     **kwargs,
 ) -> Environment[ControlTaskState, ControlTaskConfig, ControlTaskParams, CcasrGfpControlObs]:
     """Create a Ccasr-gfp control task environment.
@@ -260,6 +271,9 @@ def make_env(
     Args:
         config: Custom ControlTaskConfig. If None, uses defaults.
         params: Custom ControlTaskParams. If None, creates from kwargs.
+        params_prior: Optional prior for domain randomization. If set,
+            ``env.sample_params_fn`` will sample distinct θ* per parallel env.
+            Can also be triggered via flat kwargs (e.g. ``nu_scale=0.3``).
         **kwargs: Keyword arguments for creating config/params if not provided.
 
     Returns:
@@ -268,8 +282,8 @@ def make_env(
     Example:
         >>> # Constant target at F=25
         >>> env = make_env(F_target_constant=25.0)
-        >>> # Sinewave target
-        >>> env = make_env(target_type="sinewave", sinewave_period_minutes=600.0)
+        >>> # Domain randomization
+        >>> env = make_env(nu_scale=0.3, Kh_scale=0.2)
     """
     if config is None:
         # Distribute flat kwargs to the appropriate nested config dataclass.
@@ -289,6 +303,13 @@ def make_env(
     if params is None:
         params = ControlTaskParams(physics=PhysicsParams(**filter_kwargs(kwargs, PhysicsParams)))
 
+    if params_prior is None:
+        prior_kwargs = filter_kwargs(kwargs, PhysicsParamsPrior)
+        if prior_kwargs:
+            params_prior = ControlTaskParamsPrior(physics=PhysicsParamsPrior(**prior_kwargs))
+
+    sample_fn = params_prior.sample if params_prior is not None else None
+
     return Environment(
         step=step,
         reset=reset,
@@ -296,4 +317,5 @@ def make_env(
         get_obs_shape=get_obs_shape,
         params=params,
         config=config,
+        sample_params_fn=sample_fn,
     )

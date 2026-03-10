@@ -14,11 +14,11 @@ import logging
 import jax
 import numpy as np
 
-from myriad.agents.agent import AgentState
+from myriad.agents.agent import Agent, AgentState
 from myriad.configs.default import EvalConfig
 
 from .display import format_eval_config
-from .initialization import initialize_environment_and_agent
+from .initialization import initialize_environment_and_agent, make_params_batch
 from .logging import SessionLogger
 from .metadata import RunMetadata
 from .output_dir import format_artifacts_tree, get_or_create_output_dir
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 def evaluate(
     config: EvalConfig,
     agent_state: AgentState | None = None,
+    agent: Agent | None = None,
     return_episodes: bool = False,
     save_episodes_to_disk_flag: bool | None = None,
 ) -> EvaluationResults:
@@ -52,6 +53,10 @@ def evaluate(
             Use config_to_eval_config() to convert a training Config if needed.
         agent_state: Optional pre-initialized agent state. If None, agent will be initialized
             with random weights using config.run.seed.
+        agent: Optional pre-built Agent instance. If provided, ``config.agent`` is used
+            only for logging/metadata and the supplied agent runs instead.  Use this for
+            agents whose constructor requires non-serializable arguments (e.g. a JAX array
+            schedule for :mod:`myriad.agents.classical.open_loop`).
         return_episodes: If True, return full episode trajectories in EvaluationResults.episodes.
             This includes observations, actions, rewards, and dones for each step.
         save_episodes_to_disk_flag: If True, save episodes to disk (respects config settings).
@@ -89,10 +94,15 @@ def evaluate(
 
             # Initialize RNG
             key = jax.random.PRNGKey(seed)
-            key, env_key, agent_key = jax.random.split(key, 3)
+            key, env_key, agent_key, params_key = jax.random.split(key, 4)
 
-            # Create environment and agent using shared initialization
-            env, agent, _ = initialize_environment_and_agent(config)
+            # Create environment (and agent from config if none was supplied)
+            env, config_agent, _ = initialize_environment_and_agent(config)
+            if agent is None:
+                agent = config_agent
+
+            # Build per-env params batch (deterministic if no prior, randomized if prior set)
+            params_batch = make_params_batch(env, eval_rollouts, params_key)
 
             # Initialize agent state if not provided
             if agent_state is None:
@@ -100,7 +110,7 @@ def evaluate(
                 agent_state = agent.init(agent_key, obs, agent.params)
 
             # Create and run evaluation rollout
-            eval_rollout_fn = make_eval_rollout_fn(agent, env, eval_rollouts, eval_max_steps)
+            eval_rollout_fn = make_eval_rollout_fn(agent, env, eval_rollouts, eval_max_steps, params_batch)
             key, eval_key = jax.random.split(key)
             eval_key, eval_results_jax = eval_rollout_fn(eval_key, agent_state, return_episodes=collect_episodes)
 

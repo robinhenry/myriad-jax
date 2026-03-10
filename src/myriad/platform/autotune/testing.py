@@ -7,6 +7,7 @@ import jax.numpy as jnp
 
 from myriad.agents.classical.random import make_agent as make_random_agent
 from myriad.envs import make_env
+from myriad.platform.initialization import make_params_batch
 from myriad.platform.runners import make_chunk_runner
 from myriad.platform.steps import make_train_step_fn
 from myriad.platform.types import TrainingEnvState
@@ -40,9 +41,11 @@ def validate_config(
 
         # Initialize environments
         key = jax.random.PRNGKey(42)
+        key, params_key = jax.random.split(key)
+        params_batch = make_params_batch(env, num_envs, params_key)
         reset_keys = jax.random.split(key, num_envs)
-        vmapped_reset = jax.vmap(env.reset, in_axes=(0, None, None))
-        obs, env_states = vmapped_reset(reset_keys, env.params, env.config)
+        vmapped_reset = jax.vmap(env.reset, in_axes=(0, 0, None))
+        obs, env_states = vmapped_reset(reset_keys, params_batch, env.config)
 
         to_array_batch = jax.vmap(to_array)
         obs_array = to_array_batch(obs)
@@ -54,7 +57,7 @@ def validate_config(
         memory_mb = estimate_pytree_memory_mb(training_state) + estimate_pytree_memory_mb(agent_state)
 
         # Create chunk runner using platform primitives
-        step_fn = make_train_step_fn(agent, env, None, num_envs)
+        step_fn = make_train_step_fn(agent, env, None, num_envs, params_batch)
         run_chunk = make_chunk_runner(step_fn, batch_size=1)
 
         # Test 10 steps

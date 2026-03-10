@@ -22,6 +22,7 @@ Reference:
     CDC 2025, https://gitlab.com/lugagnelab/pqn-control-cdc2025
 """
 
+import math
 from typing import NamedTuple
 
 import chex
@@ -136,6 +137,37 @@ class PhysicsParams:
     nh: float | Array = 3.6  # CcaR Hill cooperativity coefficient
     Kf: float | Array = 30.0  # GFP self-activation half-max concentration
     nf: float | Array = 3.6  # GFP Hill coefficient
+
+
+@struct.dataclass
+class PhysicsParamsPrior:
+    """Log-normal prior over kinetic parameters.
+
+    Each parameter p is sampled as: p ~ exp(Normal(loc, scale)).
+    With scale=0 the distribution collapses to a point mass at exp(loc),
+    so the default (all scales zero) is fully deterministic and backward compatible.
+    """
+
+    nu_loc: float | Array = math.log(0.01)
+    nu_scale: float | Array = 0.0
+    Kh_loc: float | Array = math.log(90.0)
+    Kh_scale: float | Array = 0.0
+    nh_loc: float | Array = math.log(3.6)
+    nh_scale: float | Array = 0.0
+    Kf_loc: float | Array = math.log(30.0)
+    Kf_scale: float | Array = 0.0
+    nf_loc: float | Array = math.log(3.6)
+    nf_scale: float | Array = 0.0
+
+    def sample(self, key: PRNGKey) -> PhysicsParams:
+        k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+        return PhysicsParams(
+            nu=jnp.exp(self.nu_loc + self.nu_scale * jax.random.normal(k1)),
+            Kh=jnp.exp(self.Kh_loc + self.Kh_scale * jax.random.normal(k2)),
+            nh=jnp.exp(self.nh_loc + self.nh_scale * jax.random.normal(k3)),
+            Kf=jnp.exp(self.Kf_loc + self.Kf_scale * jax.random.normal(k4)),
+            nf=jnp.exp(self.nf_loc + self.nf_scale * jax.random.normal(k5)),
+        )
 
 
 def compute_propensities(

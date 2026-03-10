@@ -72,17 +72,22 @@ def _make_env_stepper(
     agent: Agent,
     env: Environment,
     num_envs: int,
+    params_batch: Any,
 ) -> Callable[[PRNGKey, AgentState, TrainingEnvState], _EnvStepResult]:
     """Creates reusable vmapped env stepping logic with auto-reset.
 
     Shared by make_train_step_fn and make_collection_step_fn. Handles:
-    - Vmapped env.step/reset
+    - Vmapped env.step/reset (each env gets its own params slice)
     - Action selection
     - Observation → array conversion (for platform utilities)
     - Auto-reset via masking
+
+    Args:
+        params_batch: Batched params pytree with leading (num_envs,) dimension.
+            Constructed via make_params_batch(); each env gets its own slice.
     """
-    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
-    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
+    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, 0, None))
+    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, 0, None))
     to_array_batch = jax.vmap(to_array)
 
     def env_step(
@@ -106,9 +111,9 @@ def _make_env_stepper(
             out_axes=(0, None),
         )(action_keys, last_obs, agent_state, agent.params, False)
 
-        # Step environments in parallel
+        # Step environments in parallel (each env gets its own params slice)
         next_obs, next_env_states, rewards, dones, _ = vmapped_env_step(
-            step_keys, training_env_states.env_state, actions, env.params, env.config
+            step_keys, training_env_states.env_state, actions, params_batch, env.config
         )
         next_obs_array = to_array_batch(next_obs)
         dones_bool = dones.astype(jnp.bool_)
@@ -117,7 +122,7 @@ def _make_env_stepper(
         transition = Transition(last_obs, actions, rewards, next_obs_array, dones_bool)
 
         # Handle auto-reset for completed episodes
-        new_obs, new_env_states = vmapped_env_reset(reset_keys, env.params, env.config)
+        new_obs, new_env_states = vmapped_env_reset(reset_keys, params_batch, env.config)
         new_obs_array = to_array_batch(new_obs)
 
         # If done, use the reset state, otherwise keep the stepped state
@@ -135,13 +140,14 @@ def make_train_step_fn(
     env: Environment,
     replay_buffer: ReplayBuffer | None,
     num_envs: int,
+    params_batch: Any,
 ) -> Callable:
     """Factory to create a jitted, vmapped training step function.
 
     This function wraps the common env stepping logic with replay buffer handling
     and agent updates for off-policy training.
     """
-    env_step = _make_env_stepper(agent, env, num_envs)
+    env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     @partial(jax.jit, static_argnames=["batch_size"])
     def train_step(
@@ -176,13 +182,14 @@ def make_collection_step_fn(
     agent: Agent,
     env: Environment,
     num_envs: int,
+    params_batch: Any,
 ) -> Callable:
     """Factory to create a single-step collection function for on-policy algorithms.
 
     This creates a step function that collects one transition without performing agent updates.
     It's designed to be used with make_chunked_collector for efficient rollout collection.
     """
-    env_step = _make_env_stepper(agent, env, num_envs)
+    env_step = _make_env_stepper(agent, env, num_envs, params_batch)
 
     def collection_step(
         key: PRNGKey,
@@ -196,7 +203,13 @@ def make_collection_step_fn(
     return collection_step
 
 
-def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eval_max_steps: int) -> Callable:
+def make_eval_rollout_fn(
+    agent: Agent,
+    env: Environment,
+    eval_rollouts: int,
+    eval_max_steps: int,
+    params_batch: Any,
+) -> Callable:
     """Factory to create a jitted evaluation rollout function.
 
     Uses while_loop for early termination when all episodes complete. This differs from
@@ -207,12 +220,14 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
         env: The environment to evaluate in
         eval_rollouts: Number of parallel evaluation episodes
         eval_max_steps: Maximum steps per episode
+        params_batch: Batched params with leading (eval_rollouts,) dimension.
+            Constructed via make_params_batch(); each eval env gets its own slice.
 
     Returns:
         Function (key, agent_state, return_episodes=False) -> (key, metrics_dict)
     """
-    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, None, None))
-    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, None, None))
+    vmapped_env_step = jax.vmap(env.step, in_axes=(0, 0, 0, 0, None))
+    vmapped_env_reset = jax.vmap(env.reset, in_axes=(0, 0, None))
     # Vectorized observation conversion ensures platform always operates on arrays
     to_array_batch = jax.vmap(to_array)
     num_eval_envs = eval_rollouts
@@ -225,10 +240,18 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
         # Reset evaluation environments
         key, reset_key = jax.random.split(key)
         reset_keys = jax.random.split(reset_key, num_eval_envs)
-        obs, env_states = vmapped_env_reset(reset_keys, env.params, env.config)
-        # Convert observations to arrays
+        obs, env_states = vmapped_env_reset(reset_keys, params_batch, env.config)
         obs_array = to_array_batch(obs)
         eval_env_state = TrainingEnvState(env_state=env_states, obs=obs_array)
+
+        # Give each eval env its own copy of agent state so stateful agents
+        # (e.g. a periodic controller with an internal step counter) work correctly.
+        # For stateless agents (random, bang-bang) this is zero-overhead: their
+        # AgentState is empty and broadcast_to produces an empty pytree.
+        batched_agent_states = jax.tree_util.tree_map(
+            lambda x: jnp.broadcast_to(jnp.asarray(x), (num_eval_envs, *jnp.asarray(x).shape)),
+            agent_state,
+        )
 
         # Initialize metric accumulators
         episode_returns = jnp.zeros((num_eval_envs,), dtype=jnp.float32)
@@ -238,13 +261,9 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
 
         # Initialize episode data collectors if requested
         if return_episodes:
-            # Get a sample action to determine shape
             sample_action = agent.select_action(jax.random.PRNGKey(0), obs_array[0], agent_state, agent.params, False)[
                 0
             ]
-
-            # Pre-allocate arrays for collecting full trajectories
-            # Shape: (num_eval_envs, max_eval_steps, ...)
             episode_obs = jnp.zeros((num_eval_envs, max_eval_steps, *obs_array.shape[1:]), dtype=obs_array.dtype)
             episode_actions = jnp.zeros(
                 (num_eval_envs, max_eval_steps, *sample_action.shape), dtype=sample_action.dtype
@@ -252,49 +271,53 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
             episode_rewards = jnp.zeros((num_eval_envs, max_eval_steps), dtype=jnp.float32)
             episode_dones = jnp.zeros((num_eval_envs, max_eval_steps), dtype=bool)
         else:
-            # Use None as placeholders when not collecting episodes
             episode_obs = episode_actions = episode_rewards = episode_dones = None  # type: ignore[assignment]
 
         def cond_fun(carry: tuple) -> Array:
             if return_episodes:
-                _, _, _, _, dones, step, _, _, _, _ = carry
+                _, _, _, _, _, dones, step, _, _, _, _ = carry
             else:
-                _, _, _, _, dones, step = carry
-            continue_steps = step < max_steps
-            incomplete = jnp.logical_not(jnp.all(dones))
-            # Exit early once every evaluation episode terminates
-            return jnp.logical_and(continue_steps, incomplete)
+                _, _, _, _, _, dones, step = carry
+            return jnp.logical_and(step < max_steps, jnp.logical_not(jnp.all(dones)))
 
         def body_fun(carry: tuple) -> tuple:
             if return_episodes:
-                key, env_state, returns, lengths, dones, step, ep_obs, ep_actions, ep_rewards, ep_dones = carry
+                (
+                    key,
+                    agent_states,
+                    env_state,
+                    returns,
+                    lengths,
+                    dones,
+                    step,
+                    ep_obs,
+                    ep_actions,
+                    ep_rewards,
+                    ep_dones,
+                ) = carry
             else:
-                key, env_state, returns, lengths, dones, step = carry
+                key, agent_states, env_state, returns, lengths, dones, step = carry
 
-            # Drive each evaluation environment independently but under one loop
             key, action_key, step_key = jax.random.split(key, 3)
             action_keys = jax.random.split(action_key, num_eval_envs)
-            actions, _ = jax.vmap(agent.select_action, in_axes=(0, 0, None, None, None))(
-                action_keys, env_state.obs, agent_state, agent.params, True
+            # Per-env agent states: stateful agents (e.g. periodic) get an
+            # independent counter per env; stateless agents pay zero cost.
+            actions, next_agent_states = jax.vmap(agent.select_action, in_axes=(0, 0, 0, None, None))(
+                action_keys, env_state.obs, agent_states, agent.params, True
             )
 
             step_keys = jax.random.split(step_key, num_eval_envs)
             next_obs, next_env_states, rewards, step_dones, _ = vmapped_env_step(
-                step_keys, env_state.env_state, actions, env.params, env.config
+                step_keys, env_state.env_state, actions, params_batch, env.config
             )
-            # Convert observations to arrays
             next_obs_array = to_array_batch(next_obs)
 
             step_dones = step_dones.astype(jnp.bool_)
             active = jnp.logical_not(dones)
-            active_f32 = active.astype(rewards.dtype)
-
-            returns = returns + rewards * active_f32
+            returns = returns + rewards * active.astype(rewards.dtype)
             lengths = lengths + active.astype(lengths.dtype)
 
-            # Store episode data if collecting trajectories
             if return_episodes:
-                # Store data at current step index for each environment
                 ep_obs = ep_obs.at[:, step].set(env_state.obs)
                 ep_actions = ep_actions.at[:, step].set(actions)
                 ep_rewards = ep_rewards.at[:, step].set(rewards)
@@ -304,20 +327,31 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 env_state=mask_tree(active, next_env_states, env_state.env_state),
                 obs=where_mask(active, next_obs_array, env_state.obs),
             )
-
             dones = jnp.logical_or(dones, step_dones)
             step = step + jnp.array(1, dtype=step.dtype)
 
             if return_episodes:
-                return key, env_state, returns, lengths, dones, step, ep_obs, ep_actions, ep_rewards, ep_dones
+                return (
+                    key,
+                    next_agent_states,
+                    env_state,
+                    returns,
+                    lengths,
+                    dones,
+                    step,
+                    ep_obs,
+                    ep_actions,
+                    ep_rewards,
+                    ep_dones,
+                )
             else:
-                return key, env_state, returns, lengths, dones, step
+                return key, next_agent_states, env_state, returns, lengths, dones, step
 
-        # Run loop with early termination
         initial_step = jnp.array(0, dtype=jnp.int32)
         if return_episodes:
             initial_carry = (
                 key,
+                batched_agent_states,
                 eval_env_state,
                 episode_returns,
                 episode_lengths,
@@ -329,13 +363,22 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 episode_dones,
             )
         else:
-            initial_carry = (key, eval_env_state, episode_returns, episode_lengths, dones, initial_step)  # type: ignore[assignment]
+            initial_carry = (  # type: ignore[assignment]
+                key,
+                batched_agent_states,
+                eval_env_state,
+                episode_returns,
+                episode_lengths,
+                dones,
+                initial_step,
+            )
 
         final_carry = jax.lax.while_loop(cond_fun, body_fun, initial_carry)
 
         if return_episodes:
-            (
+            (  # type: ignore[misc]
                 key,
+                _,
                 _,
                 final_returns,
                 final_lengths,
@@ -345,20 +388,17 @@ def make_eval_rollout_fn(agent: Agent, env: Environment, eval_rollouts: int, eva
                 final_actions,
                 final_rewards,
                 final_dones_ep,
-            ) = final_carry  # type: ignore[misc]
+            ) = final_carry
         else:
-            key, _, final_returns, final_lengths, final_dones, _ = final_carry  # type: ignore[misc]
+            key, _, _, final_returns, final_lengths, final_dones, _ = final_carry  # type: ignore[misc]
 
-        # Package metrics for the caller
-        metrics = {
+        metrics: dict[str, Any] = {
             "episode_return": final_returns,
             "episode_length": final_lengths,
             "dones": final_dones,
         }
-
-        # Add episode data if requested
         if return_episodes:
-            metrics["episodes"] = {  # type: ignore[assignment]
+            metrics["episodes"] = {
                 "observations": final_obs,
                 "actions": final_actions,
                 "rewards": final_rewards,
