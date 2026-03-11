@@ -1,0 +1,50 @@
+# @package _global_
+# PQN training config for CcaSR-GFP control — reproduces paper fig3/fig4
+# Reference: "Control of a bi-stable genetic system via parallelised RL"
+#             Lugagne Lab, CDC 2025
+#
+# Parameter mapping from paper (configs/fig3/rl_agents.json, PQN entry):
+#   num_envs=1M, total_timesteps=288M  → steps_per_env=288
+#   steps_per_update=4                 → rollout_steps=4
+#   num_minibatches=8                  → agent.num_minibatches=8
+#   update_epochs=4                    → agent.num_epochs=4
+#   learning_rate=1e-4                 → agent.learning_rate=1e-4
+#   eps_decay=0.3                      → epsilon_decay_steps=2197 (=floor(0.3×(29297÷4)) update steps)
+#   lr_linear_decay=true               → lr_decay_fraction=1.0, lr_end=1e-20
+#   frame_obs_stack_size=16            → env.frame_stack_n=16
+defaults:
+  - _self_
+
+run:
+  seed: 0
+  steps_per_env: 288
+  num_envs: 1e6
+  rollout_steps: 4
+  eval_frequency: 144
+  eval_rollouts: 100           # lightweight eval during training
+  eval_max_steps: 288
+  save_agent_checkpoint: false  # checkpoint serialization for Flax structs is broken; see platform/serialization.py
+
+env:
+  name: ccasr-gfp-control
+  frame_stack_n: 16           # stack last 16 observations (paper: frame_obs_stack_size=16)
+
+agent:
+  name: pqn
+  epsilon_start: 1.0
+  epsilon_end: 0.007
+  epsilon_decay_fraction: 0.237
+  hidden_size: 256
+  num_layers: 2
+  gamma: 0.954
+  lambda_: 0.342
+  reward_scale: 0.1
+  max_grad_norm: 0.308
+  num_epochs: 8
+  num_minibatches: 8
+  learning_rate: 5e-5
+  lr_decay_fraction: 0.602
+  lr_end: 0
+
+wandb:
+  enabled: false
