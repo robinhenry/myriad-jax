@@ -25,7 +25,7 @@ from myriad.core.types import PRNGKey
 from myriad.envs.environment import Environment
 from myriad.utils import filter_kwargs
 
-from ..physics import PhysicsConfig, PhysicsParams, PhysicsState
+from ..physics import PhysicsConfig, PhysicsParams, PhysicsParamsPrior, PhysicsState
 from .base import (
     BaseCcasrGfpTaskConfig,
     TaskConfig,
@@ -67,6 +67,19 @@ class SysIdTaskParams:
     """
 
     physics: PhysicsParams = struct.field(default_factory=PhysicsParams)
+
+
+@struct.dataclass
+class SysIdTaskParamsPrior:
+    """Prior distribution over SysID task parameters.
+
+    Wraps PhysicsParamsPrior to provide task-level sampling.
+    """
+
+    physics: PhysicsParamsPrior = struct.field(default_factory=PhysicsParamsPrior)
+
+    def sample(self, key: PRNGKey) -> SysIdTaskParams:
+        return SysIdTaskParams(physics=self.physics.sample(key))
 
 
 class SysIdObs(NamedTuple):
@@ -155,6 +168,7 @@ def get_action_space(config: SysIdTaskConfig) -> Discrete:
 def make_env(
     config: SysIdTaskConfig | None = None,
     params: SysIdTaskParams | None = None,
+    params_prior: SysIdTaskParamsPrior | None = None,
     **kwargs,
 ) -> Environment[SysIdTaskState, SysIdTaskConfig, SysIdTaskParams, SysIdObs]:
     """Create a CcaS-CcaR system identification environment.
@@ -162,7 +176,10 @@ def make_env(
     Args:
         config: Static task config. If None, built from kwargs.
         params: Task params carrying θ*. If None, uses PhysicsParams defaults.
-        **kwargs: Forwarded to SysIdTaskConfig/PhysicsConfig/TaskConfig construction.
+        params_prior: Optional prior for domain randomization. If set,
+            ``env.sample_params_fn`` will sample distinct θ* per parallel env.
+            Can also be triggered via flat kwargs (e.g. ``nu_scale=0.3``).
+        **kwargs: Forwarded to SysIdTaskConfig/PhysicsConfig/TaskConfig/PhysicsParamsPrior.
 
     Returns:
         Environment instance for the SysID task.
@@ -170,9 +187,8 @@ def make_env(
     Example:
         >>> # Default ground-truth parameters
         >>> env = make_env()
-        >>> # Custom θ* for a specific cell
-        >>> from myriad.envs.bio.ccasr_gfp.physics import PhysicsParams
-        >>> env = make_env(params=SysIdTaskParams(physics=PhysicsParams(nu=0.02, Kh=80.0)))
+        >>> # Domain randomization: each parallel env gets its own θ*
+        >>> env = make_env(nu_scale=0.3, Kh_scale=0.2)
     """
     if config is None:
         config = SysIdTaskConfig(
@@ -183,6 +199,13 @@ def make_env(
     if params is None:
         params = SysIdTaskParams(physics=PhysicsParams(**filter_kwargs(kwargs, PhysicsParams)))
 
+    if params_prior is None:
+        prior_kwargs = filter_kwargs(kwargs, PhysicsParamsPrior)
+        if prior_kwargs:
+            params_prior = SysIdTaskParamsPrior(physics=PhysicsParamsPrior(**prior_kwargs))
+
+    sample_fn = params_prior.sample if params_prior is not None else None
+
     return Environment(
         step=step,
         reset=reset,
@@ -190,4 +213,5 @@ def make_env(
         get_obs_shape=get_obs_shape,
         params=params,
         config=config,
+        sample_params_fn=sample_fn,
     )

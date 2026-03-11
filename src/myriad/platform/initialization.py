@@ -3,11 +3,14 @@
 This module provides common initialization functions used by both training and evaluation.
 """
 
+import jax
+import jax.numpy as jnp
+
 from myriad.agents import make_agent
 from myriad.agents.agent import Agent
 from myriad.configs.default import Config, EvalConfig
 from myriad.core.spaces import Space
-from myriad.core.types import BaseModel
+from myriad.core.types import BaseModel, PRNGKey
 from myriad.envs import make_env
 from myriad.envs.environment import Environment
 
@@ -72,6 +75,30 @@ def initialize_environment_and_agent(
     agent = make_agent(config.agent.name, action_space=action_space, **agent_kwargs)
 
     return env, agent, action_space
+
+
+def make_params_batch(env: Environment, num_envs: int, key: PRNGKey):
+    """Build a (num_envs, ...) params pytree for parallel environments.
+
+    If ``env.sample_params_fn`` is set, samples ``num_envs`` independent parameter
+    sets (domain randomization). Otherwise replicates ``env.params`` identically
+    across all envs (backward compatible, zero-copy via broadcast_to).
+
+    Args:
+        env: The environment (checked for sample_params_fn).
+        num_envs: Number of parallel environments.
+        key: RNG key used when sampling from the prior.
+
+    Returns:
+        A params pytree with a leading (num_envs,) batch dimension.
+    """
+    if env.sample_params_fn is not None:
+        keys = jax.random.split(key, num_envs)
+        return jax.vmap(env.sample_params_fn)(keys)
+    return jax.tree_util.tree_map(
+        lambda x: jnp.broadcast_to(jnp.asarray(x), (num_envs, *jnp.asarray(x).shape)),
+        env.params,
+    )
 
 
 def get_factory_kwargs(config: BaseModel) -> dict:

@@ -10,7 +10,7 @@ from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
 
 from .display import format_train_config
-from .initialization import initialize_environment_and_agent
+from .initialization import initialize_environment_and_agent, make_params_batch
 from .logging import SessionLogger
 from .metadata import RunMetadata
 from .output_dir import format_artifacts_tree, get_or_create_output_dir
@@ -40,14 +40,18 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
 
     # Initialize everything
     key = jax.random.PRNGKey(config.run.seed)
-    key, env_key, agent_key, buffer_key = jax.random.split(key, 4)
+    key, env_key, agent_key, buffer_key, params_key, eval_params_key = jax.random.split(key, 6)
 
     # Create environment and agent using shared initialization
     env, agent, action_space = initialize_environment_and_agent(config)
 
+    # Build per-env params batches (deterministic if no prior, randomized if prior set)
+    params_batch = make_params_batch(env, config.run.num_envs, params_key)
+    eval_params_batch = make_params_batch(env, config.run.eval_rollouts, eval_params_key)
+
     # Initialize parallel environments
     env_keys = jax.random.split(env_key, config.run.num_envs)
-    obs, env_states = jax.vmap(env.reset, in_axes=(0, None, None))(env_keys, env.params, env.config)
+    obs, env_states = jax.vmap(env.reset, in_axes=(0, 0, None))(env_keys, params_batch, env.config)
 
     # Convert observations to arrays
     obs_array = jax.vmap(to_array)(obs)
@@ -60,7 +64,9 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     agent_state = agent.init(agent_key, sample_obs, agent.params)
 
     # Build shared jitted primitives first
-    eval_rollout_fn = make_eval_rollout_fn(agent, env, config.run.eval_rollouts, config.run.eval_max_steps)
+    eval_rollout_fn = make_eval_rollout_fn(
+        agent, env, config.run.eval_rollouts, config.run.eval_max_steps, eval_params_batch
+    )
     chunk_size = max(1, config.run.scan_chunk_size or 1)
 
     # Determine training mode and initialize accordingly
@@ -73,7 +79,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         assert config.run.rollout_steps is not None  # type narrowing for mypy
 
         # Create chunked collector for efficient rollout collection
-        collection_step_fn = make_collection_step_fn(agent, env, config.run.num_envs)
+        collection_step_fn = make_collection_step_fn(agent, env, config.run.num_envs, params_batch)
         rollout_fn = make_chunked_collector(collection_step_fn=collection_step_fn, total_steps=config.run.rollout_steps)
         # Create chunk runner that batches multiple rollout-update cycles
         run_chunk_fn = make_on_policy_chunk_runner(
@@ -90,7 +96,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
         sample_transition = make_sample_transition(buffer_key, sample_obs_array, action_space)
         buffer_state = replay_buffer.init(sample_transition)
         # Create chunk runner that batches multiple step-update cycles
-        train_step_fn = make_train_step_fn(agent, env, replay_buffer, config.run.num_envs)
+        train_step_fn = make_train_step_fn(agent, env, replay_buffer, config.run.num_envs, params_batch)
         run_chunk_fn = make_chunk_runner(train_step_fn, config.run.batch_size)
 
     # Training runs for steps_per_env steps in each environment

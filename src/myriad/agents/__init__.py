@@ -1,10 +1,11 @@
 from .agent import Agent, AgentParams, AgentState
-from .classical import bangbang, pid, random
+from .classical import bangbang, open_loop, periodic, pid, random  # noqa: F401
 from .registration import AgentInfo, get_agent_info, list_agents, make_agent, register_agent
 from .rl import dqn, pqn
 
 # Register built-in agents
 register_agent("random", random.make_agent)
+register_agent("periodic", periodic.make_agent)
 register_agent("bangbang", bangbang.make_agent)
 register_agent("pid", pid.make_agent)
 register_agent("dqn", dqn.make_agent, is_off_policy=True)
