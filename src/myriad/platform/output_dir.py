@@ -7,6 +7,8 @@ whether running under Hydra's directory management.
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 
 def is_hydra_run() -> bool:
     """Detect if we're running under Hydra's directory management.
@@ -51,9 +53,32 @@ def create_timestamped_output_dir(base_dir: Path | str = "outputs") -> Path:
     return output_dir
 
 
+def _format_duration(seconds: float) -> str:
+    """Format seconds into a human-readable duration string."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{int(minutes)}m {secs:.1f}s"
+    hours, minutes = divmod(int(minutes), 60)
+    return f"{int(hours)}h {int(minutes)}m {secs:.0f}s"
+
+
 def format_artifacts_tree(run_dir: Path) -> str:
     """Format a compact tree view of a run's artifacts directory for logging."""
-    lines = [f"Artifacts: {run_dir}"]
+    # Read duration from run_metadata.yaml if available
+    lines: list[str] = []
+    metadata_path = run_dir / "run_metadata.yaml"
+    if metadata_path.exists():
+        try:
+            with open(metadata_path) as f:
+                metadata = yaml.safe_load(f)
+            if metadata and "duration_seconds" in metadata:
+                lines.append(f"Duration: {_format_duration(metadata['duration_seconds'])}")
+        except Exception:
+            pass
+
+    lines.append(f"Artifacts: {run_dir}")
     children: list[tuple[str, str]] = []  # (label, detail)
 
     for item in sorted(run_dir.iterdir()):
