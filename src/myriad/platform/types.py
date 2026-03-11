@@ -319,6 +319,10 @@ class EvaluationResults:
     agent_state: Any | None = None
     """Agent state used for evaluation (if provided)."""
 
+    # --- Optional Inferrer State ---
+    inferrer_state: Any | None = None
+    """Final inferrer state (posterior representation, if inference was enabled)."""
+
     def save(self, directory: Path | str, save_checkpoint: bool = False) -> None:
         """Save results and optionally agent checkpoint to directory.
 
@@ -366,6 +370,7 @@ class EvaluationResults:
             run_dir=self.run_dir,
             episodes=self.episodes,
             agent_state=None,  # Don't pickle agent state - use checkpoint instead
+            inferrer_state=None,  # Exclude inferrer state from pickle
         )
 
         # Use shared helper for saving results and checkpoint

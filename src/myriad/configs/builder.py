@@ -10,7 +10,7 @@ from myriad.agents import get_agent_info
 from myriad.core.types import BaseModel
 from myriad.envs import EnvInfo, get_env_info
 
-from .default import AgentConfig, Config, EnvConfig, EvalConfig, EvalRunConfig, RunConfig, WandbConfig
+from .default import AgentConfig, Config, EnvConfig, EvalConfig, EvalRunConfig, InferrerConfig, RunConfig, WandbConfig
 
 # Default rollout steps for on-policy agents if not specified
 DEFAULT_ON_POLICY_ROLLOUT_STEPS = 2
@@ -32,6 +32,7 @@ def _distribute_kwargs(
     sections: dict[str, dict[str, Any]] = {
         "env": {},
         "agent": {},
+        "inferrer": {},
         "run": {},
         "wandb": {},
     }
@@ -39,6 +40,7 @@ def _distribute_kwargs(
     # Model classes for automated parameter inference
     inference_models: dict[str, type[BaseModel]] = {
         "run": run_cls,
+        "inferrer": InferrerConfig,
         "wandb": WandbConfig,
         "agent": AgentConfig,
     }
@@ -70,7 +72,7 @@ def _distribute_kwargs(
             # Default to agent config
             sections["agent"][key] = value
 
-    return sections["env"], sections["agent"], sections["run"], sections["wandb"]
+    return sections["env"], sections["agent"], sections["inferrer"], sections["run"], sections["wandb"]
 
 
 def _resolve_eval_max_steps(eval_max_steps: int | None, env_info: EnvInfo | None) -> int | None:
@@ -131,7 +133,7 @@ def create_config(
     env_info = get_env_info(env)
 
     # Distribute nested overrides
-    env_kwargs, agent_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, RunConfig)
+    env_kwargs, agent_kwargs, _inferrer_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, RunConfig)
 
     # Auto-configure training mode based on agent type
     if rollout_steps is None:
@@ -173,6 +175,8 @@ def create_eval_config(
     eval_max_steps: int | None = None,
     seed: int = 42,
     wandb_enabled: bool = False,
+    inferrer: str | None = None,
+    inference_frequency: int | None = None,
     **kwargs: Any,
 ) -> EvalConfig:
     """Create an evaluation-only config with sensible defaults.
@@ -188,6 +192,9 @@ def create_eval_config(
             If None, uses environment-specific default from registry or Config models.
         seed: Random seed for reproducibility
         wandb_enabled: Enable Weights & Biases logging
+        inferrer: Inferrer name (e.g., ``"ode-hmc"``). None disables inference.
+        inference_frequency: Run inference every N environment steps.
+            If None, uses the inferrer's default frequency.
         **kwargs: Additional config overrides (same as create_config)
 
     Returns:
@@ -197,7 +204,7 @@ def create_eval_config(
     env_info = get_env_info(env)
 
     # Distribute nested overrides
-    env_kwargs, agent_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, EvalRunConfig)
+    env_kwargs, agent_kwargs, inferrer_kwargs, run_kwargs, wandb_kwargs = _distribute_kwargs(kwargs, EvalRunConfig)
 
     # Build run config with merged params: explicit > model defaults
     run_params: dict[str, Any] = {
@@ -210,11 +217,20 @@ def create_eval_config(
     run_params = {k: v for k, v in run_params.items() if v is not None}
     eval_run_config = EvalRunConfig(**run_params)
 
+    # Build inferrer config (if requested)
+    inferrer_config = None
+    if inferrer is not None:
+        inf_params: dict[str, Any] = {"name": inferrer, **inferrer_kwargs}
+        if inference_frequency is not None:
+            inf_params["frequency"] = inference_frequency
+        inferrer_config = InferrerConfig(**inf_params)
+
     # Build other configs
     wandb_params: dict[str, Any] = {"enabled": wandb_enabled, **wandb_kwargs}
     return EvalConfig(
         env=EnvConfig(name=env, **env_kwargs),
         agent=AgentConfig(name=agent, **agent_kwargs),
         run=eval_run_config,
+        inferrer=inferrer_config,
         wandb=WandbConfig(**wandb_params),
     )

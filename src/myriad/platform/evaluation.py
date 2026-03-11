@@ -10,12 +10,14 @@ This module provides evaluation capabilities for:
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import jax
 import numpy as np
 
 from myriad.agents.agent import Agent, AgentState
 from myriad.configs.default import EvalConfig
+from myriad.inference import make_inferrer
 
 from .display import format_eval_config
 from .initialization import initialize_environment_and_agent, make_params_batch
@@ -89,8 +91,8 @@ def evaluate(
             if save_episodes_to_disk_flag is None:
                 save_episodes_to_disk_flag = config.run.eval_episode_save_frequency > 0
 
-            # Collect episodes if we need them for memory return OR for disk saving
-            collect_episodes = return_episodes or save_episodes_to_disk_flag
+            # Collect episodes if we need them for memory return, disk saving, or inference
+            collect_episodes = return_episodes or save_episodes_to_disk_flag or config.inferrer is not None
 
             # Initialize RNG
             key = jax.random.PRNGKey(seed)
@@ -126,6 +128,31 @@ def evaluate(
             if "episodes" in eval_results_jax:
                 episodes_data = {k: jax.device_get(v) for k, v in eval_results_jax["episodes"].items()}
 
+            # Run inferrer on collected episodes (if configured)
+            inferrer_state: Any = None
+            if config.inferrer is not None and episodes_data is not None:
+                inferrer_kwargs = {
+                    k: v for k, v in config.inferrer.model_dump().items() if k not in ("name", "frequency")
+                }
+                inferrer_obj = make_inferrer(config.inferrer.name, **inferrer_kwargs)
+
+                key, inf_init_key, inf_update_key = jax.random.split(key, 3)
+                inferrer_state = inferrer_obj.init(inf_init_key, inferrer_obj.params)
+
+                # Build episode dict with scalar results alongside trajectory arrays
+                inf_episodes = {
+                    **episodes_data,
+                    "episode_return": episode_returns,
+                    "episode_length": episode_lengths,
+                }
+                inferrer_state, inf_metrics = inferrer_obj.update(
+                    inf_update_key, inferrer_state, inf_episodes, inferrer_obj.params
+                )
+                logger.info(
+                    "Inference complete: %s",
+                    " | ".join(f"{k}={v:.4f}" for k, v in inf_metrics.items()),
+                )
+
             # Compute summary statistics
             results = EvaluationResults(
                 mean_return=float(np.mean(episode_returns)),
@@ -144,6 +171,7 @@ def evaluate(
                 episodes=episodes_data if return_episodes else None,
                 agent_state=agent_state,  # Store agent state for potential checkpoint saving
                 run_dir=run_dir,  # Store output directory for tests and inspection
+                inferrer_state=inferrer_state,
             )
 
             # Log evaluation with single unified call
