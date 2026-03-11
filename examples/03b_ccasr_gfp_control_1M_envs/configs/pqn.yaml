@@ -1,17 +1,5 @@
 # @package _global_
-# PQN training config for CcaSR-GFP control — reproduces paper fig3/fig4
-# Reference: "Control of a bi-stable genetic system via parallelised RL"
-#             Lugagne Lab, CDC 2025
-#
-# Parameter mapping from paper (configs/fig3/rl_agents.json, PQN entry):
-#   num_envs=1M, total_timesteps=288M  → steps_per_env=288
-#   steps_per_update=4                 → rollout_steps=4
-#   num_minibatches=8                  → agent.num_minibatches=8
-#   update_epochs=4                    → agent.num_epochs=4
-#   learning_rate=1e-4                 → agent.learning_rate=1e-4
-#   eps_decay=0.3                      → epsilon_decay_steps=2197 (=floor(0.3×(29297÷4)) update steps)
-#   lr_linear_decay=true               → lr_decay_fraction=1.0, lr_end=1e-20
-#   frame_obs_stack_size=16            → env.frame_stack_n=16
+# PQN config for CcaSR-GFP control with 1M parallel environments.
 defaults:
   - _self_
 
