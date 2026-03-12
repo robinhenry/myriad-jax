@@ -18,7 +18,7 @@ from myriad.agents.agent import Agent, AgentState
 from myriad.configs.default import EvalConfig
 
 from .display import format_eval_config
-from .initialization import initialize_environment_and_agent, make_params_batch
+from .initialization import initialize_environment, initialize_environment_and_agent, make_params_batch
 from .logging import SessionLogger
 from .metadata import RunMetadata
 from .output_dir import format_artifacts_tree, get_or_create_output_dir
@@ -96,10 +96,11 @@ def evaluate(
             key = jax.random.PRNGKey(seed)
             key, env_key, agent_key, params_key = jax.random.split(key, 4)
 
-            # Create environment (and agent from config if none was supplied)
-            env, config_agent, _ = initialize_environment_and_agent(config)
+            # Create environment; only build agent from config if caller didn't supply one
             if agent is None:
-                agent = config_agent
+                env, agent, _ = initialize_environment_and_agent(config)
+            else:
+                env = initialize_environment(config)
 
             # Build per-env params batch (deterministic if no prior, randomized if prior set)
             params_batch = make_params_batch(env, eval_rollouts, params_key)
