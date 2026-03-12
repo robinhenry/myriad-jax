@@ -5,12 +5,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from myriad.agents.agent import Agent
 from myriad.configs.default import Config
 from myriad.core.replay_buffer import ReplayBuffer
 from myriad.utils import to_array
 
 from .display import format_train_config
-from .initialization import initialize_environment_and_agent, make_params_batch
+from .initialization import initialize_environment, initialize_environment_and_agent, make_params_batch
 from .logging import SessionLogger
 from .metadata import RunMetadata
 from .output_dir import format_artifacts_tree, get_or_create_output_dir
@@ -30,7 +31,9 @@ from .types import TrainingEnvState, TrainingResults
 logger = logging.getLogger(__name__)
 
 
-def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: Path) -> TrainingResults:
+def _run_training_loop(
+    config: Config, session_logger: SessionLogger, run_dir: Path, agent: Agent | None = None
+) -> TrainingResults:
     """Executes the training loop and returns metrics + trained agent.
 
     Returns:
@@ -42,8 +45,12 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     key = jax.random.PRNGKey(config.run.seed)
     key, env_key, agent_key, buffer_key, params_key, eval_params_key = jax.random.split(key, 6)
 
-    # Create environment and agent using shared initialization
-    env, agent, action_space = initialize_environment_and_agent(config)
+    # Create environment; only build agent from config if caller didn't supply one
+    if agent is None:
+        env, agent, action_space = initialize_environment_and_agent(config)
+    else:
+        env = initialize_environment(config)
+        action_space = env.get_action_space(env.config)
 
     # Build per-env params batches (deterministic if no prior, randomized if prior set)
     params_batch = make_params_batch(env, config.run.num_envs, params_key)
@@ -263,7 +270,7 @@ def _run_training_loop(config: Config, session_logger: SessionLogger, run_dir: P
     )
 
 
-def train_and_evaluate(config: Config) -> TrainingResults:
+def train_and_evaluate(config: Config, agent: Agent | None = None) -> TrainingResults:
     """
     Main entry point for a training run.
     Initializes everything and runs the outer training loop.
@@ -274,6 +281,8 @@ def train_and_evaluate(config: Config) -> TrainingResults:
 
     Args:
         config: Training configuration specifying environment, agent, and run parameters.
+        agent: Optional pre-built Agent instance. If provided, ``config.agent`` is used
+            only for logging/metadata and the supplied agent runs instead.
 
     Returns:
         TrainingResults containing:
@@ -294,7 +303,7 @@ def train_and_evaluate(config: Config) -> TrainingResults:
     exit_code = 0
     try:
         with RunMetadata(run_dir, run_type="training"):
-            results = _run_training_loop(config, session_logger, run_dir)
+            results = _run_training_loop(config, session_logger, run_dir, agent=agent)
 
             # Save artifacts directly
             results.save(run_dir, save_checkpoint=config.run.save_agent_checkpoint)

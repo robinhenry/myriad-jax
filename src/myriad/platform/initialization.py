@@ -15,21 +15,17 @@ from myriad.envs import make_env
 from myriad.envs.environment import Environment
 
 
-def initialize_environment_and_agent(
-    config: Config | EvalConfig,
-) -> tuple[Environment, Agent, Space]:
-    """Initialize environment and agent from configuration.
+def initialize_environment(config: Config | EvalConfig) -> Environment:
+    """Initialize only the environment from configuration.
 
-    This is shared by both training and evaluation to ensure consistent setup.
+    Use this when the caller already has an agent and only needs the environment.
 
     Args:
-        config: Configuration specifying environment and agent parameters.
-            Can be either a full Config (training) or EvalConfig (evaluation-only).
+        config: Configuration specifying environment parameters.
 
     Returns:
-        Tuple of (environment, agent, action_space)
+        The initialized environment.
     """
-    # Create the environment
     env_kwargs = get_factory_kwargs(config.env)
     frame_stack_n = env_kwargs.pop("frame_stack_n", 0)
     env = make_env(config.env.name, **env_kwargs)
@@ -37,8 +33,11 @@ def initialize_environment_and_agent(
         from myriad.envs.wrappers import make_frame_stack_env
 
         env = make_frame_stack_env(env, n_frames=frame_stack_n)
+    return env
 
-    # Create the agent
+
+def _make_agent_from_config(config: Config | EvalConfig, env: Environment) -> tuple[Agent, Space]:
+    """Create an agent from configuration and an already-initialized environment."""
     agent_kwargs = get_factory_kwargs(config.agent)
     action_space = env.get_action_space(env.config)
 
@@ -73,7 +72,25 @@ def initialize_environment_and_agent(
             agent_kwargs["dt"] = env_dt
 
     agent = make_agent(config.agent.name, action_space=action_space, **agent_kwargs)
+    return agent, action_space
 
+
+def initialize_environment_and_agent(
+    config: Config | EvalConfig,
+) -> tuple[Environment, Agent, Space]:
+    """Initialize environment and agent from configuration.
+
+    This is shared by both training and evaluation to ensure consistent setup.
+
+    Args:
+        config: Configuration specifying environment and agent parameters.
+            Can be either a full Config (training) or EvalConfig (evaluation-only).
+
+    Returns:
+        Tuple of (environment, agent, action_space)
+    """
+    env = initialize_environment(config)
+    agent, action_space = _make_agent_from_config(config, env)
     return env, agent, action_space
 
 
