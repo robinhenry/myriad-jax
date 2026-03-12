@@ -225,6 +225,22 @@ class TestEvaluateBasic:
         # Should complete successfully
         assert results.num_episodes == test_eval_config.run.eval_rollouts
 
+    def test_evaluate_with_agent_kwarg_skips_config_agent(self, test_eval_config):
+        """evaluate(agent=...) should skip agent construction from config.
+
+        This allows config.agent.name to reference an unregistered agent
+        (e.g. open_loop) without causing a lookup failure.
+        """
+        # Point config at a non-existent agent name
+        test_eval_config.agent = AgentConfig(name="does-not-exist")
+
+        # Build agent manually
+        env = _make_test_env()
+        agent = _make_test_agent(env.get_action_space(env.config))
+
+        results = evaluate(test_eval_config, agent=agent, return_episodes=False)
+        assert results.num_episodes == test_eval_config.run.eval_rollouts
+
 
 class TestEvaluateStatistics:
     """Tests for evaluation statistics computation."""
