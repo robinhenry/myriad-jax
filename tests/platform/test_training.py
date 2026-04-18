@@ -1172,3 +1172,21 @@ def test_episode_saves_during_training(tmp_path, monkeypatch):
     assert results.run_dir is not None
     episodes_dir = results.run_dir / "episodes"
     assert episodes_dir.exists()
+
+
+def test_train_and_evaluate_with_agent_kwarg_skips_config_agent():
+    """train_and_evaluate(agent=...) should skip agent construction from config.
+
+    This allows config.agent.name to reference an unregistered agent
+    (e.g. open_loop) without causing a lookup failure.
+    """
+    config = _create_config(run_overrides={"steps_per_env": 2, "eval_frequency": 2})
+    # Point config at a non-existent agent name
+    config.agent = AgentConfig(name="does-not-exist")
+
+    # Build agent manually
+    env = _make_test_env()
+    agent = _make_test_agent(env.get_action_space(env.config))
+
+    results = training.train_and_evaluate(config, agent=agent)
+    assert results.agent_state is not None
