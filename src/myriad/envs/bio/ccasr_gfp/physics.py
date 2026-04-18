@@ -32,8 +32,8 @@ from flax import struct
 from jax import Array
 
 from myriad.core.types import PRNGKey
-from myriad.physics import hill_function
-from myriad.physics.gillespie import run_gillespie_loop
+from myriad.envs.bio.gillespie import step_gillespie_interval
+from myriad.physics import hill_function, sample_lognormal
 
 
 class PhysicsState(NamedTuple):
@@ -160,13 +160,13 @@ class PhysicsParamsPrior:
     nf_scale: float | Array = 0.0
 
     def sample(self, key: PRNGKey) -> PhysicsParams:
-        k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+        k_nu, k_Kh, k_nh, k_Kf, k_nf = jax.random.split(key, 5)
         return PhysicsParams(
-            nu=jnp.exp(self.nu_loc + self.nu_scale * jax.random.normal(k1)),
-            Kh=jnp.exp(self.Kh_loc + self.Kh_scale * jax.random.normal(k2)),
-            nh=jnp.exp(self.nh_loc + self.nh_scale * jax.random.normal(k3)),
-            Kf=jnp.exp(self.Kf_loc + self.Kf_scale * jax.random.normal(k4)),
-            nf=jnp.exp(self.nf_loc + self.nf_scale * jax.random.normal(k5)),
+            nu=sample_lognormal(k_nu, self.nu_loc, self.nu_scale),
+            Kh=sample_lognormal(k_Kh, self.Kh_loc, self.Kh_scale),
+            nh=sample_lognormal(k_nh, self.nh_loc, self.nh_scale),
+            Kf=sample_lognormal(k_Kf, self.Kf_loc, self.Kf_scale),
+            nf=sample_lognormal(k_nf, self.nf_loc, self.nf_scale),
         )
 
 
@@ -273,24 +273,14 @@ def step_physics(
     Returns:
         Next physical state after simulating until interval end
     """
-    target_time = interval_start + config.timestep_minutes
-
-    def _propensities(s, a):
-        return compute_propensities(s, a, params)
-
-    final_state, next_reaction_time = run_gillespie_loop(
-        key=key,
-        initial_state=state,
-        action=action,
-        target_time=target_time,
-        max_steps=config.max_gillespie_steps,
-        compute_propensities_fn=_propensities,
+    return step_gillespie_interval(
+        key,
+        state,
+        action,
+        params,
+        config,
+        compute_propensities_fn=compute_propensities,
         apply_reaction_fn=apply_reaction,
-        get_time_fn=lambda s: s.time,
-        update_time_fn=lambda s, t: s._replace(time=t),
-        pending_reaction_time=state.next_reaction_time,
         previous_action=previous_action,
+        interval_start=interval_start,
     )
-
-    # Store the pending reaction time for the next step
-    return final_state._replace(next_reaction_time=next_reaction_time)
