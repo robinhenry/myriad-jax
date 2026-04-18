@@ -24,8 +24,8 @@ from flax import struct
 from jax import Array
 
 from myriad.core.types import PRNGKey
+from myriad.envs.bio.gillespie import step_gillespie_interval
 from myriad.physics import hill_function, sample_lognormal
-from myriad.physics.gillespie import run_gillespie_loop
 
 
 class PhysicsState(NamedTuple):
@@ -208,23 +208,14 @@ def step_physics(
     Returns:
         Next physical state after simulating until interval end
     """
-    target_time = interval_start + config.timestep_minutes
-
-    def _propensities(s: PhysicsState, a: Array) -> Array:
-        return compute_propensities(s, a, params)
-
-    final_state, next_reaction_time = run_gillespie_loop(
-        key=key,
-        initial_state=state,
-        action=action,
-        target_time=target_time,
-        max_steps=config.max_gillespie_steps,
-        compute_propensities_fn=_propensities,
+    return step_gillespie_interval(
+        key,
+        state,
+        action,
+        params,
+        config,
+        compute_propensities_fn=compute_propensities,
         apply_reaction_fn=apply_reaction,
-        get_time_fn=lambda s: s.time,
-        update_time_fn=lambda s, t: s._replace(time=t),
-        pending_reaction_time=state.next_reaction_time,
         previous_action=previous_action,
+        interval_start=interval_start,
     )
-
-    return final_state._replace(next_reaction_time=next_reaction_time)

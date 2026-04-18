@@ -110,3 +110,19 @@ class TestMakeEnvWithPrior:
         env = make_env(k_prod=42.0)
         assert env.sample_params_fn is None
         assert float(env.params.physics.k_prod) == pytest.approx(42.0)
+
+    def test_kwargs_flow_to_task_config(self):
+        """Task-level kwargs (max_steps, X_obs_normalizer) flow through make_env."""
+        env = make_env(max_steps=100, X_obs_normalizer=50.0)
+        assert env.config.max_steps == 100
+        assert float(env.config.X_obs_normalizer) == pytest.approx(50.0)
+
+    def test_registered_under_canonical_name(self):
+        """make_env('opto-hill-1d-sysid') resolves through the env registry."""
+        from myriad.envs import make_env as registry_make_env
+
+        env = registry_make_env("opto-hill-1d-sysid")
+        assert env.get_obs_shape(env.config) == (1,)
+        action_space = env.get_action_space(env.config)
+        assert float(action_space.low) == 0.0
+        assert float(action_space.high) == 1.0

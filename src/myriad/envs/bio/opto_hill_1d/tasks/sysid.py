@@ -47,24 +47,12 @@ class SysIdTaskState(NamedTuple):
 
 
 @struct.dataclass
-class TaskConfig:
-    """Task-level configuration (episode length, observation normalization)."""
-
-    max_steps: int = 288  # 288 × 5 min = 24 h
-    X_obs_normalizer: float = 100.0
-
-
-@struct.dataclass
 class SysIdTaskConfig:
     """Static configuration for the opto_hill_1d SysID task."""
 
     physics: PhysicsConfig = struct.field(default_factory=PhysicsConfig)
-    task: TaskConfig = struct.field(default_factory=TaskConfig)
-
-    @property
-    def max_steps(self) -> int:
-        """Required by EnvironmentConfig protocol."""
-        return self.task.max_steps
+    max_steps: int = 288  # 288 × 5 min = 24 h
+    X_obs_normalizer: float = 100.0
 
 
 @struct.dataclass
@@ -112,13 +100,7 @@ class SysIdObs(NamedTuple):
 
 
 def get_obs(state: SysIdTaskState, config: SysIdTaskConfig) -> SysIdObs:
-    return SysIdObs(X_normalized=state.physics.X / config.task.X_obs_normalizer)
-
-
-def _sample_initial_physics(key: PRNGKey) -> PhysicsState:
-    """Start from zero protein at time 0 (unused key kept for symmetry)."""
-    del key
-    return PhysicsState.create(time=jnp.array(0.0), X=jnp.array(0.0))
+    return SysIdObs(X_normalized=state.physics.X / config.X_obs_normalizer)
 
 
 def _reset(
@@ -127,10 +109,9 @@ def _reset(
     config: SysIdTaskConfig,
 ) -> tuple[SysIdObs, SysIdTaskState]:
     """Reset to initial cell state (X=0). θ* is unchanged — it lives in params."""
-    del params  # unused on reset
-    physics = _sample_initial_physics(key)
+    del params, key  # X starts at 0 deterministically; signature kept for protocol
     state = SysIdTaskState(
-        physics=physics,
+        physics=PhysicsState.create(time=jnp.array(0.0), X=jnp.array(0.0)),
         t=jnp.array(0),
         U=jnp.array(0.0, dtype=jnp.float32),
     )
@@ -167,7 +148,7 @@ def _step(
         interval_start=interval_start,
     )
     t_next = state.t + 1
-    done = (t_next >= config.task.max_steps).astype(jnp.float32)
+    done = (t_next >= config.max_steps).astype(jnp.float32)
     next_state = SysIdTaskState(physics=next_physics, t=t_next, U=action)
     obs = get_obs(next_state, config)
     info = {"X": next_physics.X, "U": action}
@@ -203,8 +184,8 @@ def make_env(
         params_prior: Optional prior for domain randomization. If set,
             ``env.sample_params_fn`` will sample distinct θ* per parallel env.
             Can also be triggered via flat kwargs (e.g. ``k_prod_scale=0.3``).
-        **kwargs: Forwarded to SysIdTaskConfig / PhysicsConfig / TaskConfig /
-            PhysicsParams / PhysicsParamsPrior via filter_kwargs.
+        **kwargs: Forwarded to SysIdTaskConfig / PhysicsConfig / PhysicsParams /
+            PhysicsParamsPrior via filter_kwargs.
 
     Returns:
         Environment instance for the SysID task.
@@ -214,9 +195,10 @@ def make_env(
         >>> env = make_env(k_prod_scale=0.3, K_scale=0.2)
     """
     if config is None:
+        sysid_kwargs = {k: v for k, v in filter_kwargs(kwargs, SysIdTaskConfig).items() if k != "physics"}
         config = SysIdTaskConfig(
             physics=PhysicsConfig(**filter_kwargs(kwargs, PhysicsConfig)),
-            task=TaskConfig(**filter_kwargs(kwargs, TaskConfig)),
+            **sysid_kwargs,
         )
 
     if params is None:
