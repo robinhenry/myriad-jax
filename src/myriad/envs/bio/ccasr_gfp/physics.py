@@ -32,7 +32,7 @@ from flax import struct
 from jax import Array
 
 from myriad.core.types import PRNGKey
-from myriad.physics import hill_function
+from myriad.physics import hill_function, sample_lognormal
 from myriad.physics.gillespie import run_gillespie_loop
 
 
@@ -160,13 +160,13 @@ class PhysicsParamsPrior:
     nf_scale: float | Array = 0.0
 
     def sample(self, key: PRNGKey) -> PhysicsParams:
-        k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+        k_nu, k_Kh, k_nh, k_Kf, k_nf = jax.random.split(key, 5)
         return PhysicsParams(
-            nu=jnp.exp(self.nu_loc + self.nu_scale * jax.random.normal(k1)),
-            Kh=jnp.exp(self.Kh_loc + self.Kh_scale * jax.random.normal(k2)),
-            nh=jnp.exp(self.nh_loc + self.nh_scale * jax.random.normal(k3)),
-            Kf=jnp.exp(self.Kf_loc + self.Kf_scale * jax.random.normal(k4)),
-            nf=jnp.exp(self.nf_loc + self.nf_scale * jax.random.normal(k5)),
+            nu=sample_lognormal(k_nu, self.nu_loc, self.nu_scale),
+            Kh=sample_lognormal(k_Kh, self.Kh_loc, self.Kh_scale),
+            nh=sample_lognormal(k_nh, self.nh_loc, self.nh_scale),
+            Kf=sample_lognormal(k_Kf, self.Kf_loc, self.Kf_scale),
+            nf=sample_lognormal(k_nf, self.nf_loc, self.nf_scale),
         )
 
 

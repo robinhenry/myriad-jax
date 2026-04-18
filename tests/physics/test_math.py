@@ -4,9 +4,12 @@ This module tests mathematical building blocks like the Hill function,
 ensuring they produce correct values and handle edge cases properly.
 """
 
+import math
+
+import jax
 import jax.numpy as jnp
 
-from myriad.physics import hill_function
+from myriad.physics import hill_function, sample_lognormal
 
 
 class TestHillFunction:
@@ -107,3 +110,36 @@ class TestHillFunction:
 
         # F > K, so should be > 0.5
         assert result_F > 0.5, f"Expected F result > 0.5, got {result_F}"
+
+
+class TestSampleLognormal:
+    """Test suite for the log-normal sampling helper."""
+
+    def test_scale_zero_is_exact_exp_loc(self):
+        """scale=0 must return exactly exp(loc), regardless of key."""
+        loc = math.log(0.5)
+        for seed in [0, 1, 999]:
+            value = sample_lognormal(jax.random.PRNGKey(seed), loc, 0.0)
+            assert float(value) == jnp.exp(jnp.array(loc))
+
+    def test_always_positive(self):
+        """Log-normal draws must be strictly positive for any finite scale."""
+        keys = jax.random.split(jax.random.PRNGKey(0), 64)
+        samples = jax.vmap(lambda k: sample_lognormal(k, 0.0, 1.5))(keys)
+        assert jnp.all(samples > 0)
+        assert jnp.all(jnp.isfinite(samples))
+
+    def test_sample_mean_matches_lognormal_expectation(self):
+        """E[exp(loc + scale · N)] = exp(loc + scale²/2). Check with vmap."""
+        loc = 0.0
+        scale = 0.4
+        keys = jax.random.split(jax.random.PRNGKey(42), 4096)
+        samples = jax.vmap(lambda k: sample_lognormal(k, loc, scale))(keys)
+        expected_mean = jnp.exp(loc + 0.5 * scale**2)
+        assert abs(float(jnp.mean(samples)) - float(expected_mean)) / float(expected_mean) < 0.1
+
+    def test_reproducible_with_same_key(self):
+        key = jax.random.PRNGKey(7)
+        a = sample_lognormal(key, 1.0, 0.5)
+        b = sample_lognormal(key, 1.0, 0.5)
+        assert float(a) == float(b)

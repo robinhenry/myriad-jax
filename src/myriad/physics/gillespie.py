@@ -121,9 +121,11 @@ def run_gillespie_loop(
     if pending_reaction_time is None:
         pending_reaction_time = jnp.array(jnp.inf)
 
-    # Invalidate pending reaction if action changed (propensities are different)
+    # Invalidate pending reaction if action changed (propensities are different).
+    # Use element-wise inequality so this is correct for both binary and
+    # continuous actions — jnp.logical_xor would silently cast floats to bool.
     if previous_action is not None:
-        action_changed = jnp.logical_xor(previous_action, action)
+        action_changed = jnp.any(jnp.asarray(previous_action) != jnp.asarray(action))
         pending_reaction_time = jnp.where(action_changed, jnp.array(jnp.inf), pending_reaction_time)
 
     # Sample initial reaction time if needed

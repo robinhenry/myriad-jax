@@ -1,7 +1,32 @@
 """Reusable mathematical functions for physics models."""
 
+import jax
 import jax.numpy as jnp
 from jax import Array
+
+from myriad.core.types import PRNGKey
+
+
+def sample_lognormal(
+    key: PRNGKey,
+    loc: float | Array,
+    scale: float | Array,
+) -> Array:
+    """Draw a single log-normal sample: ``exp(loc + scale * N(0, 1))``.
+
+    When ``scale == 0`` the return value is exactly ``exp(loc)`` regardless of
+    ``key``, which lets callers default priors to point masses (deterministic
+    behavior) and opt into spread by raising ``scale``.
+
+    Args:
+        key: PRNG key.
+        loc: Location parameter of the underlying Normal (log-space mean).
+        scale: Scale parameter of the underlying Normal (log-space stdev).
+
+    Returns:
+        Scalar JAX array sampled from the log-normal distribution.
+    """
+    return jnp.exp(loc + scale * jax.random.normal(key))
 
 
 def hill_function(

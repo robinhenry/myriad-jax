@@ -28,6 +28,7 @@ multirun/
 # Project specific
 data/
 ./videos/
+tmp/
 
 # Sphinx documentation build
 docs/_build/
