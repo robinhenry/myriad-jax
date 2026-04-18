@@ -16,28 +16,26 @@ State assumptions (structural, not a Protocol):
     PhysicsConfig must expose ``timestep_minutes`` and ``max_gillespie_steps``.
 """
 
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable
 
 from jax import Array
 
 from myriad.core.types import PRNGKey
 from myriad.physics.gillespie import run_gillespie_loop
 
-S = TypeVar("S")
-
 
 def step_gillespie_interval(
     key: PRNGKey,
-    state: S,
+    state: Any,
     action: Array,
     params: Any,
     config: Any,
     *,
-    compute_propensities_fn: Callable[[S, Array, Any], Array],
-    apply_reaction_fn: Callable[[S, Array], S],
+    compute_propensities_fn: Callable[[Any, Array, Any], Array],
+    apply_reaction_fn: Callable[[Any, Array], Any],
     previous_action: Array,
     interval_start: Array,
-) -> S:
+) -> Any:
     """Advance a bio state one RL interval via the Gillespie SSA.
 
     Args:
@@ -60,7 +58,7 @@ def step_gillespie_interval(
     """
     target_time = interval_start + config.timestep_minutes
 
-    def _propensities(s: S, a: Array) -> Array:
+    def _propensities(s: Any, a: Array) -> Array:
         return compute_propensities_fn(s, a, params)
 
     final_state, next_reaction_time = run_gillespie_loop(
